@@ -1,20 +1,48 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+export enum CommMethod {
+  EMAIL = 'email',
+  PHONE = 'phone',
+  LINKEDIN = 'linkedin',
+  WHATSAPP = 'whatsapp',
+  SLACK = 'slack',
+  TWITTER = 'twitter',
+}
 
-# Run and deploy your AI Studio app
+export interface ScannedLeadData {
+  firstName?: string;
+  lastName?: string;
+  email?: string;
+  phone?: string;
+  linkedin?: string;
+  company?: string;
+  jobTitle?: string;
+  website?: string;
+}
 
-This contains everything you need to run your app locally.
+export interface Lead {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone: string;
+  company: string;
+  jobTitle: string;
+  website: string;
+  conferenceName: string;
+  commMethods: CommMethod[];
+  contactValues: Partial<Record<CommMethod, string>>;
+  notes: string;
+  timestamp: number;
+  aiSummary?: string;
+}
 
-View your app in AI Studio: https://ai.studio/apps/adfc54d1-a49e-442a-9017-c3aa8e05cceb
+export interface UserProfile {
+  name: string;
+  email: string;
+  conferences: string[];
+  socialLinks: Record<string, string>;
+  picture?: string;
+  phone?: string;
+  password?: string;
+}
 
-## Run Locally
-
-**Prerequisites:**  Node.js
-
-
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+export type PaymentCycle = 'monthly' | 'annual';
