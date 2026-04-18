@@ -1,0 +1,121 @@
+
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MemoPear | Smart Field Intelligence</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/html5-qr-code" type="text/javascript"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <script>
+      tailwind.config = {
+        darkMode: 'class',
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ['Plus Jakarta Sans', 'sans-serif'],
+            },
+            colors: {
+              pear: {
+                50: '#f7fee7',
+                100: '#ecfccb',
+                200: '#d9f99d',
+                300: '#bef264',
+                400: '#a3e635',
+                500: '#84cc16',
+                600: '#65a30d',
+                700: '#4d7c0f',
+                800: '#3f6212',
+                900: '#365314',
+                950: '#1a2e05',
+              },
+              stem: {
+                50: '#fdf8f6',
+                100: '#f2e8e5',
+                200: '#eaddd7',
+                300: '#dac7be',
+                400: '#bc9d8e',
+                500: '#a37c69',
+                600: '#8d6352',
+                700: '#713f12',
+                800: '#5d3511',
+                900: '#451a03',
+              }
+            }
+          },
+        },
+      }
+    </script>
+    <style>
+        body { 
+          transition: background-color 0.3s ease, color 0.3s ease;
+        }
+        .tech-grid {
+          background-image: radial-gradient(circle at 2px 2px, rgba(132, 204, 22, 0.05) 1px, transparent 0);
+          background-size: 40px 40px;
+        }
+        .dark .tech-grid {
+          background-image: radial-gradient(circle at 2px 2px, rgba(163, 230, 53, 0.03) 1px, transparent 0);
+        }
+        .mesh-gradient {
+          background: radial-gradient(at 0% 0%, hsla(84, 81%, 44%, 0.08) 0px, transparent 50%),
+                      radial-gradient(at 100% 0%, hsla(45, 93%, 47%, 0.08) 0px, transparent 50%),
+                      radial-gradient(at 100% 100%, hsla(84, 81%, 44%, 0.05) 0px, transparent 50%),
+                      radial-gradient(at 0% 100%, hsla(45, 93%, 47%, 0.05) 0px, transparent 50%);
+        }
+        .glass {
+          background: rgba(255, 255, 255, 0.8);
+          backdrop-filter: blur(12px);
+          border: 1px solid rgba(132, 204, 22, 0.1);
+        }
+        .dark .glass {
+          background: rgba(26, 46, 5, 0.6);
+          border: 1px solid rgba(163, 230, 53, 0.1);
+        }
+        .glass-bright {
+          background: rgba(255, 255, 255, 0.9);
+          backdrop-filter: blur(8px);
+          border: 1px solid rgba(132, 204, 22, 0.1);
+        }
+        .dark .glass-bright {
+          background: rgba(255, 255, 255, 0.03);
+          border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+        .glow-pear {
+          box-shadow: 0 0 40px -10px rgba(132, 204, 22, 0.2);
+        }
+        .animate-pulse-pear {
+          animation: pulse-pear 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+        @keyframes pulse-pear {
+          0%, 100% { opacity: 1; transform: scale(1); }
+          50% { opacity: .7; transform: scale(1.05); }
+        }
+        .recording-pulse {
+          animation: recording-pulse 1.5s infinite;
+        }
+        @keyframes recording-pulse {
+          0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
+          70% { box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
+          100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+        }
+    </style>
+<script type="importmap">
+{
+  "imports": {
+    "react": "https://esm.sh/react@^19.2.4",
+    "react-dom/": "https://esm.sh/react-dom@^19.2.4/",
+    "react/": "https://esm.sh/react@^19.2.4/",
+    "@google/genai": "https://esm.sh/@google/genai@^1.39.0"
+  }
+}
+</script>
+<link rel="stylesheet" href="/index.css">
+</head>
+<body class="tech-grid min-h-screen bg-slate-50 text-slate-900 dark:bg-[#020617] dark:text-slate-50">
+    <div class="mesh-gradient fixed inset-0 pointer-events-none"></div>
+    <div id="root" class="relative z-10"></div>
+<script type="module" src="/index.tsx"></script>
+</body>
+</html>
