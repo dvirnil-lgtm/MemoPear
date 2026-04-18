@@ -20,6 +20,7 @@ android/app/build
 android/build
 *.keystore
 *.jks
+keystore-base64.txt
 
 # Editor directories and files
 .vscode/*
