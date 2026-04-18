@@ -94,6 +94,58 @@ gcloud run domain-mappings list --region us-central1
 
 Visit your domain - it should show the MemoPear site with a valid SSL certificate.
 
+## Android App
+
+### Prerequisites
+
+1. Install [Android Studio](https://developer.android.com/studio)
+2. During install, make sure "Android SDK" is checked
+3. A [Google Play Developer account](https://play.google.com/console) ($25 one-time fee)
+
+### Build the Android App
+
+```bash
+# Build the web app and sync to Android
+npm run android:build
+
+# Open in Android Studio
+npx cap open android
+```
+
+Android Studio will open. Then:
+
+1. Wait for Gradle sync to finish (progress bar at bottom)
+2. Go to **Build > Generate Signed Bundle / APK**
+3. Select **Android App Bundle**
+4. Create a new keystore (or use existing) - SAVE THIS FILE, you need it for every update
+5. Fill in the key details and click **Next**
+6. Select **release** and click **Create**
+7. The `.aab` file will be in `android/app/release/`
+
+### Publish to Google Play Store
+
+1. Go to [Google Play Console](https://play.google.com/console)
+2. Click **Create app**
+3. Fill in:
+   - App name: **MemoPear**
+   - Default language: **English**
+   - App or Game: **App**
+   - Free or Paid: your choice
+4. Go to **Production > Create new release**
+5. Upload the `.aab` file from the build step
+6. Fill in release notes
+7. Complete all the required sections in the left sidebar (store listing, content rating, pricing)
+8. Submit for review (takes 1-7 days)
+
+### Store Listing Info
+
+You'll need these for the Play Store listing:
+- **Short description**: Smart AI-powered lead capture for conferences and trade shows
+- **Full description**: MemoPear transforms trade show encounters into high-velocity pipeline data. Scan business cards with AI, capture QR codes, record meeting notes with voice transcription, and generate personalized follow-up emails - all powered by Google Gemini AI.
+- **Category**: Business
+- **Screenshots**: At least 2 phone screenshots (take them from the running app)
+- **App icon**: 512x512 PNG (use the MemoPear logo)
+
 ## Project Structure
 
 ```
