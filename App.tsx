@@ -1,21 +1,21 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { GoogleGenAI, Modality } from "@google/genai";
+import { User } from 'firebase/auth';
+import { getFunctions, httpsCallable } from 'firebase/functions';
 import { Lead, CommMethod, UserProfile, PaymentCycle } from './types';
 import { QRScanner } from './components/QRScanner';
 import { CommMethodToggle } from './components/CommMethodToggle';
 import { PrivacyPolicy, TermsAndConditions, ContactUs } from './components/LegalPages';
 import { parseScannedData, parseBusinessCard, generateLeadReport } from './services/geminiService';
+import { signInWithGoogle, signInWithLinkedIn, signUpWithEmail, signInWithEmail, logOut, onAuthChange } from './services/authService';
+import * as firestoreService from './services/firestoreService';
 
-// Constants for retention and session
-const RETENTION_DAYS = 30;
-const SESSION_DAYS = 7;
-const STORAGE_KEY_LEADS = 'lcp_leads_v1';
-const STORAGE_KEY_AUTH = 'lcp_auth_v1';
-const STORAGE_KEY_PAID = 'lcp_paid_v1';
 const STORAGE_KEY_NOTICE = 'lcp_notice_shown_v1';
-const STORAGE_KEY_LINKEDIN = 'lcp_linkedin_connected_v1';
 const STORAGE_KEY_TOUR_COMPLETE = 'lcp_tour_done_v1';
+const STORAGE_KEY_LINKEDIN = 'lcp_linkedin_v1';
+const STORAGE_KEY_LEADS = 'lcp_leads_v1';
+const RETENTION_DAYS = 30;
 
 const TESTIMONIALS = [
   { quote: "NexusGather turned our trade show chaos into a streamlined pipeline. We captured 300% more context than ever before.", author: "Sarah Chen", role: "VP Field Marketing, HyperScale" },
@@ -264,11 +264,13 @@ const App: React.FC = () => {
     if (saved === 'light' || saved === 'dark') return saved;
     return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
   });
+  const [firebaseUser, setFirebaseUser] = useState<User | null>(null);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [password, setPassword] = useState('');
   const [hasPaid, setHasPaid] = useState(false);
   const [linkedinConnected, setLinkedinConnected] = useState(false);
   const [authMode, setAuthMode] = useState<'login' | 'signup'>('login');
+  const [authLoading, setAuthLoading] = useState(false);
   const [view, setView] = useState<'home' | 'login' | 'pricing' | 'billing' | 'form' | 'history' | 'payment' | 'profile' | 'privacy' | 'terms' | 'contact'>('home');
   const [leads, setLeads] = useState<Lead[]>([]);
   const [userProfile, setUserProfile] = useState<UserProfile>({
@@ -287,17 +289,27 @@ const App: React.FC = () => {
   const [showConfDropdown, setShowConfDropdown] = useState(false);
 
   useEffect(() => {
-    const savedProfile = localStorage.getItem('memo_profile');
-    if (savedProfile) {
-      try {
-        const parsed = JSON.parse(savedProfile);
-        setUserProfile(prev => ({
-          ...prev,
-          ...parsed,
-          socialLinks: { ...prev.socialLinks, ...(parsed.socialLinks || {}) }
-        }));
-      } catch (e) { console.error("Profile load failed", e); }
-    }
+    const unsubscribe = onAuthChange(async (user) => {
+      setFirebaseUser(user);
+      setIsLoggedIn(!!user);
+      if (user) {
+        const profile = await firestoreService.getUserProfile(user.uid);
+        if (profile) {
+          setUserProfile(prev => ({ ...prev, ...profile, socialLinks: { ...prev.socialLinks, ...(profile.socialLinks || {}) } }));
+        }
+        const paid = await firestoreService.getSubscriptionStatus(user.uid);
+        setHasPaid(paid);
+        const userLeads = await firestoreService.getLeads(user.uid);
+        setLeads(userLeads);
+        if (paid) setView('form');
+        else setView('history');
+      } else {
+        setLeads([]);
+        setHasPaid(false);
+        setView('home');
+      }
+    });
+    return () => unsubscribe();
   }, []);
   const [paymentCycle, setPaymentCycle] = useState<PaymentCycle>('monthly');
   const [showNotice, setShowNotice] = useState(false);
@@ -352,28 +364,6 @@ const App: React.FC = () => {
     const initialTheme = savedTheme || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
     setTheme(initialTheme);
     document.documentElement.classList.toggle('dark', initialTheme === 'dark');
-
-    const savedPaid = localStorage.getItem(STORAGE_KEY_PAID);
-    if (savedPaid === 'true') setHasPaid(true);
-
-    const savedLinkedin = localStorage.getItem(STORAGE_KEY_LINKEDIN);
-    if (savedLinkedin === 'true') setLinkedinConnected(true);
-
-    const savedAuth = localStorage.getItem(STORAGE_KEY_AUTH);
-    if (savedAuth) {
-      const { timestamp } = JSON.parse(savedAuth);
-      if (Date.now() - timestamp < SESSION_DAYS * 24 * 60 * 60 * 1000) {
-        setIsLoggedIn(true);
-        if (savedPaid === 'true') setView('form');
-        else setView('history');
-      }
-    }
-    const savedLeads = localStorage.getItem(STORAGE_KEY_LEADS);
-    if (savedLeads) {
-      const parsedLeads: Lead[] = JSON.parse(savedLeads);
-      const filteredLeads = parsedLeads.filter(lead => (Date.now() - lead.timestamp) < RETENTION_DAYS * 24 * 60 * 60 * 1000);
-      setLeads(filteredLeads);
-    }
     if (!localStorage.getItem(STORAGE_KEY_NOTICE)) setShowNotice(true);
     if (!localStorage.getItem(STORAGE_KEY_TOUR_COMPLETE) && isLoggedIn) setShowTour(true);
   }, [isLoggedIn]);
@@ -452,12 +442,12 @@ const App: React.FC = () => {
     });
   };
 
-  const deleteSelectedLeads = () => {
-    const remainingLeads = leads.filter(l => !selectedLeadIds.has(l.id));
-    setLeads(remainingLeads);
-    localStorage.setItem(STORAGE_KEY_LEADS, JSON.stringify(remainingLeads));
+  const deleteSelectedLeads = async () => {
+    if (!firebaseUser) return;
+    await firestoreService.deleteLeads(firebaseUser.uid, Array.from(selectedLeadIds));
+    setLeads(prev => prev.filter(l => !selectedLeadIds.has(l.id)));
     setSelectedLeadIds(new Set());
-    setStatusMsg({ type: 'success', text: 'Pipeline purged locally.' });
+    setStatusMsg({ type: 'success', text: 'Pipeline purged.' });
   };
 
   const handleSyncAttempt = (modal: 'sheets' | 'email') => {
@@ -490,47 +480,68 @@ const App: React.FC = () => {
     cleanupLeads();
   }, []);
 
-  const handleAuth = (e?: React.FormEvent) => {
+  const handleAuth = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    const authData = { email, password, timestamp: Date.now() };
-    localStorage.setItem(STORAGE_KEY_AUTH, JSON.stringify(authData));
-    
-    // Save to "internal database" (localStorage for this environment)
-    const savedProfile = { ...userProfile, email, password };
-    localStorage.setItem('memo_profile', JSON.stringify(savedProfile));
-    
-    setIsLoggedIn(true);
-    setUserProfile(savedProfile);
-    setStatusMsg({ type: 'success', text: 'Welcome to MemoPear!' });
-    if (hasPaid) setView('form');
-    else setView('history');
+    setAuthLoading(true);
+    try {
+      if (authMode === 'signup') {
+        await signUpWithEmail(email, password);
+      } else {
+        await signInWithEmail(email, password);
+      }
+      setStatusMsg({ type: 'success', text: 'Welcome to MemoPear!' });
+    } catch (err: any) {
+      setStatusMsg({ type: 'error', text: err.message || 'Authentication failed.' });
+    } finally {
+      setAuthLoading(false);
+    }
   };
 
-  const handleLogout = () => {
-    localStorage.removeItem(STORAGE_KEY_AUTH);
-    setIsLoggedIn(false);
+  const handleGoogleAuth = async () => {
+    setAuthLoading(true);
+    try {
+      await signInWithGoogle();
+      setStatusMsg({ type: 'success', text: 'Welcome to MemoPear!' });
+    } catch (err: any) {
+      setStatusMsg({ type: 'error', text: err.message || 'Google sign-in failed.' });
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  const handleLinkedInAuth = async () => {
+    setAuthLoading(true);
+    try {
+      await signInWithLinkedIn();
+      setStatusMsg({ type: 'success', text: 'Welcome to MemoPear!' });
+    } catch (err: any) {
+      setStatusMsg({ type: 'error', text: err.message || 'LinkedIn sign-in failed.' });
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  const handleLogout = async () => {
+    await logOut();
     setView('home');
     setStatusMsg({ type: 'success', text: 'Session Terminated.' });
   };
 
-  const deleteAllLeads = () => {
+  const deleteAllLeads = async () => {
+    if (!firebaseUser) return;
     if (window.confirm('Purge all intelligence records? This cannot be undone.')) {
+      await firestoreService.deleteAllLeads(firebaseUser.uid);
       setLeads([]);
-      localStorage.setItem(STORAGE_KEY_LEADS, JSON.stringify([]));
       setStatusMsg({ type: 'success', text: 'Pipeline Cleared.' });
     }
   };
 
   const handlePayment = (e: React.FormEvent) => {
     e.preventDefault();
-    setIsSubmitting(true);
-    setTimeout(() => {
-      setHasPaid(true);
-      localStorage.setItem(STORAGE_KEY_PAID, 'true');
-      setIsSubmitting(false);
-      setStatusMsg({ type: 'success', text: 'Pro Command Activated.' });
-      setView('form');
-    }, 2000);
+    const stripeLink = paymentCycle === 'annual'
+      ? 'https://buy.stripe.com/eVq3cx7bNf8b2ON5UzfEk01'
+      : 'https://buy.stripe.com/aFa28t67J8JNdtr3MrfEk00';
+    window.open(stripeLink, '_blank');
   };
 
   const toggleCommMethod = (method: CommMethod) => {
@@ -677,10 +688,10 @@ const App: React.FC = () => {
     }
   };
 
-  const handleUpdateLead = (updatedLead: Lead) => {
-    const updatedLeads = leads.map(l => l.id === updatedLead.id ? updatedLead : l);
-    setLeads(updatedLeads);
-    localStorage.setItem(STORAGE_KEY_LEADS, JSON.stringify(updatedLeads));
+  const handleUpdateLead = async (updatedLead: Lead) => {
+    if (!firebaseUser) return;
+    await firestoreService.updateLead(firebaseUser.uid, updatedLead);
+    setLeads(prev => prev.map(l => l.id === updatedLead.id ? updatedLead : l));
     setEditingLead(null);
     setStatusMsg({ type: 'success', text: 'Lead Intelligence Updated.' });
   };
@@ -728,9 +739,10 @@ const App: React.FC = () => {
       id: crypto.randomUUID(), firstName, lastName, email, phone, company, jobTitle, website, conferenceName, commMethods, contactValues, notes, timestamp: Date.now(),
     };
     newLead.aiSummary = await generateLeadReport(newLead);
-    const updated = [newLead, ...leads];
-    setLeads(updated);
-    localStorage.setItem(STORAGE_KEY_LEADS, JSON.stringify(updated));
+    if (firebaseUser) {
+      await firestoreService.addLead(firebaseUser.uid, newLead);
+    }
+    setLeads(prev => [newLead, ...prev]);
     setFirstName(''); setLastName(''); setEmail(''); setPhone(''); setCompany(''); setJobTitle(''); setWebsite(''); setNotes(''); setCommMethods([]); setContactValues({});
     setShowContactFields(false);
     setIsSubmitting(false);
@@ -1080,34 +1092,30 @@ const App: React.FC = () => {
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M15 19l-7-7 7-7" /></svg>
               Go Back
             </button>
-            <h2 className="text-4xl font-black mb-8 tracking-tighter">Complete Activation</h2>
-            
-            <div className="space-y-4">
-              <button onClick={() => setPaymentMethod('google')} className={`w-full py-6 rounded-[2rem] border-2 flex items-center justify-center gap-3 transition-all ${paymentMethod === 'google' ? 'border-pear-600 bg-pear-600/5' : 'border-slate-200 dark:border-white/10'}`}><div className="bg-black text-white px-3 py-1 rounded-md text-sm font-bold flex items-center gap-1">Google <span className="font-black">Pay</span></div></button>
-              <button onClick={() => setPaymentMethod('paypal')} className={`w-full py-6 rounded-[2rem] border-2 flex items-center justify-center gap-3 transition-all ${paymentMethod === 'paypal' ? 'border-pear-600 bg-pear-600/5' : 'border-slate-200 dark:border-white/10'}`}><div className="flex items-center italic"><span className="text-blue-900 font-black">Pay</span><span className="text-blue-500 font-black">Pal</span></div></button>
-              <div className={`rounded-[2rem] border-2 transition-all overflow-hidden ${paymentMethod === 'card' ? 'border-pear-600 bg-pear-600/5' : 'border-slate-200 dark:border-white/10'}`}>
-                <button onClick={() => setPaymentMethod('card')} className="w-full py-6 flex items-center justify-center gap-3 font-black text-xs uppercase tracking-widest"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" /></svg>Credit Card</button>
-                {paymentMethod === 'card' && (
-                  <form onSubmit={handlePayment} className="p-8 pt-0 space-y-4 animate-in slide-in-from-top-4">
-                    <input type="text" placeholder="Card Number" required className="w-full px-5 py-4 rounded-xl bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 outline-none text-sm font-bold" />
-                    <div className="grid grid-cols-2 gap-4">
-                      <input type="text" placeholder="MM / YY" required className="px-5 py-4 rounded-xl bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 outline-none text-sm font-bold" />
-                      <input type="text" placeholder="CVV" required className="px-5 py-4 rounded-xl bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 outline-none text-sm font-bold" />
-                    </div>
-                  </form>
-                )}
-              </div>
-            </div>
-            <div className="mt-12 text-center">
-              <p className="text-2xl font-black mb-2">
-                {paymentCycle === 'monthly' ? '$1.49' : '$16.09'} USD
+            <h2 className="text-4xl font-black mb-4 tracking-tighter">Complete Activation</h2>
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-8">
+              {paymentCycle === 'monthly' ? '$1.49 / month' : '$16.09 / year'} • Billed securely via Stripe • Cancel Anytime
+            </p>
+            <div className="glass p-8 rounded-[2.5rem] border border-slate-200 dark:border-white/10 text-center space-y-6">
+              <p className="text-2xl font-black">
+                {paymentCycle === 'monthly' ? '$1.49' : '$16.09'} <span className="text-sm font-bold text-slate-400">USD</span>
               </p>
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-8">
-                {paymentCycle === 'monthly' ? 'Billed Monthly' : 'Billed Annually'} • Cancel Anytime
-              </p>
-              <button onClick={handlePayment} disabled={!paymentMethod || isSubmitting} className="w-full py-6 bg-pear-600 text-white font-black rounded-3xl shadow-2xl active:scale-95 transition-all disabled:opacity-30 disabled:grayscale uppercase text-xs tracking-widest">
-                {isSubmitting ? 'Verifying...' : 'Initialize Pipeline'}
+              <p className="text-xs text-slate-500">You'll be redirected to Stripe's secure checkout. Invoices are sent automatically by Stripe.</p>
+              <button
+                onClick={() => {
+                  const stripeLink = paymentCycle === 'annual'
+                    ? 'https://buy.stripe.com/eVq3cx7bNf8b2ON5UzfEk01'
+                    : 'https://buy.stripe.com/aFa28t67J8JNdtr3MrfEk00';
+                  window.open(stripeLink, '_blank');
+                }}
+                className="w-full py-6 bg-pear-600 text-white font-black rounded-3xl shadow-2xl active:scale-95 transition-all uppercase text-xs tracking-widest"
+              >
+                Pay with Stripe
               </button>
+              <div className="flex items-center justify-center gap-2 text-[9px] text-slate-400 font-bold">
+                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
+                256-bit SSL • Powered by Stripe
+              </div>
             </div>
           </div>
         )}
@@ -1308,37 +1316,25 @@ const App: React.FC = () => {
                       <p className="text-[8px] font-black uppercase text-slate-400 tracking-widest">Active Protocol</p>
                       <p className="text-xs font-bold">{hasPaid ? 'Professional Command' : 'Standard Observer'}</p>
                     </div>
-                    <div className="text-right">
-                      <p className="text-[8px] font-black uppercase text-slate-400 tracking-widest">Payment Method</p>
-                      <p className="text-xs font-bold font-mono">**** **** **** 4242</p>
-                    </div>
                   </div>
-                  
-                  <div className="space-y-3">
-                    <p className="text-[8px] font-black uppercase text-slate-400 tracking-widest mb-2">Recent Invoices</p>
-                    {[
-                      { id: 'INV-2026-003', date: 'Mar 01, 2026', amount: '$1.49', status: 'Paid' },
-                      { id: 'INV-2026-002', date: 'Feb 01, 2026', amount: '$1.49', status: 'Paid' },
-                      { id: 'INV-2026-001', date: 'Jan 01, 2026', amount: '$1.49', status: 'Paid' },
-                    ].map(inv => (
-                      <div key={inv.id} className="flex items-center justify-between py-2 border-b border-slate-100 dark:border-white/5 last:border-0">
-                        <div>
-                          <p className="text-[10px] font-bold">{inv.id}</p>
-                          <p className="text-[8px] text-slate-400">{inv.date}</p>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-[10px] font-black">{inv.amount}</p>
-                          <span className="text-[7px] font-black uppercase px-1.5 py-0.5 bg-emerald-500/10 text-emerald-500 rounded-full">{inv.status}</span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+                  <p className="text-[9px] text-slate-400 mb-4">Invoices are managed by Stripe. Click below to view your billing history, update payment methods, or cancel your subscription.</p>
+                  <a
+                    href="https://billing.stripe.com/p/login/test_00g00000000000"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-2 px-4 py-2 bg-slate-900 dark:bg-white text-white dark:text-slate-900 text-[9px] font-black uppercase tracking-widest rounded-xl hover:opacity-80 transition-all"
+                  >
+                    Open Stripe Billing Portal
+                  </a>
                 </div>
               </div>
 
-              <button 
-                onClick={() => {
-                  localStorage.setItem('memo_profile', JSON.stringify(userProfile));
+              <button
+                onClick={async () => {
+                  if (firebaseUser) {
+                    const { updateUserProfile } = await import('./services/firestoreService');
+                    await updateUserProfile(firebaseUser.uid, userProfile);
+                  }
                   setStatusMsg({ type: 'success', text: 'Profile Synchronized.' });
                 }}
                 className="w-full py-6 bg-pear-600 text-white font-black rounded-3xl shadow-xl hover:scale-[1.02] active:scale-95 transition-all text-xs uppercase tracking-widest"
@@ -1386,7 +1382,7 @@ const App: React.FC = () => {
                   </div>
 
                   <div className="space-y-6">
-                    <button onClick={() => handleAuth()} className="w-full py-4 px-6 border border-slate-200 dark:border-white/10 rounded-full flex items-center justify-center gap-3 font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-white/5 transition-all shadow-sm">
+                    <button onClick={handleGoogleAuth} disabled={authLoading} className="w-full py-4 px-6 border border-slate-200 dark:border-white/10 rounded-full flex items-center justify-center gap-3 font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-white/5 transition-all shadow-sm disabled:opacity-50">
                       <svg viewBox="0 0 24 24" className="w-5 h-5 flex-shrink-0"><path fill="#EA4335" d="M24 12.25c0-.85-.07-1.71-.22-2.54H12v4.81h6.72c-.29 1.57-1.18 2.9-2.5 3.79v3.15h4.05c2.37-2.18 3.73-5.39 3.73-8.71z"/><path fill="#34A853" d="M12 24c3.24 0 5.97-1.08 7.96-2.92l-4.05-3.15c-1.12.75-2.56 1.19-3.91 1.19-3.02 0-5.58-2.04-6.5-4.79L1.31 17.44C3.25 21.31 7.29 24 12 24z"/><path fill="#FBBC05" d="M5.5 14.33c-.24-.71-.38-1.47-.38-2.33s.14-1.62.38-2.33L1.31 6.53C.47 8.21 0 10.05 0 12s.47 3.79 1.31 5.47l4.19-3.14z"/><path fill="#4285F4" d="M12 4.75c1.76 0 3.35.61 4.59 1.79l3.44-3.44C17.96 1.08 15.24 0 12 0 7.29 0 3.25 2.69 1.31 6.53l4.19 3.14c.92-2.75 3.48-4.79 6.5-4.79z"/></svg>
                       Sign up with your Google account
                     </button>
@@ -1431,11 +1427,11 @@ const App: React.FC = () => {
                   </form>
 
                   <div className="grid grid-cols-2 gap-4">
-                    <button onClick={() => handleAuth()} className="w-full py-4 px-6 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl flex items-center justify-center gap-3 font-black text-[9px] uppercase tracking-widest hover:bg-slate-50 transition-all shadow-sm">
+                    <button onClick={handleGoogleAuth} disabled={authLoading} className="w-full py-4 px-6 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl flex items-center justify-center gap-3 font-black text-[9px] uppercase tracking-widest hover:bg-slate-50 transition-all shadow-sm disabled:opacity-50">
                       <svg viewBox="0 0 24 24" className="w-4 h-4"><path fill="#EA4335" d="M24 12.25c0-.85-.07-1.71-.22-2.54H12v4.81h6.72c-.29 1.57-1.18 2.9-2.5 3.79v3.15h4.05c2.37-2.18 3.73-5.39 3.73-8.71z"/><path fill="#34A853" d="M12 24c3.24 0 5.97-1.08 7.96-2.92l-4.05-3.15c-1.12.75-2.56 1.19-3.91 1.19-3.02 0-5.58-2.04-6.5-4.79L1.31 17.44C3.25 21.31 7.29 24 12 24z"/><path fill="#FBBC05" d="M5.5 14.33c-.24-.71-.38-1.47-.38-2.33s.14-1.62.38-2.33L1.31 6.53C.47 8.21 0 10.05 0 12s.47 3.79 1.31 5.47l4.19-3.14z"/><path fill="#4285F4" d="M12 4.75c1.76 0 3.35.61 4.59 1.79l3.44-3.44C17.96 1.08 15.24 0 12 0 7.29 0 3.25 2.69 1.31 6.53l4.19 3.14c.92-2.75 3.48-4.79 6.5-4.79z"/></svg>
                       Google
                     </button>
-                    <button onClick={() => handleAuth()} className="w-full py-4 px-6 bg-[#0077b5] text-white rounded-2xl flex items-center justify-center gap-3 font-black text-[9px] uppercase tracking-widest hover:bg-[#005c8c] transition-all shadow-md">
+                    <button onClick={handleLinkedInAuth} disabled={authLoading} className="w-full py-4 px-6 bg-[#0077b5] text-white rounded-2xl flex items-center justify-center gap-3 font-black text-[9px] uppercase tracking-widest hover:bg-[#005c8c] transition-all shadow-md disabled:opacity-50">
                       LinkedIn
                     </button>
                   </div>
@@ -1692,15 +1688,15 @@ const App: React.FC = () => {
         {view === 'contact' && <ContactUs onBack={() => setView('home')} />}
       </main>
 
-      <footer className="py-12 border-t border-slate-200 dark:border-white/10 mt-20 pb-32">
+      <footer className="py-4 border-t border-slate-200 dark:border-white/10 mt-8">
         <div className="max-w-2xl mx-auto px-6 text-center">
-          <div className="flex flex-wrap justify-center gap-6 mb-8">
+          <div className="flex flex-wrap justify-center gap-4 mb-3">
             <button onClick={() => setView('privacy')} className="text-[10px] font-black uppercase text-slate-400 hover:text-blue-600 transition-colors tracking-widest">Privacy Policy</button>
             <button onClick={() => setView('terms')} className="text-[10px] font-black uppercase text-slate-400 hover:text-blue-600 transition-colors tracking-widest">Terms & Conditions</button>
             <button onClick={() => setView('contact')} className="text-[10px] font-black uppercase text-slate-400 hover:text-blue-600 transition-colors tracking-widest">Contact Us</button>
           </div>
-          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest opacity-60 leading-relaxed font-mono">
-            © 2026 Memopear. All rights reserved.<br/>Strategic Intelligence for Field Operations.
+          <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest opacity-60 font-mono">
+            © 2026 Memopear. All rights reserved.
           </p>
         </div>
       </footer>
@@ -1800,8 +1796,64 @@ const App: React.FC = () => {
         <div className="fixed inset-0 z-[220] flex items-center justify-center p-6 bg-black/70 backdrop-blur-md">
           <div className="max-w-xs w-full glass p-8 md:p-10 rounded-[2.5rem] md:rounded-[3.5rem] text-center shadow-2xl animate-in zoom-in-95">
             <h2 className="text-lg md:text-xl font-black mb-1 tracking-tighter uppercase text-emerald-600">Spreadsheet Sync</h2>
-            <input type="text" value={sheetName} onChange={(e) => setSheetName(e.target.value)} placeholder="Sheet Name" className="w-full px-5 md:px-6 py-3 md:py-4 rounded-xl md:rounded-2xl bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 text-[10px] md:text-xs font-bold mb-4 md:mb-6 mt-3 md:mt-4 outline-none" />
-            <button onClick={() => { setStatusMsg({type:'success', text:'Pipeline pushed to Sheets.'}); setActiveModal(null); setSelectedLeadIds(new Set()); }} className="w-full py-4 md:py-5 bg-emerald-600 text-white font-black rounded-xl md:rounded-2xl text-[9px] md:text-[10px] uppercase tracking-widest shadow-xl active:scale-95 transition-all">Commence Push</button>
+            <p className="text-[9px] text-slate-400 font-bold mt-2 mb-4">Your leads will be exported to a new Google Sheet and shared with your registered email.</p>
+            <button
+              disabled={authLoading}
+              onClick={async () => {
+                setAuthLoading(true);
+                try {
+                  const { getFunctions, httpsCallable } = await import('firebase/functions');
+                  const { app } = await import('./firebase');
+                  const fns = getFunctions(app);
+                  const exportFn = httpsCallable(fns, 'exportLeadsToSheets');
+                  const result: any = await exportFn({});
+                  setActiveModal(null);
+                  setSelectedLeadIds(new Set());
+                  setStatusMsg({ type: 'success', text: `Exported ${result.data.count} leads to Google Sheets!` });
+                  if (result.data.spreadsheetUrl) window.open(result.data.spreadsheetUrl, '_blank');
+                } catch (err: any) {
+                  setStatusMsg({ type: 'error', text: err.message || 'Export failed.' });
+                } finally {
+                  setAuthLoading(false);
+                }
+              }}
+              className="w-full py-4 md:py-5 bg-emerald-600 text-white font-black rounded-xl md:rounded-2xl text-[9px] md:text-[10px] uppercase tracking-widest shadow-xl active:scale-95 transition-all disabled:opacity-50"
+            >
+              {authLoading ? 'Exporting...' : 'Export to Google Sheets'}
+            </button>
+            <button onClick={() => setActiveModal(null)} className="mt-3 md:mt-4 text-slate-400 font-black text-[8px] md:text-[9px] uppercase hover:text-slate-600 transition-colors">Cancel</button>
+          </div>
+        </div>
+      )}
+
+      {activeModal === 'email' && (
+        <div className="fixed inset-0 z-[220] flex items-center justify-center p-6 bg-black/70 backdrop-blur-md">
+          <div className="max-w-xs w-full glass p-8 md:p-10 rounded-[2.5rem] md:rounded-[3.5rem] text-center shadow-2xl animate-in zoom-in-95">
+            <h2 className="text-lg md:text-xl font-black mb-1 tracking-tighter uppercase text-indigo-600">Email Export</h2>
+            <p className="text-[9px] text-slate-400 font-bold mt-2 mb-4">A CSV of all your leads will be sent to your registered email from info@memopear.com.</p>
+            <button
+              disabled={authLoading}
+              onClick={async () => {
+                setAuthLoading(true);
+                try {
+                  const { getFunctions, httpsCallable } = await import('firebase/functions');
+                  const { app } = await import('./firebase');
+                  const fns = getFunctions(app);
+                  const exportFn = httpsCallable(fns, 'exportLeadsToEmail');
+                  const result: any = await exportFn({});
+                  setActiveModal(null);
+                  setSelectedLeadIds(new Set());
+                  setStatusMsg({ type: 'success', text: `CSV with ${result.data.count} leads sent to your email!` });
+                } catch (err: any) {
+                  setStatusMsg({ type: 'error', text: err.message || 'Export failed.' });
+                } finally {
+                  setAuthLoading(false);
+                }
+              }}
+              className="w-full py-4 md:py-5 bg-indigo-600 text-white font-black rounded-xl md:rounded-2xl text-[9px] md:text-[10px] uppercase tracking-widest shadow-xl active:scale-95 transition-all disabled:opacity-50"
+            >
+              {authLoading ? 'Sending...' : 'Send CSV to My Email'}
+            </button>
             <button onClick={() => setActiveModal(null)} className="mt-3 md:mt-4 text-slate-400 font-black text-[8px] md:text-[9px] uppercase hover:text-slate-600 transition-colors">Cancel</button>
           </div>
         </div>
