@@ -1333,10 +1333,17 @@ const App: React.FC = () => {
                       </div>
                     ))}
                   </div>
+
+                  <button
+                    onClick={() => window.open('https://billing.stripe.com/p/login/aFa28t67J8JNdtr3MrfEk00', '_blank')}
+                    className="mt-5 w-full py-3 border border-slate-200 dark:border-white/10 rounded-2xl text-[10px] font-black uppercase tracking-widest text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/5 transition-all"
+                  >
+                    Manage Subscription
+                  </button>
                 </div>
               </div>
 
-              <button 
+              <button
                 onClick={() => {
                   localStorage.setItem('memo_profile', JSON.stringify(userProfile));
                   setStatusMsg({ type: 'success', text: 'Profile Synchronized.' });
