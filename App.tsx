@@ -29,23 +29,23 @@ const TESTIMONIALS = [
 
 const TOUR_STEPS = [
   {
-    title: "Welcome to MemoPear",
-    description: "Your smart companion for field intelligence. Let's show you how to capture leads like a pro.",
+    title: "Hey, welcome to MemoPear! 👋",
+    description: "We help you remember every person you meet at conferences. Let's show you how it works in 30 seconds.",
     icon: "🍐"
   },
   {
-    title: "AI Card Reader",
-    description: "Snap a photo of any business card. Our AI extracts names, emails, and social profiles instantly.",
+    title: "Scan any business card",
+    description: "Just snap a photo and our AI reads the card instantly — name, email, phone, company, all of it.",
     icon: "📸"
   },
   {
-    title: "Voice Intelligence",
-    description: "Record meeting notes hands-free. Gemini transcribes and summarizes your conversations.",
+    title: "Talk through your notes",
+    description: "Hit record after a meeting and just talk. We'll transcribe everything so you can stay present.",
     icon: "🎙️"
   },
   {
-    title: "Profile & Conferences",
-    description: "Set up your profile and track the conferences you're attending for better organization.",
+    title: "Set up your profile",
+    description: "Add your name and the conferences you're attending so your contacts are organized from day one.",
     icon: "👤"
   }
 ];
@@ -269,7 +269,14 @@ const App: React.FC = () => {
   const [hasPaid, setHasPaid] = useState(false);
   const [linkedinConnected, setLinkedinConnected] = useState(false);
   const [authMode, setAuthMode] = useState<'login' | 'signup'>('login');
-  const [view, setView] = useState<'home' | 'login' | 'pricing' | 'billing' | 'form' | 'history' | 'payment' | 'profile' | 'privacy' | 'terms' | 'contact'>('home');
+  const [view, setView] = useState<'home' | 'login' | 'pricing' | 'billing' | 'form' | 'history' | 'payment' | 'profile' | 'privacy' | 'terms' | 'contact'>(() => {
+    const pathMap: Record<string, 'home' | 'login' | 'pricing' | 'billing' | 'form' | 'history' | 'payment' | 'profile' | 'privacy' | 'terms' | 'contact'> = {
+      '/': 'home', '/login': 'login', '/pricing': 'pricing', '/gather': 'form',
+      '/pipeline': 'history', '/payment': 'payment', '/profile': 'profile',
+      '/privacy': 'privacy', '/terms': 'terms', '/contact': 'contact',
+    };
+    return pathMap[window.location.pathname] || 'home';
+  });
   const [leads, setLeads] = useState<Lead[]>([]);
   const [userProfile, setUserProfile] = useState<UserProfile>({
     name: '',
@@ -364,8 +371,8 @@ const App: React.FC = () => {
       const { timestamp } = JSON.parse(savedAuth);
       if (Date.now() - timestamp < SESSION_DAYS * 24 * 60 * 60 * 1000) {
         setIsLoggedIn(true);
-        if (savedPaid === 'true') setView('form');
-        else setView('history');
+        if (savedPaid === 'true') { setView('form'); window.history.replaceState({ view: 'form' }, '', '/gather'); }
+        else { setView('history'); window.history.replaceState({ view: 'history' }, '', '/pipeline'); }
       }
     }
     const savedLeads = localStorage.getItem(STORAGE_KEY_LEADS);
@@ -461,7 +468,7 @@ const App: React.FC = () => {
   };
 
   const handleSyncAttempt = (modal: 'sheets' | 'email') => {
-    if (!hasPaid) { setView('pricing'); return; }
+    if (!hasPaid) { navigateTo('pricing'); return; }
     setActiveModal(modal);
   };
 
@@ -502,15 +509,15 @@ const App: React.FC = () => {
     setIsLoggedIn(true);
     setUserProfile(savedProfile);
     setStatusMsg({ type: 'success', text: 'Welcome to MemoPear!' });
-    if (hasPaid) setView('form');
-    else setView('history');
+    if (hasPaid) navigateTo('form');
+    else navigateTo('history');
   };
 
   const handleLogout = () => {
     localStorage.removeItem(STORAGE_KEY_AUTH);
     setIsLoggedIn(false);
-    setView('home');
-    setStatusMsg({ type: 'success', text: 'Session Terminated.' });
+    navigateTo('home');
+    setStatusMsg({ type: 'success', text: 'Logged out successfully.' });
   };
 
   const deleteAllLeads = () => {
@@ -528,8 +535,8 @@ const App: React.FC = () => {
       setHasPaid(true);
       localStorage.setItem(STORAGE_KEY_PAID, 'true');
       setIsSubmitting(false);
-      setStatusMsg({ type: 'success', text: 'Pro Command Activated.' });
-      setView('form');
+      setStatusMsg({ type: 'success', text: "You're all set! Start capturing contacts." });
+      navigateTo('form');
     }, 2000);
   };
 
@@ -717,10 +724,10 @@ const App: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!hasPaid) { 
-      setView('pricing'); 
-      setStatusMsg({ type: 'error', text: 'Pro Command required to capture intelligence.' }); 
-      return; 
+    if (!hasPaid) {
+      navigateTo('pricing');
+      setStatusMsg({ type: 'error', text: 'Upgrade to Pro to save contacts.' });
+      return;
     }
     if (!firstName || !lastName) { setStatusMsg({ type: 'error', text: 'Identity required.' }); return; }
     setIsSubmitting(true);
@@ -735,6 +742,55 @@ const App: React.FC = () => {
     setShowContactFields(false);
     setIsSubmitting(false);
   };
+
+  const VIEW_URLS: Record<string, string> = {
+    home: '/', login: '/login', pricing: '/pricing', form: '/gather',
+    history: '/pipeline', payment: '/payment', profile: '/profile',
+    privacy: '/privacy', terms: '/terms', contact: '/contact', billing: '/billing',
+  };
+
+  const PAGE_META: Record<string, { title: string; description: string }> = {
+    home: { title: 'MemoPear | Capture Conference Contacts with AI', description: 'Stop losing contacts at conferences. MemoPear lets you scan badges, snap business cards, and record notes — all in one place.' },
+    login: { title: 'Sign In | MemoPear', description: 'Log in or create your MemoPear account to start capturing conference contacts.' },
+    pricing: { title: 'Pricing | MemoPear', description: 'One simple plan. Scan badges, use voice notes, sync to Google Sheets, and more for just $1.49/month.' },
+    form: { title: 'Add a Contact | MemoPear', description: 'Quickly add a new contact from a conference — scan a badge, snap a card, or just type their info.' },
+    history: { title: 'Your Contacts | MemoPear', description: 'Browse and manage all the contacts you\'ve gathered at events and conferences.' },
+    payment: { title: 'Upgrade | MemoPear', description: 'Unlock AI scanning, voice notes, LinkedIn lookup, and Google Sheets sync.' },
+    profile: { title: 'Profile | MemoPear', description: 'Manage your MemoPear profile, conferences, and billing settings.' },
+    privacy: { title: 'Privacy Policy | MemoPear', description: 'How MemoPear handles your data and protects your privacy.' },
+    terms: { title: 'Terms & Conditions | MemoPear', description: 'MemoPear terms of service and subscription details.' },
+    contact: { title: 'Contact Us | MemoPear', description: 'Get in touch with the MemoPear team.' },
+    billing: { title: 'Billing | MemoPear', description: 'Manage your MemoPear subscription and billing.' },
+  };
+
+  const navigateTo = (nextView: typeof view) => {
+    const url = VIEW_URLS[nextView] || '/';
+    window.history.pushState({ view: nextView }, '', url);
+    setView(nextView);
+  };
+
+  useEffect(() => {
+    const meta = PAGE_META[view] || PAGE_META.home;
+    document.title = meta.title;
+    const metaDesc = document.querySelector('meta[name="description"]');
+    if (metaDesc) metaDesc.setAttribute('content', meta.description);
+  }, [view]);
+
+  useEffect(() => {
+    const handlePopState = (e: PopStateEvent) => {
+      if (e.state?.view) setView(e.state.view);
+      else {
+        const pathMap: Record<string, typeof view> = {
+          '/': 'home', '/login': 'login', '/pricing': 'pricing', '/gather': 'form',
+          '/pipeline': 'history', '/payment': 'payment', '/profile': 'profile',
+          '/privacy': 'privacy', '/terms': 'terms', '/contact': 'contact',
+        };
+        setView(pathMap[window.location.pathname] || 'home');
+      }
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
 
   const navLinks = [
     { name: 'Home', view: 'home' as const },
@@ -766,7 +822,7 @@ const App: React.FC = () => {
 
       {/* Universal Navigation Header */}
       <nav className={`fixed top-0 left-0 right-0 z-[100] px-6 py-4 flex items-center justify-between border-b border-slate-200 dark:border-white/5 bg-slate-50/80 dark:bg-[#020617]/80 backdrop-blur-lg transition-opacity duration-300 ${isMenuOpen ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
-        <div className="flex items-center gap-3 cursor-pointer" onClick={() => { setView('home'); setIsMenuOpen(false); }}>
+        <div className="flex items-center gap-3 cursor-pointer" onClick={() => { navigateTo('home'); setIsMenuOpen(false); }}>
           <MemoPearLogo className="w-8 h-8" />
           <h1 className="text-xl font-black tracking-tight">MemoPear</h1>
         </div>
@@ -774,7 +830,7 @@ const App: React.FC = () => {
         {/* Desktop Nav */}
         <div className="hidden md:flex items-center gap-5">
           {navLinks.map(link => (
-            <button key={link.name} onClick={() => setView(link.view)} className={`text-[10px] font-black uppercase tracking-widest transition-colors ${view === link.view ? 'text-blue-600' : 'text-slate-400 hover:text-slate-900 dark:hover:text-white'}`}>
+            <button key={link.name} onClick={() => navigateTo(link.view)} className={`text-[10px] font-black uppercase tracking-widest transition-colors ${view === link.view ? 'text-blue-600' : 'text-slate-400 hover:text-slate-900 dark:hover:text-white'}`}>
               {link.name}
             </button>
           ))}
@@ -819,7 +875,7 @@ const App: React.FC = () => {
             {navLinks.map(link => (
               <button 
                 key={link.name} 
-                onClick={() => { setView(link.view); setIsMenuOpen(false); }} 
+                onClick={() => { navigateTo(link.view); setIsMenuOpen(false); }}
                 className={`w-full text-center py-6 text-3xl font-black uppercase tracking-[0.25em] transition-all duration-300 active:scale-95 ${view === link.view ? 'text-blue-600' : 'text-slate-400 hover:text-slate-900 dark:hover:text-white'}`}
               >
                 {link.name}
@@ -838,13 +894,13 @@ const App: React.FC = () => {
             {isLoggedIn ? (
               <button onClick={() => { handleLogout(); setIsMenuOpen(false); }} className="w-full max-w-xs py-6 bg-rose-600 text-white font-black rounded-[2rem] text-sm uppercase tracking-widest shadow-2xl mt-8 active:scale-95 transition-all">Logout</button>
             ) : (
-              <button onClick={() => { setView('login'); setIsMenuOpen(false); }} className="w-full max-w-xs py-6 bg-blue-600 text-white font-black rounded-[2rem] text-sm uppercase tracking-widest shadow-2xl mt-8 active:scale-95 transition-all">Login / Sign Up</button>
+              <button onClick={() => { navigateTo('login'); setIsMenuOpen(false); }} className="w-full max-w-xs py-6 bg-blue-600 text-white font-black rounded-[2rem] text-sm uppercase tracking-widest shadow-2xl mt-8 active:scale-95 transition-all">Login / Sign Up</button>
             )}
           </div>
         </div>
       )}
 
-      <main ref={mainRef} className={`flex-grow relative overflow-y-auto overflow-x-hidden pt-20 pb-24 transition-all duration-500 ${isMenuOpen ? 'blur-2xl scale-110 opacity-30 grayscale' : 'blur-0 scale-100 opacity-100 grayscale-0'}`}>
+      <main ref={mainRef} className={`flex-grow relative ${view === 'form' ? 'overflow-hidden' : 'overflow-y-auto'} overflow-x-hidden pt-20 transition-all duration-500 ${view === 'form' ? 'pb-20' : 'pb-24'} ${isMenuOpen ? 'blur-2xl scale-110 opacity-30 grayscale' : 'blur-0 scale-100 opacity-100 grayscale-0'}`}>
         {statusMsg && (
           <div className="absolute top-4 left-6 right-6 z-[120] p-3 rounded-xl border glass shadow-2xl flex items-center gap-3 animate-in fade-in slide-in-from-top-4">
             <span className="text-sm">{statusMsg.type === 'success' ? '🛡️' : '⚠️'}</span>
@@ -862,11 +918,11 @@ const App: React.FC = () => {
                 MemoPear
               </h1>
               <p className="text-2xl text-slate-600 dark:text-slate-400 mb-12 max-w-lg font-medium leading-relaxed">
-                Transform trade show encounters into high-velocity pipeline data. Integrated Identity, AI Enrichment, and Enterprise Sync.
+                Never lose a contact at a conference again. Scan badges, snap business cards, and follow up in seconds — all with AI.
               </p>
               <div className="flex flex-col sm:flex-row gap-6 w-full max-w-md z-10">
-                <button onClick={() => setView('login')} className="flex-1 py-5 bg-blue-600 text-white font-black rounded-2xl shadow-2xl hover:scale-105 transition-all">Login / Sign Up</button>
-                <button onClick={() => setShowTour(true)} className="flex-1 py-5 glass font-bold rounded-2xl border-slate-200 dark:border-white/10 hover:bg-slate-50 dark:hover:bg-white/10 transition-all">Take Platform Tour</button>
+                <button onClick={() => navigateTo('login')} className="flex-1 py-5 bg-blue-600 text-white font-black rounded-2xl shadow-2xl hover:scale-105 transition-all">Get Started Free</button>
+                <button onClick={() => setShowTour(true)} className="flex-1 py-5 glass font-bold rounded-2xl border-slate-200 dark:border-white/10 hover:bg-slate-50 dark:hover:bg-white/10 transition-all">See How It Works</button>
               </div>
             </section>
 
@@ -880,10 +936,10 @@ const App: React.FC = () => {
                     </div>
                     <div className="order-1 lg:order-2 space-y-6">
                       <div className="w-12 h-12 rounded-full bg-blue-600 text-white flex items-center justify-center font-black text-xl shadow-lg">1</div>
-                      <h3 className="text-4xl font-black tracking-tight leading-none">Instant Lead Funneling</h3>
-                      <p className="text-lg text-slate-500 font-medium leading-relaxed">Input prospect identities manually or trigger the AI scan engine. No detail is too small, everything is categorized.</p>
+                      <h3 className="text-4xl font-black tracking-tight leading-none">Capture Contacts in Seconds</h3>
+                      <p className="text-lg text-slate-500 font-medium leading-relaxed">Just met someone cool? Type their name, scan their badge, or snap a photo of their business card. Done.</p>
                       <ul className="space-y-4">
-                         {['AI-OCR Scanning', 'Manual vCard Input', 'Meeting Identifier Tags'].map(item => (
+                         {['AI Badge & Card Scanner', 'Quick Manual Entry', 'Conference Tagging'].map(item => (
                            <li key={item} className="flex items-center gap-3 text-xs font-bold text-slate-400 uppercase tracking-widest">
                              <span className="w-4 h-0.5 bg-blue-600"></span> {item}
                            </li>
@@ -896,10 +952,10 @@ const App: React.FC = () => {
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center mt-48">
                     <div className="space-y-6 text-left lg:text-right">
                       <div className="w-12 h-12 rounded-full bg-blue-600 text-white flex items-center justify-center font-black text-xl shadow-lg lg:ml-auto">2</div>
-                      <h3 className="text-4xl font-black tracking-tight leading-none">AI Enrichment Engine</h3>
-                      <p className="text-lg text-slate-500 font-medium leading-relaxed">Gemini 3 analyzes meeting notes and card data to build a comprehensive profile. Automated identity lookup connects the dots.</p>
+                      <h3 className="text-4xl font-black tracking-tight leading-none">Let AI Do the Heavy Lifting</h3>
+                      <p className="text-lg text-slate-500 font-medium leading-relaxed">Our AI reads business cards, transcribes your voice notes, and pulls LinkedIn profiles automatically. You just have the conversation.</p>
                       <ul className="space-y-4 lg:flex lg:flex-col lg:items-end">
-                         {['Gemini Vision Extraction', 'Voice Intelligence Processing', 'LinkedIn Identity Matching'].map(item => (
+                         {['Business Card OCR', 'Voice Note Transcription', 'LinkedIn Lookup'].map(item => (
                            <li key={item} className="flex items-center gap-3 text-xs font-bold text-slate-400 uppercase tracking-widest">
                              {item} <span className="w-4 h-0.5 bg-blue-600"></span>
                            </li>
@@ -918,11 +974,11 @@ const App: React.FC = () => {
                     </div>
                     <div className="order-1 lg:order-2 space-y-6">
                       <div className="w-12 h-12 rounded-full bg-blue-600 text-white flex items-center justify-center font-black text-xl shadow-lg">3</div>
-                      <h3 className="text-4xl font-black tracking-tight leading-none">Command Pipeline</h3>
-                      <p className="text-lg text-slate-500 font-medium leading-relaxed">Your entire event intelligence localized. Review, edit, and expand on gathered intel within a unified interface.</p>
+                      <h3 className="text-4xl font-black tracking-tight leading-none">All Your Contacts, Organized</h3>
+                      <p className="text-lg text-slate-500 font-medium leading-relaxed">Browse everyone you've met, search by name or company, and see your AI-generated follow-up notes — all in one clean list.</p>
                       <div className="p-4 bg-blue-600/5 rounded-2xl border border-blue-600/10">
-                         <p className="text-[10px] font-black text-blue-600 uppercase mb-2">Live Status</p>
-                         <p className="text-xs font-bold text-slate-600 dark:text-slate-400 italic">"Matches found for 94% of scanned badges."</p>
+                         <p className="text-[10px] font-black text-blue-600 uppercase mb-2">Real results</p>
+                         <p className="text-xs font-bold text-slate-600 dark:text-slate-400 italic">"Matched LinkedIn profiles for 94% of scanned badges."</p>
                       </div>
                     </div>
                   </div>
@@ -931,8 +987,8 @@ const App: React.FC = () => {
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center mt-48">
                     <div className="space-y-6 text-left lg:text-right">
                       <div className="w-12 h-12 rounded-full bg-emerald-600 text-white flex items-center justify-center font-black text-xl shadow-lg lg:ml-auto">4</div>
-                      <h3 className="text-4xl font-black tracking-tight leading-none">Enterprise Dispatch</h3>
-                      <p className="text-lg text-slate-500 font-medium leading-relaxed">Batch select your high-value prospects and transmit encrypted payloads directly to your corporate records.</p>
+                      <h3 className="text-4xl font-black tracking-tight leading-none">Follow Up Without the Hassle</h3>
+                      <p className="text-lg text-slate-500 font-medium leading-relaxed">Export to Google Sheets with one tap, or let AI write a personalized follow-up email for every contact you captured.</p>
                       <div className="flex gap-2 lg:justify-end">
                         <div className="w-10 h-10 bg-emerald-600/10 rounded-xl flex items-center justify-center text-xl">📊</div>
                         <div className="w-10 h-10 bg-indigo-600/10 rounded-xl flex items-center justify-center text-xl">✉️</div>
@@ -950,8 +1006,8 @@ const App: React.FC = () => {
             <section className="py-24 overflow-hidden relative bg-slate-50 dark:bg-[#020617]">
                <div className="max-w-6xl mx-auto px-6 mb-12 flex flex-col sm:flex-row justify-between items-end gap-6">
                   <div className="text-left">
-                     <h2 className="text-[10px] font-black text-blue-600 uppercase tracking-[0.5em] mb-4">Field Intel</h2>
-                     <h3 className="text-4xl font-black tracking-tight">Gathering Feedback</h3>
+                     <h2 className="text-[10px] font-black text-blue-600 uppercase tracking-[0.5em] mb-4">Don't take our word for it</h2>
+                     <h3 className="text-4xl font-black tracking-tight">People love MemoPear</h3>
                   </div>
                   <div className="flex gap-4">
                      <button 
@@ -996,9 +1052,9 @@ const App: React.FC = () => {
             <section className="px-6 py-32 bg-blue-600 text-white text-center relative overflow-hidden">
                <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-10"></div>
                <div className="relative z-10">
-                  <h2 className="text-5xl font-black mb-6 tracking-tighter leading-none">Secure the Pipeline. <br/> Initialize Today.</h2>
-                  <p className="text-lg font-medium mb-12 opacity-80 max-w-sm mx-auto">Join the elite field marketing teams dominating conferences with NexusGather.</p>
-                  <button onClick={() => setView('login')} className="px-12 py-6 bg-white text-blue-600 font-black rounded-3xl shadow-2xl hover:scale-110 transition-transform uppercase text-xs tracking-widest active:scale-95">Login / Sign Up</button>
+                  <h2 className="text-5xl font-black mb-6 tracking-tighter leading-none">Ready to never miss <br/> a follow-up again?</h2>
+                  <p className="text-lg font-medium mb-12 opacity-80 max-w-sm mx-auto">Join thousands of people using MemoPear at conferences, trade shows, and networking events.</p>
+                  <button onClick={() => navigateTo('login')} className="px-12 py-6 bg-white text-blue-600 font-black rounded-3xl shadow-2xl hover:scale-110 transition-transform uppercase text-xs tracking-widest active:scale-95">Get Started Free</button>
                </div>
             </section>
           </div>
@@ -1006,8 +1062,8 @@ const App: React.FC = () => {
 
         {view === 'pricing' && (
           <div className="p-4 md:p-8 text-center max-w-4xl mx-auto animate-in fade-in duration-500">
-            <h2 className="text-4xl md:text-5xl font-black mb-4 tracking-tighter text-pear-600 dark:text-pear-400">Command Plans</h2>
-            <p className="text-sm md:text-lg text-slate-500 mb-8 font-medium">Enterprise-grade field intelligence for high-velocity teams.</p>
+            <h2 className="text-4xl md:text-5xl font-black mb-4 tracking-tighter text-pear-600 dark:text-pear-400">Simple Pricing</h2>
+            <p className="text-sm md:text-lg text-slate-500 mb-8 font-medium">One plan. Everything included. No surprises.</p>
             
             <div className="flex justify-center gap-3 mb-8">
               <button 
@@ -1026,9 +1082,11 @@ const App: React.FC = () => {
             </div>
 
             <div className="glass p-6 md:p-10 rounded-[2.5rem] border-2 border-pear-600 shadow-xl mb-8 text-left relative overflow-hidden bg-white dark:bg-white/5">
-              <div className="absolute top-0 right-0 p-6">
-                <div className="bg-pear-600 text-white px-4 py-2 rounded-full text-[8px] font-black uppercase tracking-widest shadow-lg">Most Popular</div>
-              </div>
+              {paymentCycle === 'annual' && (
+                <div className="absolute top-0 right-0 p-6">
+                  <div className="bg-pear-600 text-white px-4 py-2 rounded-full text-[8px] font-black uppercase tracking-widest shadow-lg">Best Value</div>
+                </div>
+              )}
               
               <div className="flex items-end gap-2 mb-6">
                 <div className="text-5xl md:text-6xl font-black tracking-tighter text-pear-700 dark:text-pear-300">
@@ -1039,18 +1097,18 @@ const App: React.FC = () => {
                 </div>
               </div>
               
-              <p className="text-[10px] font-black text-pear-600 uppercase mb-6 tracking-[0.3em]">Professional Command</p>
+              <p className="text-[10px] font-black text-pear-600 uppercase mb-6 tracking-[0.3em]">MemoPear Pro</p>
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4 mb-10">
                 {[
-                  { title: "AI OCR Scan", desc: "Extract data from any badge or card with 99.9% accuracy." },
-                  { title: "Gemini Card Analysis", desc: "Deep intelligence extraction using Vision AI." },
-                  { title: "Voice-to-Intel", desc: "Real-time transcription of meeting notes." },
-                  { title: "LinkedIn Integrated Search", desc: "One-tap prospect enrichment." },
-                  { title: "Google Sheets Sync", desc: "Direct synchronization to your cloud records." },
-                  { title: "Encrypted Local Storage", desc: "Your data stays on your device. Privacy first." },
-                  { title: "Follow-up Drafting", desc: "AI-generated personalized email drafts." },
-                  { title: "Infinite Capacity", desc: "No limits on the number of leads you can gather." }
+                  { title: "AI Badge & Card Scanner", desc: "Snap a photo or scan a QR code — we fill in the details automatically." },
+                  { title: "Business Card OCR", desc: "Our AI reads any business card with incredible accuracy." },
+                  { title: "Voice Note Transcription", desc: "Talk through your notes hands-free and we'll transcribe everything." },
+                  { title: "LinkedIn Lookup", desc: "Find anyone on LinkedIn with one tap — right from their contact card." },
+                  { title: "Google Sheets Export", desc: "Push all your contacts to a spreadsheet with a single click." },
+                  { title: "Private & Secure", desc: "Everything stays on your device. No cloud storage of your contacts." },
+                  { title: "AI Follow-up Emails", desc: "Get a personalized follow-up email drafted for every contact." },
+                  { title: "Unlimited Contacts", desc: "Capture as many contacts as you want — no limits, ever." }
                 ].map(item => (
                   <div key={item.title} className="flex gap-4 items-start group">
                     <div className="w-8 h-8 rounded-xl bg-pear-600 text-white flex items-center justify-center text-sm flex-shrink-0 shadow-lg">✓</div>
@@ -1063,20 +1121,20 @@ const App: React.FC = () => {
               </div>
 
               <button onClick={() => {
-                const stripeLink = paymentCycle === 'annual' 
-                  ? 'https://buy.stripe.com/eVq3cx7bNf8b2ON5UzfEk01' 
+                const stripeLink = paymentCycle === 'annual'
+                  ? 'https://buy.stripe.com/eVq3cx7bNf8b2ON5UzfEk01'
                   : 'https://buy.stripe.com/aFa28t67J8JNdtr3MrfEk00';
                 window.open(stripeLink, '_blank');
-              }} className="w-full py-4 bg-pear-600 text-white font-black rounded-2xl shadow-xl hover:scale-[1.02] active:scale-95 transition-all text-[10px] uppercase tracking-widest">Initialize Pipeline</button>
+              }} className="w-full py-4 bg-pear-600 text-white font-black rounded-2xl shadow-xl hover:scale-[1.02] active:scale-95 transition-all text-[10px] uppercase tracking-widest">Get Started Now</button>
             </div>
             
-            <button onClick={() => setView('home')} className="text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-pear-600 transition-colors">Return to Base</button>
+            <button onClick={() => navigateTo('home')} className="text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-pear-600 transition-colors">Back to Home</button>
           </div>
         )}
 
         {view === 'payment' && (
           <div className="p-8 max-w-md mx-auto animate-in fade-in duration-500">
-            <button onClick={() => setView('pricing')} className="flex items-center gap-2 text-[10px] font-black uppercase text-slate-400 tracking-widest mb-8">
+            <button onClick={() => navigateTo('pricing')} className="flex items-center gap-2 text-[10px] font-black uppercase text-slate-400 tracking-widest mb-8">
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M15 19l-7-7 7-7" /></svg>
               Go Back
             </button>
@@ -1378,10 +1436,10 @@ const App: React.FC = () => {
                 <div className="space-y-8">
                   <div className="text-left space-y-4">
                     <h1 className="text-5xl md:text-6xl font-black tracking-tight leading-[0.9] text-slate-900 dark:text-white">
-                      Gather with us to unlock your business
+                      Start building your network today
                     </h1>
                     <p className="text-lg md:text-xl text-slate-500 font-medium leading-relaxed">
-                      Access thousands of network opportunities and enterprise-grade pipeline templates
+                      Join thousands of people who use MemoPear to stay on top of their conference contacts
                     </p>
                   </div>
 
@@ -1412,7 +1470,7 @@ const App: React.FC = () => {
                     </form>
 
                     <p className="text-[10px] text-slate-400 font-medium text-center">
-                      By signing up, you agree to the <button onClick={() => setView('terms')} className="underline hover:text-slate-600 transition-colors">Terms of use</button> and <button onClick={() => setView('privacy')} className="underline hover:text-slate-600 transition-colors">Privacy Policy</button>.
+                      By signing up, you agree to the <button onClick={() => navigateTo('terms')} className="underline hover:text-slate-600 transition-colors">Terms of use</button> and <button onClick={() => navigateTo('privacy')} className="underline hover:text-slate-600 transition-colors">Privacy Policy</button>.
                     </p>
                   </div>
                 </div>
@@ -1420,14 +1478,14 @@ const App: React.FC = () => {
                 <div className="space-y-8">
                   <div className="text-center space-y-4">
                     <MemoPearLogo className="w-16 h-16 mx-auto mb-6" />
-                    <h2 className="text-4xl font-black text-slate-900 dark:text-white tracking-tight">Welcome Back</h2>
-                    <p className="text-slate-500 font-medium">Strategic intelligence awaiting your command</p>
+                    <h2 className="text-4xl font-black text-slate-900 dark:text-white tracking-tight">Welcome back!</h2>
+                    <p className="text-slate-500 font-medium">Good to see you again. Your contacts are waiting.</p>
                   </div>
 
                   <form onSubmit={handleAuth} className="space-y-4">
                     <input type="email" placeholder="Work Email" required value={email} onChange={(e) => setEmail(e.target.value)} className="w-full px-5 py-4 rounded-xl bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 outline-none text-sm font-bold focus:border-blue-500 transition-all" />
                     <input type="password" placeholder="Password" required value={password} onChange={(e) => setPassword(e.target.value)} className="w-full px-5 py-4 rounded-xl bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 outline-none text-sm font-bold focus:border-blue-500 transition-all" />
-                    <button type="submit" className="w-full py-5 bg-blue-600 text-white font-black rounded-2xl shadow-xl hover:scale-[1.02] transition-all uppercase text-[10px] tracking-widest">Authorize Dashboard</button>
+                    <button type="submit" className="w-full py-5 bg-blue-600 text-white font-black rounded-2xl shadow-xl hover:scale-[1.02] transition-all uppercase text-[10px] tracking-widest">Sign In</button>
                   </form>
 
                   <div className="grid grid-cols-2 gap-4">
@@ -1447,153 +1505,124 @@ const App: React.FC = () => {
         )}
 
         {isLoggedIn && (view === 'form' || view === 'history') && (
-           <div className="p-3 md:p-6">
+           <div className={view === 'form' ? 'h-full flex flex-col' : 'p-3 md:p-6'}>
               {view === 'form' && (
-                 <div className="relative max-w-2xl mx-auto pt-1 pb-10 md:pt-16 md:pb-24">
+                 <form onSubmit={handleSubmit} className="relative h-full flex flex-col max-w-2xl mx-auto w-full px-3 py-2 gap-2">
                     {!hasPaid && (
-                       <div className="absolute inset-0 z-[60] glass p-10 flex flex-col items-center justify-center text-center rounded-[3rem]">
-                          <div className="w-24 h-24 bg-pear-600/10 rounded-full flex items-center justify-center mb-8 text-4xl">🍐</div>
-                          <h2 className="text-2xl font-black mb-4 text-pear-700 dark:text-pear-300">Pipeline Locked</h2>
-                          <button onClick={() => setView('pricing')} className="w-full py-5 bg-pear-600 text-white font-black rounded-2xl shadow-xl hover:scale-105 transition-all max-w-sm uppercase text-xs tracking-widest">Activate Pro ($1.49/mo)</button>
+                       <div className="absolute inset-0 z-[60] glass p-10 flex flex-col items-center justify-center text-center rounded-[2rem]">
+                          <div className="w-20 h-20 bg-pear-600/10 rounded-full flex items-center justify-center mb-6 text-4xl">🍐</div>
+                          <h2 className="text-2xl font-black mb-2 text-pear-700 dark:text-pear-300">Unlock Contact Capture</h2>
+                          <p className="text-sm text-slate-500 mb-6">Upgrade to Pro to save contacts, scan badges, and use voice notes.</p>
+                          <button onClick={() => navigateTo('pricing')} className="w-full py-4 bg-pear-600 text-white font-black rounded-2xl shadow-xl hover:scale-105 transition-all max-w-xs uppercase text-xs tracking-widest">Upgrade to Pro — $1.49/mo</button>
                        </div>
                     )}
-                    
-                     <div className="mb-1 md:mb-10 text-center">
-                        <h2 className="text-xl md:text-4xl font-black tracking-tight mb-0 md:mb-2">Gather Intel</h2>
-                        <p className="text-slate-400 font-bold uppercase text-[6px] md:text-[10px] tracking-[0.2em]">Live Session: {conferenceName || 'Global Field Gathering'}</p>
-                     </div>
 
-                     <form onSubmit={handleSubmit} className="space-y-2 md:space-y-8">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-2 md:gap-4">
-                           <div className="space-y-0.5 md:space-y-2 relative group">
-                              <label className="text-[8px] md:text-[10px] font-black uppercase text-slate-400 tracking-widest pl-2">Event Scope</label>
-                              <div className="relative">
-                                 <div className="flex gap-2 mb-1">
-                                    <input type="text" id="conference-field" value={conferenceName} onChange={(e) => setConferenceName(e.target.value)} placeholder="Search or Enter Conference" className="flex-1 px-4 md:px-6 py-1.5 md:py-4 rounded-xl md:rounded-2xl bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 text-xs md:text-sm font-bold outline-none focus:border-pear-500/50 transition-all" />
-                                    <button 
-                                      type="button"
-                                      onClick={async () => {
-                                        setIsSubmitting(true);
-                                        try {
-                                          const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-                                          const response = await ai.models.generateContent({
-                                            model: 'gemini-3-flash-preview',
-                                            contents: "List 15 major upcoming global conferences from https://10times.com/conferences. Return ONLY a JSON array of strings containing the conference names.",
-                                            config: {
-                                              tools: [{ urlContext: {} }],
-                                              responseMimeType: "application/json",
-                                            }
-                                          });
-                                          const list = JSON.parse(response.text.trim());
-                                          if (Array.isArray(list)) {
-                                            setUserProfile(prev => ({ ...prev, conferences: Array.from(new Set([...prev.conferences, ...list])) }));
-                                            setStatusMsg({ type: 'success', text: 'Conferences Synced.' });
-                                          }
-                                        } catch (err) {
-                                          console.error(err);
-                                          setStatusMsg({ type: 'error', text: 'Sync Failed.' });
-                                        } finally {
-                                          setIsSubmitting(false);
-                                        }
-                                      }}
-                                      className="px-3 bg-blue-600/10 text-blue-600 rounded-xl border border-blue-600/20 text-[8px] font-black uppercase tracking-widest hover:bg-blue-600 hover:text-white transition-all"
-                                    >
-                                      Sync
-                                    </button>
-                                 </div>
-                                <div className="absolute top-full left-0 right-0 z-50 mt-1 glass rounded-xl border border-pear-100 dark:border-white/10 shadow-2xl max-h-32 md:max-h-48 overflow-y-auto hidden group-focus-within:block">
-                                  {userProfile.conferences.length > 0 ? (
-                                    userProfile.conferences.map((c, i) => (
-                                      <button key={i} type="button" onMouseDown={() => setConferenceName(c)} className="w-full text-left px-4 md:px-6 py-2 md:py-3 text-xs md:text-sm font-bold hover:bg-pear-50 dark:hover:bg-white/5 transition-colors border-b border-slate-100 dark:border-white/5 last:border-0">{c}</button>
-                                    ))
-                                  ) : (
-                                    <div className="px-4 md:px-6 py-2 md:py-4 text-[10px] md:text-xs font-bold text-slate-400 italic">No conferences in profile.</div>
-                                  )}
-                                  <div className="bg-slate-50 dark:bg-white/5 px-4 md:px-6 py-1.5 md:py-2 text-[7px] md:text-[8px] font-black uppercase tracking-widest text-slate-400 border-t border-slate-100 dark:border-white/5">Suggested (10times)</div>
-                                  {['MWC Barcelona', 'Web Summit', 'Dreamforce', 'CES 2025'].map((c, i) => (
-                                    <button key={i} type="button" onMouseDown={() => setConferenceName(c)} className="w-full text-left px-4 md:px-6 py-2 md:py-3 text-xs md:text-sm font-bold hover:bg-pear-50 dark:hover:bg-white/5 transition-colors border-b border-slate-100 dark:border-white/5 last:border-0">{c}</button>
-                                  ))}
-                                </div>
-                             </div>
-                          </div>
-                          <div className={`flex items-end gap-2 transition-all duration-500 ${showTour && tourStep === 0 ? 'ring-4 ring-pear-500 ring-offset-4 dark:ring-offset-[#020617] rounded-2xl animate-pulse scale-105' : ''}`}>
-                             <button type="button" onClick={() => setIsScanning(true)} className="flex-1 py-1.5 md:py-4 rounded-xl md:rounded-2xl bg-pear-600/10 text-pear-600 text-[9px] md:text-[10px] font-black uppercase border border-pear-600/20 active:scale-95 transition-all">QR Scanner</button>
-                             <button type="button" onClick={() => cardInputRef.current?.click()} className="flex-1 py-1.5 md:py-4 rounded-xl md:rounded-2xl bg-stem-600/10 text-stem-600 text-[9px] md:text-[10px] font-black uppercase border border-stem-600/20 active:scale-95 transition-all">
-                                <input type="file" ref={cardInputRef} className="hidden" accept="image/*" capture="environment" onChange={handleCardCapture} /> AI Card Scan
-                             </button>
-                          </div>
-                       </div>
-
-                       <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
-                          <div className="space-y-1 md:space-y-2">
-                             <label className="text-[8px] md:text-[10px] font-black uppercase text-slate-400 tracking-widest pl-2">Identity</label>
-                             <div className="grid grid-cols-2 gap-2">
-                                <input type="text" value={firstName} onChange={(e) => setFirstName(e.target.value)} placeholder="First" className="w-full px-4 md:px-5 py-1.5 md:py-4 rounded-xl md:rounded-2xl bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 text-xs md:text-sm font-bold outline-none" required />
-                                <input type="text" value={lastName} onChange={(e) => setLastName(e.target.value)} placeholder="Last" className="w-full px-4 md:px-5 py-1.5 md:py-4 rounded-xl md:rounded-2xl bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 text-xs md:text-sm font-bold outline-none" required />
-                                <input type="text" value={company} onChange={(e) => setCompany(e.target.value)} placeholder="Company" className="w-full px-4 md:px-5 py-1.5 md:py-4 rounded-xl md:rounded-2xl bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 text-xs md:text-sm font-bold outline-none mt-0.5 md:mt-2 col-span-2" />
-                                <input type="text" value={jobTitle} onChange={(e) => setJobTitle(e.target.value)} placeholder="Job Title" className="w-full px-4 md:px-5 py-1.5 md:py-4 rounded-xl md:rounded-2xl bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 text-xs md:text-sm font-bold outline-none mt-0.5 md:mt-2 col-span-2" />
-                             </div>
-                             
-                             <button type="button" onClick={() => setShowContactFields(!showContactFields)} className="text-[8px] md:text-[9px] font-black text-pear-600 uppercase tracking-widest pl-2 pt-1 md:pt-2 flex items-center gap-1">
-                               {showContactFields ? 'Hide Contact Details' : 'Add Contact Details Manually'}
-                               <svg className={`w-3 h-3 transition-transform ${showContactFields ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M19 9l-7 7-7-7" /></svg>
-                             </button>
-
-                             {(showContactFields || email || phone || website) && (
-                               <div className="grid grid-cols-2 gap-2 mt-1 md:mt-2 animate-in slide-in-from-top-2 duration-300">
-                                 <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email" className="w-full px-4 md:px-5 py-1.5 md:py-4 rounded-xl md:rounded-2xl bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 text-xs md:text-sm font-bold outline-none" />
-                                 <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Phone" className="w-full px-4 md:px-5 py-1.5 md:py-4 rounded-xl md:rounded-2xl bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 text-xs md:text-sm font-bold outline-none" />
-                                 <input type="url" value={website} onChange={(e) => setWebsite(e.target.value)} placeholder="Website" className="w-full px-4 md:px-5 py-1.5 md:py-4 rounded-xl md:rounded-2xl bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 text-xs md:text-sm font-bold outline-none col-span-2" />
-                               </div>
-                             )}
-                          </div>
-                          <div className={`space-y-1 md:space-y-2 transition-all duration-500 ${showTour && tourStep === 1 ? 'ring-4 ring-pear-500 ring-offset-4 dark:ring-offset-[#020617] rounded-2xl animate-pulse scale-105' : ''}`}>
-                             <label className="text-[8px] md:text-[10px] font-black uppercase text-slate-400 tracking-widest pl-2">Follow-up Draft</label>
-                             <button type="button" onClick={isTranscribing ? stopTranscription : startTranscription} className={`w-full py-1.5 md:py-4 rounded-xl md:rounded-2xl text-[9px] md:text-[10px] font-black uppercase border active:scale-95 transition-all ${isTranscribing ? 'bg-red-500 text-white recording-pulse' : 'bg-pear-600/10 text-pear-600'}`}>{isTranscribing ? 'Listening...' : 'Record Voice Intel'}</button>
-                          </div>
-                       </div>
-
-                       <div className="space-y-2 md:space-y-4">
-                          <label className="text-[8px] md:text-[10px] font-black uppercase text-slate-400 tracking-widest pl-2">Intelligence Channels</label>
-                          <div className="flex flex-wrap gap-1 md:gap-2">
-                             {Object.values(CommMethod).map(method => (
-                               <CommMethodToggle key={method} method={method} selected={commMethods.includes(method)} onToggle={toggleCommMethod} />
-                             ))}
-                          </div>
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-2 md:gap-3 mt-2 md:mt-4">
-                             {commMethods.map(method => (
-                               <div key={method} className="animate-in slide-in-from-left-2 fade-in">
-                                  <input 
-                                    type="text" 
-                                    value={contactValues[method] || ''} 
-                                    onChange={(e) => handleContactValueChange(method, e.target.value)}
-                                    placeholder={`${method.charAt(0).toUpperCase() + method.slice(1)} handle/address`}
-                                    className="w-full px-4 md:px-5 py-2 md:py-3 rounded-lg md:rounded-xl bg-pear-600/5 border border-pear-600/10 text-[10px] md:text-xs font-bold outline-none"
-                                  />
-                               </div>
-                             ))}
-                          </div>
-                       </div>
-
-                       <div className="space-y-2">
-                          <label className="text-[8px] md:text-[10px] font-black uppercase text-slate-400 tracking-widest pl-2">Field Notes</label>
-                          <textarea 
-                              value={notes} 
-                              onChange={(e) => setNotes(e.target.value)} 
-                              rows={2} 
-                              placeholder="Key discussion points, pain points..." 
-                              className={`w-full p-3 md:p-6 rounded-xl md:rounded-[2rem] bg-white dark:bg-white/5 border outline-none text-xs md:text-sm leading-relaxed resize-none transition-all duration-500 ${showTour && tourStep === 1 ? 'border-pear-500 ring-4 ring-pear-500/20' : 'border-slate-200 dark:border-white/10 focus:border-pear-500/50'}`} 
-                           />
-                       </div>
-
-                       <button type="submit" disabled={isSubmitting} className="w-full py-2.5 md:py-6 bg-pear-600 text-white font-black rounded-xl md:rounded-3xl text-xs md:text-sm shadow-2xl active:scale-95 transition-all disabled:opacity-50 uppercase tracking-widest">
-                         {isSubmitting ? 'Syncing Intel...' : 'Commit to Pipeline'}
+                    {/* Row 1: Conference + Scan buttons */}
+                    <div className="flex gap-2 flex-shrink-0 relative group">
+                       <input
+                         type="text"
+                         value={conferenceName}
+                         onChange={(e) => setConferenceName(e.target.value)}
+                         placeholder="Conference name"
+                         className="flex-1 min-w-0 px-3 py-2 rounded-xl bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 text-xs font-bold outline-none focus:border-pear-500/50 transition-all"
+                       />
+                       <button
+                         type="button"
+                         onClick={async () => {
+                           setIsSubmitting(true);
+                           try {
+                             const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+                             const response = await ai.models.generateContent({
+                               model: 'gemini-3-flash-preview',
+                               contents: "List 15 major upcoming global conferences from https://10times.com/conferences. Return ONLY a JSON array of strings containing the conference names.",
+                               config: { tools: [{ urlContext: {} }], responseMimeType: "application/json" }
+                             });
+                             const list = JSON.parse(response.text.trim());
+                             if (Array.isArray(list)) {
+                               setUserProfile(prev => ({ ...prev, conferences: Array.from(new Set([...prev.conferences, ...list])) }));
+                               setStatusMsg({ type: 'success', text: 'Conferences synced!' });
+                             }
+                           } catch (err) { setStatusMsg({ type: 'error', text: 'Sync failed.' }); }
+                           finally { setIsSubmitting(false); }
+                         }}
+                         className="px-2.5 py-2 bg-blue-600/10 text-blue-600 rounded-xl border border-blue-600/20 text-[8px] font-black uppercase tracking-widest hover:bg-blue-600 hover:text-white transition-all flex-shrink-0"
+                       >Sync</button>
+                       <button type="button" onClick={() => setIsScanning(true)} className={`px-3 py-2 rounded-xl bg-pear-600/10 text-pear-600 text-[8px] font-black uppercase border border-pear-600/20 active:scale-95 transition-all flex-shrink-0 ${showTour && tourStep === 0 ? 'ring-2 ring-pear-500 animate-pulse' : ''}`}>QR</button>
+                       <button type="button" onClick={() => cardInputRef.current?.click()} className={`px-3 py-2 rounded-xl bg-stem-600/10 text-stem-600 text-[8px] font-black uppercase border border-stem-600/20 active:scale-95 transition-all flex-shrink-0 ${showTour && tourStep === 0 ? 'ring-2 ring-pear-500 animate-pulse' : ''}`}>
+                         <input type="file" ref={cardInputRef} className="hidden" accept="image/*" capture="environment" onChange={handleCardCapture} />Scan Card
                        </button>
-                       <p className="text-[7px] md:text-[8px] font-bold text-slate-400 text-center uppercase tracking-widest opacity-60 mt-2">
-                         Records are purged automatically after 30 days for data privacy.
-                       </p>
-                    </form>
-                 </div>
+                       <div className="absolute top-full left-0 right-0 z-50 mt-1 glass rounded-xl border border-pear-100 dark:border-white/10 shadow-2xl max-h-40 overflow-y-auto hidden group-focus-within:block">
+                         {[...userProfile.conferences, 'MWC Barcelona', 'Web Summit', 'Dreamforce', 'CES 2025'].map((c, i) => (
+                           <button key={i} type="button" onMouseDown={() => setConferenceName(c)} className="w-full text-left px-4 py-2 text-xs font-bold hover:bg-pear-50 dark:hover:bg-white/5 transition-colors border-b border-slate-100 dark:border-white/5 last:border-0">{c}</button>
+                         ))}
+                       </div>
+                    </div>
+
+                    {/* Row 2: Name fields */}
+                    <div className="grid grid-cols-2 gap-2 flex-shrink-0">
+                       <input type="text" value={firstName} onChange={(e) => setFirstName(e.target.value)} placeholder="First name *" className="px-3 py-2 rounded-xl bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 text-xs font-bold outline-none focus:border-pear-500/50 transition-all" required />
+                       <input type="text" value={lastName} onChange={(e) => setLastName(e.target.value)} placeholder="Last name *" className="px-3 py-2 rounded-xl bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 text-xs font-bold outline-none focus:border-pear-500/50 transition-all" required />
+                    </div>
+
+                    {/* Row 3: Company + Job Title */}
+                    <div className="grid grid-cols-2 gap-2 flex-shrink-0">
+                       <input type="text" value={company} onChange={(e) => setCompany(e.target.value)} placeholder="Company" className="px-3 py-2 rounded-xl bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 text-xs font-bold outline-none focus:border-pear-500/50 transition-all" />
+                       <input type="text" value={jobTitle} onChange={(e) => setJobTitle(e.target.value)} placeholder="Job title" className="px-3 py-2 rounded-xl bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 text-xs font-bold outline-none focus:border-pear-500/50 transition-all" />
+                    </div>
+
+                    {/* Row 4: Email + Phone */}
+                    <div className="grid grid-cols-2 gap-2 flex-shrink-0">
+                       <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email" className="px-3 py-2 rounded-xl bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 text-xs font-bold outline-none focus:border-pear-500/50 transition-all" />
+                       <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Phone" className="px-3 py-2 rounded-xl bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 text-xs font-bold outline-none focus:border-pear-500/50 transition-all" />
+                    </div>
+
+                    {/* Row 5: Follow-up channels */}
+                    <div className={`flex-shrink-0 transition-all duration-500 ${showTour && tourStep === 1 ? 'ring-2 ring-pear-500 rounded-xl animate-pulse' : ''}`}>
+                       <label className="text-[8px] font-black uppercase text-slate-400 tracking-widest pl-1 mb-1 block">Best way to follow up</label>
+                       <div className="flex flex-wrap gap-1">
+                          {Object.values(CommMethod).map(method => (
+                            <CommMethodToggle key={method} method={method} selected={commMethods.includes(method)} onToggle={toggleCommMethod} />
+                          ))}
+                       </div>
+                       {commMethods.length > 0 && (
+                         <div className="grid grid-cols-2 gap-1.5 mt-1.5">
+                           {commMethods.map(method => (
+                             <input
+                               key={method}
+                               type="text"
+                               value={contactValues[method] || ''}
+                               onChange={(e) => handleContactValueChange(method, e.target.value)}
+                               placeholder={`${method.charAt(0).toUpperCase() + method.slice(1)}`}
+                               className="px-3 py-1.5 rounded-lg bg-pear-600/5 border border-pear-600/10 text-[10px] font-bold outline-none"
+                             />
+                           ))}
+                         </div>
+                       )}
+                    </div>
+
+                    {/* Row 6: Notes + Voice — fills remaining space */}
+                    <div className={`flex gap-2 flex-1 min-h-0 transition-all duration-500 ${showTour && tourStep === 1 ? 'ring-2 ring-pear-500 rounded-xl animate-pulse' : ''}`}>
+                       <textarea
+                         value={notes}
+                         onChange={(e) => setNotes(e.target.value)}
+                         placeholder="What did you talk about? Any next steps?"
+                         className={`flex-1 min-h-0 p-3 rounded-xl bg-white dark:bg-white/5 border outline-none text-xs leading-relaxed resize-none transition-all ${showTour && tourStep === 1 ? 'border-pear-500' : 'border-slate-200 dark:border-white/10 focus:border-pear-500/50'}`}
+                       />
+                       <button
+                         type="button"
+                         onClick={isTranscribing ? stopTranscription : startTranscription}
+                         className={`flex-shrink-0 w-14 rounded-xl border text-lg active:scale-95 transition-all flex items-center justify-center ${isTranscribing ? 'bg-red-500 text-white border-red-500 recording-pulse' : 'bg-pear-600/10 text-pear-600 border-pear-600/20'}`}
+                         title={isTranscribing ? 'Stop recording' : 'Record voice note'}
+                       >🎙</button>
+                    </div>
+
+                    {/* Row 7: Submit */}
+                    <div className="flex-shrink-0 pb-1">
+                       <button type="submit" disabled={isSubmitting} className="w-full py-3 bg-pear-600 text-white font-black rounded-xl text-sm shadow-xl active:scale-95 transition-all disabled:opacity-50 uppercase tracking-widest">
+                         {isSubmitting ? 'Saving...' : 'Save Contact'}
+                       </button>
+                    </div>
+                 </form>
               )}
               
               {view === 'history' && (
@@ -1604,31 +1633,31 @@ const App: React.FC = () => {
                              <div className="w-10 h-10 bg-blue-600 text-white rounded-2xl flex items-center justify-center font-black text-sm">{selectedLeadIds.size}</div>
                              <button onClick={() => setSelectedLeadIds(new Set())} className="text-xs font-black text-slate-500 uppercase tracking-widest">Deselect All</button>
                           </div>
-                          <button onClick={deleteSelectedLeads} className="px-6 py-3 bg-rose-600/10 text-rose-500 rounded-2xl text-[10px] font-black uppercase border border-rose-600/20 active:scale-95 transition-all">Purge Selection</button>
+                          <button onClick={deleteSelectedLeads} className="px-6 py-3 bg-rose-600/10 text-rose-500 rounded-2xl text-[10px] font-black uppercase border border-rose-600/20 active:scale-95 transition-all">Delete Selected</button>
                        </div>
                        <div className="flex gap-2 overflow-x-auto no-scrollbar">
-                          <button onClick={() => handleSyncAttempt('sheets')} className="px-8 py-4 bg-emerald-600 text-white rounded-[1.5rem] text-[10px] font-black uppercase shadow-lg hover:bg-emerald-700 transition-all">📊 Drive Sync</button>
-                          <button onClick={() => handleSyncAttempt('email')} className="px-8 py-4 bg-indigo-600 text-white rounded-[1.5rem] text-[10px] font-black uppercase shadow-lg hover:bg-indigo-700 transition-all">✉️ Dispatch</button>
+                          <button onClick={() => handleSyncAttempt('sheets')} className="px-8 py-4 bg-emerald-600 text-white rounded-[1.5rem] text-[10px] font-black uppercase shadow-lg hover:bg-emerald-700 transition-all">📊 Export to Sheets</button>
+                          <button onClick={() => handleSyncAttempt('email')} className="px-8 py-4 bg-indigo-600 text-white rounded-[1.5rem] text-[10px] font-black uppercase shadow-lg hover:bg-indigo-700 transition-all">✉️ Send Emails</button>
                           
                        </div>
                     </div>
                     <div className="mb-8">
-                       <h2 className="text-5xl font-black tracking-tighter mb-2">Lead Intelligence</h2>
+                       <h2 className="text-5xl font-black tracking-tighter mb-2">Your Contacts</h2>
                         <div className="flex gap-2 mt-4">
                            <button onClick={() => setStatusMsg({type:'success', text:'Google Spreadsheet Linked.'})} className="px-4 py-2 bg-slate-800 text-white rounded-xl text-[9px] font-black uppercase shadow-lg hover:bg-slate-900 transition-all">🔗 Link Sheets</button>
                            <button onClick={() => setShowRetentionNotice(true)} className="px-4 py-2 bg-blue-600/10 text-blue-600 rounded-xl text-[9px] font-black uppercase border border-blue-600/20 active:scale-95 transition-all">Retention Policy</button>
                            {leads.length > 0 && (
-                             <button onClick={deleteAllLeads} className="px-4 py-2 bg-rose-600/10 text-rose-500 rounded-xl text-[9px] font-black uppercase border border-rose-600/20 active:scale-95 transition-all">Purge All</button>
+                             <button onClick={deleteAllLeads} className="px-4 py-2 bg-rose-600/10 text-rose-500 rounded-xl text-[9px] font-black uppercase border border-rose-600/20 active:scale-95 transition-all">Delete All</button>
                            )}
                         </div>
-                       <p className="text-slate-400 font-bold uppercase text-[10px] tracking-[0.2em]">{leads.length} Active Records In Pipeline</p>
+                       <p className="text-slate-400 font-bold uppercase text-[10px] tracking-[0.2em]">{leads.length} {leads.length === 1 ? 'contact' : 'contacts'} saved</p>
                     </div>
                     <div className="space-y-6">
                        {leads.length === 0 ? (
                          <div className="py-24 text-center glass rounded-[4rem] border-dashed border-slate-300 dark:border-white/10 flex flex-col items-center">
                             <div className="w-20 h-20 bg-slate-100 dark:bg-white/5 rounded-full flex items-center justify-center text-4xl mb-6 grayscale">🕵️</div>
-                            <p className="text-slate-400 font-black uppercase text-[10px] tracking-[0.2em]">Pipeline Dormant</p>
-                            <button onClick={() => setView('form')} className="mt-8 text-blue-600 font-black uppercase text-xs tracking-widest">Start Gathering</button>
+                            <p className="text-slate-400 font-black uppercase text-[10px] tracking-[0.2em]">No contacts yet</p>
+                            <button onClick={() => navigateTo('form')} className="mt-8 text-blue-600 font-black uppercase text-xs tracking-widest">Add Your First Contact</button>
                          </div>
                        ) : leads.map(lead => (
                           <div key={lead.id} onClick={() => setExpandedLeadId(expandedLeadId === lead.id ? null : lead.id)} className={`glass p-4 md:p-8 rounded-2xl md:rounded-[3rem] border relative cursor-pointer shadow-md transition-all duration-300 ${selectedLeadIds.has(lead.id) ? 'border-pear-500 bg-pear-500/5 ring-1 ring-pear-500' : 'border-slate-200 dark:border-white/5 hover:border-pear-500/30'}`}>
@@ -1687,20 +1716,20 @@ const App: React.FC = () => {
               )}
            </div>
         )}
-        {view === 'privacy' && <PrivacyPolicy onBack={() => setView('home')} />}
-        {view === 'terms' && <TermsAndConditions onBack={() => setView('home')} />}
-        {view === 'contact' && <ContactUs onBack={() => setView('home')} />}
+        {view === 'privacy' && <PrivacyPolicy onBack={() => navigateTo('home')} />}
+        {view === 'terms' && <TermsAndConditions onBack={() => navigateTo('home')} />}
+        {view === 'contact' && <ContactUs onBack={() => navigateTo('home')} />}
       </main>
 
       <footer className="py-12 border-t border-slate-200 dark:border-white/10 mt-20 pb-32">
         <div className="max-w-2xl mx-auto px-6 text-center">
           <div className="flex flex-wrap justify-center gap-6 mb-8">
-            <button onClick={() => setView('privacy')} className="text-[10px] font-black uppercase text-slate-400 hover:text-blue-600 transition-colors tracking-widest">Privacy Policy</button>
-            <button onClick={() => setView('terms')} className="text-[10px] font-black uppercase text-slate-400 hover:text-blue-600 transition-colors tracking-widest">Terms & Conditions</button>
-            <button onClick={() => setView('contact')} className="text-[10px] font-black uppercase text-slate-400 hover:text-blue-600 transition-colors tracking-widest">Contact Us</button>
+            <button onClick={() => navigateTo('privacy')} className="text-[10px] font-black uppercase text-slate-400 hover:text-blue-600 transition-colors tracking-widest">Privacy Policy</button>
+            <button onClick={() => navigateTo('terms')} className="text-[10px] font-black uppercase text-slate-400 hover:text-blue-600 transition-colors tracking-widest">Terms & Conditions</button>
+            <button onClick={() => navigateTo('contact')} className="text-[10px] font-black uppercase text-slate-400 hover:text-blue-600 transition-colors tracking-widest">Contact Us</button>
           </div>
           <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest opacity-60 leading-relaxed font-mono">
-            © 2026 Memopear. All rights reserved.<br/>Strategic Intelligence for Field Operations.
+            © 2026 MemoPear. All rights reserved.<br/>Making conferences less stressful, one contact at a time.
           </p>
         </div>
       </footer>
@@ -1759,8 +1788,8 @@ const App: React.FC = () => {
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 w-[95%] max-w-sm z-[60]">
           <div className="glass p-2 rounded-[3rem] border border-slate-200 dark:border-white/10 flex relative shadow-[0_30px_600px_rgba(0,0,0,0.5)]">
              <div className={`absolute top-2 bottom-2 w-[48%] bg-blue-600 rounded-[2.5rem] transition-all duration-300 ease-out shadow-xl ${view === 'history' ? 'translate-x-full left-[1.5%]' : 'translate-x-0 left-[1.5%]'}`} />
-             <button onClick={() => { setView('form'); setExpandedLeadId(null); }} className={`flex-1 flex items-center justify-center py-5 rounded-3xl z-10 text-[11px] font-black uppercase tracking-[0.25em] transition-colors ${view === 'form' ? 'text-white' : 'text-slate-400'}`}>Gather</button>
-             <button onClick={() => { setView('history'); setExpandedLeadId(null); }} className={`flex-1 flex items-center justify-center py-5 rounded-3xl z-10 text-[11px] font-black uppercase tracking-[0.25em] transition-colors ${view === 'history' ? 'text-white' : 'text-slate-400'}`}>Pipeline</button>
+             <button onClick={() => { navigateTo('form'); setExpandedLeadId(null); }} className={`flex-1 flex items-center justify-center py-5 rounded-3xl z-10 text-[11px] font-black uppercase tracking-[0.25em] transition-colors ${view === 'form' ? 'text-white' : 'text-slate-400'}`}>Add Contact</button>
+             <button onClick={() => { navigateTo('history'); setExpandedLeadId(null); }} className={`flex-1 flex items-center justify-center py-5 rounded-3xl z-10 text-[11px] font-black uppercase tracking-[0.25em] transition-colors ${view === 'history' ? 'text-white' : 'text-slate-400'}`}>Contacts</button>
           </div>
         </div>
       )}
@@ -1787,10 +1816,10 @@ const App: React.FC = () => {
                   onClick={nextTourStep}
                   className="w-full py-4 md:py-6 bg-blue-600 text-white font-black rounded-2xl md:rounded-3xl text-[10px] md:text-xs uppercase tracking-widest shadow-2xl hover:scale-[1.02] active:scale-95 transition-all"
                >
-                  {tourStep === TOUR_STEPS.length - 1 ? 'Start Intelligence Gathering' : 'Next Protocol'}
+                  {tourStep === TOUR_STEPS.length - 1 ? "Let's Go!" : 'Next'}
                </button>
                
-               <button onClick={completeTour} className="mt-6 text-slate-500 font-black text-[10px] uppercase tracking-widest hover:text-white transition-colors">Skip Tour</button>
+               <button onClick={completeTour} className="mt-6 text-slate-500 font-black text-[10px] uppercase tracking-widest hover:text-white transition-colors">Skip for now</button>
             </div>
          </div>
       )}
@@ -1799,9 +1828,9 @@ const App: React.FC = () => {
       {activeModal === 'sheets' && (
         <div className="fixed inset-0 z-[220] flex items-center justify-center p-6 bg-black/70 backdrop-blur-md">
           <div className="max-w-xs w-full glass p-8 md:p-10 rounded-[2.5rem] md:rounded-[3.5rem] text-center shadow-2xl animate-in zoom-in-95">
-            <h2 className="text-lg md:text-xl font-black mb-1 tracking-tighter uppercase text-emerald-600">Spreadsheet Sync</h2>
-            <input type="text" value={sheetName} onChange={(e) => setSheetName(e.target.value)} placeholder="Sheet Name" className="w-full px-5 md:px-6 py-3 md:py-4 rounded-xl md:rounded-2xl bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 text-[10px] md:text-xs font-bold mb-4 md:mb-6 mt-3 md:mt-4 outline-none" />
-            <button onClick={() => { setStatusMsg({type:'success', text:'Pipeline pushed to Sheets.'}); setActiveModal(null); setSelectedLeadIds(new Set()); }} className="w-full py-4 md:py-5 bg-emerald-600 text-white font-black rounded-xl md:rounded-2xl text-[9px] md:text-[10px] uppercase tracking-widest shadow-xl active:scale-95 transition-all">Commence Push</button>
+            <h2 className="text-lg md:text-xl font-black mb-1 tracking-tighter uppercase text-emerald-600">Export to Google Sheets</h2>
+            <input type="text" value={sheetName} onChange={(e) => setSheetName(e.target.value)} placeholder="Sheet name" className="w-full px-5 md:px-6 py-3 md:py-4 rounded-xl md:rounded-2xl bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 text-[10px] md:text-xs font-bold mb-4 md:mb-6 mt-3 md:mt-4 outline-none" />
+            <button onClick={() => { setStatusMsg({type:'success', text:'Contacts exported to Sheets!'}); setActiveModal(null); setSelectedLeadIds(new Set()); }} className="w-full py-4 md:py-5 bg-emerald-600 text-white font-black rounded-xl md:rounded-2xl text-[9px] md:text-[10px] uppercase tracking-widest shadow-xl active:scale-95 transition-all">Export Now</button>
             <button onClick={() => setActiveModal(null)} className="mt-3 md:mt-4 text-slate-400 font-black text-[8px] md:text-[9px] uppercase hover:text-slate-600 transition-colors">Cancel</button>
           </div>
         </div>
@@ -1811,9 +1840,9 @@ const App: React.FC = () => {
         <div className="fixed inset-0 z-[250] flex items-center justify-center p-6 bg-black/50 backdrop-blur-xl">
            <div className="max-w-xs w-full glass p-8 md:p-12 rounded-[3rem] md:rounded-[4rem] text-center shadow-2xl">
               <div className="w-16 h-16 md:w-24 md:h-24 bg-blue-600/10 rounded-2xl md:rounded-[2.5rem] flex items-center justify-center mx-auto mb-6 md:mb-8 text-3xl md:text-5xl">🛡️</div>
-              <h2 className="text-2xl md:text-3xl font-black mb-4 md:mb-6">Nexus Shield</h2>
-              <p className="text-[10px] md:text-xs text-slate-500 mb-8 md:mb-10 leading-relaxed">Intelligence gathered locally and encrypted on-device. Your pipeline is protected by Enterprise-grade security.</p>
-              <button onClick={() => { localStorage.setItem(STORAGE_KEY_NOTICE, 'true'); setShowNotice(false); }} className="w-full py-4 md:py-6 bg-blue-600 text-white font-black rounded-2xl md:rounded-3xl text-[10px] md:text-xs uppercase tracking-widest active:scale-95">Activate Shield</button>
+              <h2 className="text-2xl md:text-3xl font-black mb-4 md:mb-6">Your data stays private</h2>
+              <p className="text-[10px] md:text-xs text-slate-500 mb-8 md:mb-10 leading-relaxed">All your contacts are stored only on your device and encrypted. We never upload your data to our servers.</p>
+              <button onClick={() => { localStorage.setItem(STORAGE_KEY_NOTICE, 'true'); setShowNotice(false); }} className="w-full py-4 md:py-6 bg-blue-600 text-white font-black rounded-2xl md:rounded-3xl text-[10px] md:text-xs uppercase tracking-widest active:scale-95">Got it!</button>
            </div>
         </div>
       )}
@@ -1823,8 +1852,8 @@ const App: React.FC = () => {
            <div className="max-w-xs w-full glass p-8 md:p-12 rounded-[3rem] md:rounded-[4rem] text-center shadow-2xl border border-blue-600/20">
               <div className="w-16 h-16 md:w-20 md:h-20 bg-blue-600/10 rounded-2xl md:rounded-[2.5rem] flex items-center justify-center mx-auto mb-6 md:mb-8 text-3xl md:text-4xl">⏱️</div>
               <h2 className="text-xl md:text-2xl font-black mb-3 md:mb-4">Data Retention</h2>
-              <p className="text-[10px] md:text-xs text-slate-500 mb-8 md:mb-10 leading-relaxed">To maintain enterprise security and compliance, all gathered intelligence is automatically purged from our system after 30 days of inactivity.</p>
-              <button onClick={() => setShowRetentionNotice(false)} className="w-full py-4 md:py-5 bg-blue-600 text-white font-black rounded-2xl md:rounded-3xl text-[10px] md:text-xs uppercase tracking-widest active:scale-95">Understood</button>
+              <p className="text-[10px] md:text-xs text-slate-500 mb-8 md:mb-10 leading-relaxed">To keep things tidy and private, contacts are automatically deleted from your device after 30 days. Make sure to export anything you want to keep.</p>
+              <button onClick={() => setShowRetentionNotice(false)} className="w-full py-4 md:py-5 bg-blue-600 text-white font-black rounded-2xl md:rounded-3xl text-[10px] md:text-xs uppercase tracking-widest active:scale-95">Got it!</button>
            </div>
         </div>
       )}
