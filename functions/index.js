@@ -1,7 +1,7 @@
 const { onRequest, onCall } = require('firebase-functions/v2/https');
 const { defineSecret } = require('firebase-functions/params');
 const admin = require('firebase-admin');
-const functions = require('firebase-functions');
+const functionsV1 = require('firebase-functions/v1');
 
 admin.initializeApp();
 
@@ -125,7 +125,7 @@ exports.exportLeadsToSheets = onCall(async (request) => {
 });
 
 // Send welcome email and create Firestore user doc on signup
-exports.onUserCreated = functions.auth.user().onCreate(async (user) => {
+exports.onUserCreated = functionsV1.auth.user().onCreate(async (user) => {
   const db = admin.firestore();
   await db.collection('users').doc(user.uid).set({
     email: user.email || '',
