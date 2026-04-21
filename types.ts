@@ -46,3 +46,11 @@ export interface UserProfile {
 }
 
 export type PaymentCycle = 'monthly' | 'annual';
+
+export interface TeamMember {
+  id: string;
+  email: string;
+  name?: string;
+  status: 'pending' | 'active';
+  invitedAt: number;
+}

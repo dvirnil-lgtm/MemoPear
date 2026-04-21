@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { GoogleGenAI, Modality } from "@google/genai";
-import { Lead, CommMethod, UserProfile, PaymentCycle } from './types';
+import { Lead, CommMethod, UserProfile, PaymentCycle, TeamMember } from './types';
 import { QRScanner } from './components/QRScanner';
 import { CommMethodToggle } from './components/CommMethodToggle';
 import { PrivacyPolicy, TermsAndConditions, ContactUs } from './components/LegalPages';
@@ -16,6 +16,8 @@ const STORAGE_KEY_PAID = 'lcp_paid_v1';
 const STORAGE_KEY_NOTICE = 'lcp_notice_shown_v1';
 const STORAGE_KEY_LINKEDIN = 'lcp_linkedin_connected_v1';
 const STORAGE_KEY_TOUR_COMPLETE = 'lcp_tour_done_v1';
+const STORAGE_KEY_SEATS = 'lcp_seats_v1';
+const STORAGE_KEY_TEAM = 'lcp_team_v1';
 
 const TESTIMONIALS = [
   { quote: "NexusGather turned our trade show chaos into a streamlined pipeline. We captured 300% more context than ever before.", author: "Sarah Chen", role: "VP Field Marketing, HyperScale" },
@@ -268,15 +270,26 @@ const App: React.FC = () => {
   const [password, setPassword] = useState('');
   const [hasPaid, setHasPaid] = useState(false);
   const [linkedinConnected, setLinkedinConnected] = useState(false);
-  const [authMode, setAuthMode] = useState<'login' | 'signup'>('login');
-  const [view, setView] = useState<'home' | 'login' | 'pricing' | 'billing' | 'form' | 'history' | 'payment' | 'profile' | 'privacy' | 'terms' | 'contact'>(() => {
-    const pathMap: Record<string, 'home' | 'login' | 'pricing' | 'billing' | 'form' | 'history' | 'payment' | 'profile' | 'privacy' | 'terms' | 'contact'> = {
+  const [authMode, setAuthMode] = useState<'login' | 'signup'>('signup');
+  type AppView = 'home' | 'login' | 'pricing' | 'billing' | 'form' | 'history' | 'payment' | 'profile' | 'privacy' | 'terms' | 'contact' | 'team';
+  const [view, setView] = useState<AppView>(() => {
+    const pathMap: Record<string, AppView> = {
       '/': 'home', '/login': 'login', '/pricing': 'pricing', '/gather': 'form',
       '/pipeline': 'history', '/payment': 'payment', '/profile': 'profile',
-      '/privacy': 'privacy', '/terms': 'terms', '/contact': 'contact',
+      '/privacy': 'privacy', '/terms': 'terms', '/contact': 'contact', '/team': 'team',
     };
     return pathMap[window.location.pathname] || 'home';
   });
+  const [seatCount, setSeatCount] = useState<number>(() => {
+    const saved = localStorage.getItem(STORAGE_KEY_SEATS);
+    return saved ? parseInt(saved, 10) : 1;
+  });
+  const [teamMembers, setTeamMembers] = useState<TeamMember[]>(() => {
+    const saved = localStorage.getItem(STORAGE_KEY_TEAM);
+    return saved ? JSON.parse(saved) : [];
+  });
+  const [seatQuantity, setSeatQuantity] = useState(1);
+  const [inviteEmail, setInviteEmail] = useState('');
   const [leads, setLeads] = useState<Lead[]>([]);
   const [userProfile, setUserProfile] = useState<UserProfile>({
     name: '',
@@ -747,6 +760,7 @@ const App: React.FC = () => {
     home: '/', login: '/login', pricing: '/pricing', form: '/gather',
     history: '/pipeline', payment: '/payment', profile: '/profile',
     privacy: '/privacy', terms: '/terms', contact: '/contact', billing: '/billing',
+    team: '/team',
   };
 
   const PAGE_META: Record<string, { title: string; description: string }> = {
@@ -761,9 +775,10 @@ const App: React.FC = () => {
     terms: { title: 'Terms & Conditions | MemoPear', description: 'MemoPear terms of service and subscription details.' },
     contact: { title: 'Contact Us | MemoPear', description: 'Get in touch with the MemoPear team.' },
     billing: { title: 'Billing | MemoPear', description: 'Manage your MemoPear subscription and billing.' },
+    team: { title: 'Team | MemoPear', description: 'Invite your team members and manage your seats.' },
   };
 
-  const navigateTo = (nextView: typeof view) => {
+  const navigateTo = (nextView: AppView) => {
     const url = VIEW_URLS[nextView] || '/';
     window.history.pushState({ view: nextView }, '', url);
     setView(nextView);
@@ -780,10 +795,10 @@ const App: React.FC = () => {
     const handlePopState = (e: PopStateEvent) => {
       if (e.state?.view) setView(e.state.view);
       else {
-        const pathMap: Record<string, typeof view> = {
+        const pathMap: Record<string, AppView> = {
           '/': 'home', '/login': 'login', '/pricing': 'pricing', '/gather': 'form',
           '/pipeline': 'history', '/payment': 'payment', '/profile': 'profile',
-          '/privacy': 'privacy', '/terms': 'terms', '/contact': 'contact',
+          '/privacy': 'privacy', '/terms': 'terms', '/contact': 'contact', '/team': 'team',
         };
         setView(pathMap[window.location.pathname] || 'home');
       }
@@ -792,11 +807,12 @@ const App: React.FC = () => {
     return () => window.removeEventListener('popstate', handlePopState);
   }, []);
 
-  const navLinks = [
-    { name: 'Home', view: 'home' as const },
-    { name: 'Pricing', view: 'pricing' as const },
-    { name: 'Pipeline', view: 'history' as const },
-    { name: 'Profile', view: 'profile' as const },
+  const navLinks: { name: string; view: AppView }[] = [
+    { name: 'Home', view: 'home' },
+    { name: 'Pricing', view: 'pricing' },
+    { name: 'Pipeline', view: 'history' },
+    ...(seatCount > 1 ? [{ name: 'Team', view: 'team' as AppView }] : []),
+    { name: 'Profile', view: 'profile' },
   ];
 
   const completeTour = () => {
@@ -1064,21 +1080,43 @@ const App: React.FC = () => {
           <div className="p-4 md:p-8 text-center max-w-4xl mx-auto animate-in fade-in duration-500">
             <h2 className="text-4xl md:text-5xl font-black mb-4 tracking-tighter text-pear-600 dark:text-pear-400">Simple Pricing</h2>
             <p className="text-sm md:text-lg text-slate-500 mb-8 font-medium">One plan. Everything included. No surprises.</p>
-            
-            <div className="flex justify-center gap-3 mb-8">
-              <button 
+
+            {/* Billing cycle toggle */}
+            <div className="flex justify-center gap-3 mb-6">
+              <button
                 onClick={() => setPaymentCycle('monthly')}
                 className={`px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${paymentCycle === 'monthly' ? 'bg-pear-600 text-white shadow-lg' : 'bg-slate-200 dark:bg-white/10 text-slate-400'}`}
               >
                 Monthly
               </button>
-              <button 
+              <button
                 onClick={() => setPaymentCycle('annual')}
                 className={`px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all relative ${paymentCycle === 'annual' ? 'bg-pear-600 text-white shadow-lg' : 'bg-slate-200 dark:bg-white/10 text-slate-400'}`}
               >
                 Annual
                 <span className="absolute -top-2 -right-2 bg-rose-500 text-white text-[7px] px-1.5 py-0.5 rounded-full">10% OFF</span>
               </button>
+            </div>
+
+            {/* Seat quantity selector */}
+            <div className="flex flex-col items-center gap-2 mb-8">
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">How many seats?</p>
+              <div className="flex gap-2 flex-wrap justify-center">
+                {[1, 2, 3, 5, 10].map(n => (
+                  <button
+                    key={n}
+                    onClick={() => setSeatQuantity(n)}
+                    className={`w-14 h-14 rounded-2xl text-sm font-black transition-all ${seatQuantity === n ? 'bg-pear-600 text-white shadow-lg scale-105' : 'bg-slate-100 dark:bg-white/10 text-slate-500 hover:bg-slate-200 dark:hover:bg-white/20'}`}
+                  >
+                    {n}
+                  </button>
+                ))}
+              </div>
+              {seatQuantity > 1 && (
+                <p className="text-[10px] text-slate-400 font-medium">
+                  {seatQuantity} people on your team — each gets their own MemoPear Pro access
+                </p>
+              )}
             </div>
 
             <div className="glass p-6 md:p-10 rounded-[2.5rem] border-2 border-pear-600 shadow-xl mb-8 text-left relative overflow-hidden bg-white dark:bg-white/5">
@@ -1088,14 +1126,21 @@ const App: React.FC = () => {
                 </div>
               )}
               
-              <div className="flex items-end gap-2 mb-6">
+              <div className="flex items-end gap-2 mb-2">
                 <div className="text-5xl md:text-6xl font-black tracking-tighter text-pear-700 dark:text-pear-300">
-                  {paymentCycle === 'monthly' ? '$1.49' : '$16.09'}
+                  {paymentCycle === 'monthly'
+                    ? `$${(1.49 * seatQuantity).toFixed(2)}`
+                    : `$${(16.09 * seatQuantity).toFixed(2)}`}
                 </div>
                 <div className="text-sm text-slate-400 font-bold mb-2 uppercase tracking-widest">
                   / {paymentCycle === 'monthly' ? 'month' : 'year'}
                 </div>
               </div>
+              {seatQuantity > 1 && (
+                <p className="text-[10px] text-slate-400 font-medium mb-4">
+                  ${ paymentCycle === 'monthly' ? '1.49' : '16.09'} per seat × {seatQuantity} seats
+                </p>
+              )}
               
               <p className="text-[10px] font-black text-pear-600 uppercase mb-6 tracking-[0.3em]">MemoPear Pro</p>
               
@@ -1121,11 +1166,17 @@ const App: React.FC = () => {
               </div>
 
               <button onClick={() => {
-                const stripeLink = paymentCycle === 'annual'
+                const base = paymentCycle === 'annual'
                   ? 'https://buy.stripe.com/eVq3cx7bNf8b2ON5UzfEk01'
                   : 'https://buy.stripe.com/aFa28t67J8JNdtr3MrfEk00';
+                const stripeLink = seatQuantity > 1 ? `${base}?prefilled_quantity=${seatQuantity}` : base;
+                const newSeatCount = seatQuantity;
+                localStorage.setItem(STORAGE_KEY_SEATS, String(newSeatCount));
+                setSeatCount(newSeatCount);
                 window.open(stripeLink, '_blank');
-              }} className="w-full py-4 bg-pear-600 text-white font-black rounded-2xl shadow-xl hover:scale-[1.02] active:scale-95 transition-all text-[10px] uppercase tracking-widest">Get Started Now</button>
+              }} className="w-full py-4 bg-pear-600 text-white font-black rounded-2xl shadow-xl hover:scale-[1.02] active:scale-95 transition-all text-[10px] uppercase tracking-widest">
+                {seatQuantity > 1 ? `Get ${seatQuantity} Seats Now` : 'Get Started Now'}
+              </button>
             </div>
             
             <button onClick={() => navigateTo('home')} className="text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-pear-600 transition-colors">Back to Home</button>
@@ -1363,8 +1414,11 @@ const App: React.FC = () => {
                 <div className="glass p-6 rounded-3xl border border-slate-200 dark:border-white/10">
                   <div className="flex justify-between items-center mb-6">
                     <div>
-                      <p className="text-[8px] font-black uppercase text-slate-400 tracking-widest">Active Protocol</p>
-                      <p className="text-xs font-bold">{hasPaid ? 'Professional Command' : 'Standard Observer'}</p>
+                      <p className="text-[8px] font-black uppercase text-slate-400 tracking-widest">Plan</p>
+                      <p className="text-xs font-bold">{hasPaid ? `MemoPear Pro${seatCount > 1 ? ` · ${seatCount} seats` : ''}` : 'Free'}</p>
+                      {seatCount > 1 && (
+                        <button onClick={() => navigateTo('team')} className="text-[8px] font-black uppercase text-pear-600 tracking-widest hover:underline mt-0.5">Manage Team →</button>
+                      )}
                     </div>
                     <div className="text-right">
                       <p className="text-[8px] font-black uppercase text-slate-400 tracking-widest">Payment Method</p>
@@ -1716,6 +1770,143 @@ const App: React.FC = () => {
               )}
            </div>
         )}
+        {view === 'team' && isLoggedIn && (
+          <div className="p-6 md:p-10 max-w-2xl mx-auto animate-in fade-in duration-500 pb-32">
+            <div className="flex items-center justify-between mb-8">
+              <div>
+                <h2 className="text-4xl font-black tracking-tighter text-pear-600 dark:text-pear-400">Your Team</h2>
+                <p className="text-sm text-slate-400 font-medium mt-1">
+                  {seatCount} seat{seatCount !== 1 ? 's' : ''} · {teamMembers.filter(m => m.status === 'active').length + 1} active · {teamMembers.filter(m => m.status === 'pending').length} pending
+                </p>
+              </div>
+              <button
+                onClick={() => navigateTo('pricing')}
+                className="px-4 py-2 bg-pear-600/10 text-pear-600 rounded-xl text-[10px] font-black uppercase border border-pear-600/20 hover:bg-pear-600 hover:text-white transition-all"
+              >
+                + More Seats
+              </button>
+            </div>
+
+            {/* Seat usage bar */}
+            <div className="glass p-5 rounded-2xl border border-slate-200 dark:border-white/10 mb-8">
+              <div className="flex justify-between items-center mb-2">
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Seats Used</p>
+                <p className="text-[10px] font-black text-pear-600">{Math.min(teamMembers.length + 1, seatCount)} / {seatCount}</p>
+              </div>
+              <div className="h-2 bg-slate-200 dark:bg-white/10 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-pear-600 rounded-full transition-all duration-500"
+                  style={{ width: `${Math.min(((teamMembers.length + 1) / seatCount) * 100, 100)}%` }}
+                />
+              </div>
+              {teamMembers.length + 1 >= seatCount && seatCount > 0 && (
+                <p className="text-[9px] text-amber-500 font-bold mt-2">All seats are filled. <button onClick={() => navigateTo('pricing')} className="underline">Buy more seats</button> to invite more people.</p>
+              )}
+            </div>
+
+            {/* Invite form */}
+            {teamMembers.length + 1 < seatCount && (
+              <div className="mb-8">
+                <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest pl-1 mb-2 block">Invite a teammate</label>
+                <div className="flex gap-2">
+                  <input
+                    type="email"
+                    value={inviteEmail}
+                    onChange={(e) => setInviteEmail(e.target.value)}
+                    placeholder="colleague@company.com"
+                    className="flex-1 px-4 py-3 rounded-xl bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 text-sm font-bold outline-none focus:border-pear-500/50 transition-all"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && inviteEmail.trim()) {
+                        const newMember: TeamMember = { id: crypto.randomUUID(), email: inviteEmail.trim(), status: 'pending', invitedAt: Date.now() };
+                        const updated = [...teamMembers, newMember];
+                        setTeamMembers(updated);
+                        localStorage.setItem(STORAGE_KEY_TEAM, JSON.stringify(updated));
+                        setInviteEmail('');
+                        setStatusMsg({ type: 'success', text: `Invite sent to ${newMember.email}` });
+                      }
+                    }}
+                  />
+                  <button
+                    onClick={() => {
+                      if (!inviteEmail.trim()) return;
+                      const newMember: TeamMember = { id: crypto.randomUUID(), email: inviteEmail.trim(), status: 'pending', invitedAt: Date.now() };
+                      const updated = [...teamMembers, newMember];
+                      setTeamMembers(updated);
+                      localStorage.setItem(STORAGE_KEY_TEAM, JSON.stringify(updated));
+                      setInviteEmail('');
+                      setStatusMsg({ type: 'success', text: `Invite sent to ${newMember.email}` });
+                    }}
+                    className="px-5 py-3 bg-pear-600 text-white font-black rounded-xl text-sm shadow-lg hover:scale-[1.02] active:scale-95 transition-all"
+                  >
+                    Send Invite
+                  </button>
+                </div>
+                <p className="text-[9px] text-slate-400 font-medium mt-2 pl-1">
+                  {seatCount - teamMembers.length - 1} seat{seatCount - teamMembers.length - 1 !== 1 ? 's' : ''} still available
+                </p>
+              </div>
+            )}
+
+            {/* Members list */}
+            <div className="space-y-3">
+              <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest pl-1">Members</label>
+
+              {/* Owner row */}
+              <div className="flex items-center justify-between p-4 glass rounded-2xl border border-pear-200 dark:border-pear-600/20 bg-pear-600/5">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-pear-600 text-white flex items-center justify-center text-sm font-black">
+                    {(userProfile.name || userProfile.email || 'Y')[0].toUpperCase()}
+                  </div>
+                  <div>
+                    <p className="text-sm font-black">{userProfile.name || userProfile.email || 'You'}</p>
+                    <p className="text-[10px] text-slate-400 font-medium">{userProfile.email}</p>
+                  </div>
+                </div>
+                <span className="text-[9px] font-black uppercase px-2.5 py-1 bg-pear-600 text-white rounded-full">Owner</span>
+              </div>
+
+              {/* Invited members */}
+              {teamMembers.map(member => (
+                <div key={member.id} className="flex items-center justify-between p-4 glass rounded-2xl border border-slate-200 dark:border-white/10">
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-xl bg-slate-200 dark:bg-white/10 text-slate-500 flex items-center justify-center text-sm font-black">
+                      {member.email[0].toUpperCase()}
+                    </div>
+                    <div>
+                      <p className="text-sm font-black">{member.name || member.email}</p>
+                      {member.name && <p className="text-[10px] text-slate-400 font-medium">{member.email}</p>}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className={`text-[9px] font-black uppercase px-2.5 py-1 rounded-full ${member.status === 'active' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-amber-500/10 text-amber-500'}`}>
+                      {member.status === 'active' ? 'Active' : 'Invite sent'}
+                    </span>
+                    <button
+                      onClick={() => {
+                        const updated = teamMembers.filter(m => m.id !== member.id);
+                        setTeamMembers(updated);
+                        localStorage.setItem(STORAGE_KEY_TEAM, JSON.stringify(updated));
+                        setStatusMsg({ type: 'success', text: 'Seat freed up.' });
+                      }}
+                      className="w-7 h-7 rounded-lg bg-rose-500/10 text-rose-500 flex items-center justify-center hover:bg-rose-500 hover:text-white transition-all text-xs"
+                      title="Remove member"
+                    >✕</button>
+                  </div>
+                </div>
+              ))}
+
+              {teamMembers.length === 0 && (
+                <div className="py-10 text-center glass rounded-3xl border border-dashed border-slate-200 dark:border-white/10">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">No teammates invited yet</p>
+                  {seatCount <= 1 && (
+                    <button onClick={() => navigateTo('pricing')} className="mt-4 text-pear-600 font-black text-xs uppercase tracking-widest hover:underline">Buy team seats to get started</button>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         {view === 'privacy' && <PrivacyPolicy onBack={() => navigateTo('home')} />}
         {view === 'terms' && <TermsAndConditions onBack={() => navigateTo('home')} />}
         {view === 'contact' && <ContactUs onBack={() => navigateTo('home')} />}
@@ -1786,10 +1977,33 @@ const App: React.FC = () => {
 
       {isLoggedIn && !['login', 'pricing', 'payment', 'privacy', 'terms', 'contact'].includes(view) && !isMenuOpen && (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 w-[95%] max-w-sm z-[60]">
-          <div className="glass p-2 rounded-[3rem] border border-slate-200 dark:border-white/10 flex relative shadow-[0_30px_600px_rgba(0,0,0,0.5)]">
-             <div className={`absolute top-2 bottom-2 w-[48%] bg-blue-600 rounded-[2.5rem] transition-all duration-300 ease-out shadow-xl ${view === 'history' ? 'translate-x-full left-[1.5%]' : 'translate-x-0 left-[1.5%]'}`} />
-             <button onClick={() => { navigateTo('form'); setExpandedLeadId(null); }} className={`flex-1 flex items-center justify-center py-5 rounded-3xl z-10 text-[11px] font-black uppercase tracking-[0.25em] transition-colors ${view === 'form' ? 'text-white' : 'text-slate-400'}`}>Add Contact</button>
-             <button onClick={() => { navigateTo('history'); setExpandedLeadId(null); }} className={`flex-1 flex items-center justify-center py-5 rounded-3xl z-10 text-[11px] font-black uppercase tracking-[0.25em] transition-colors ${view === 'history' ? 'text-white' : 'text-slate-400'}`}>Contacts</button>
+          <div className="glass p-2 rounded-[3rem] border border-slate-200 dark:border-white/10 flex relative shadow-[0_30px_60px_rgba(0,0,0,0.3)]">
+            {seatCount <= 1 ? (
+              <>
+                <div className={`absolute top-2 bottom-2 w-[calc(50%-6px)] bg-blue-600 rounded-[2.5rem] transition-all duration-300 ease-out shadow-xl left-[4px] ${view === 'history' ? 'translate-x-full' : 'translate-x-0'}`} />
+                <button onClick={() => { navigateTo('form'); setExpandedLeadId(null); }} className={`flex-1 flex items-center justify-center py-5 rounded-3xl z-10 text-[11px] font-black uppercase tracking-[0.25em] transition-colors ${view === 'form' ? 'text-white' : 'text-slate-400'}`}>Add Contact</button>
+                <button onClick={() => { navigateTo('history'); setExpandedLeadId(null); }} className={`flex-1 flex items-center justify-center py-5 rounded-3xl z-10 text-[11px] font-black uppercase tracking-[0.25em] transition-colors ${view === 'history' ? 'text-white' : 'text-slate-400'}`}>Contacts</button>
+              </>
+            ) : (
+              <>
+                {(['form', 'history', 'team'] as AppView[]).map((v, i) => {
+                  const labels: Record<string, string> = { form: 'Add', history: 'Contacts', team: 'Team' };
+                  const active = view === v;
+                  return (
+                    <button
+                      key={v}
+                      onClick={() => { navigateTo(v); if (v !== 'team') setExpandedLeadId(null); }}
+                      className={`flex-1 flex flex-col items-center justify-center py-4 rounded-3xl z-10 text-[10px] font-black uppercase tracking-[0.2em] transition-all ${active ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'}`}
+                    >
+                      {v === 'team' && seatCount > 1 && teamMembers.filter(m => m.status === 'pending').length > 0 && !active && (
+                        <span className="w-1.5 h-1.5 rounded-full bg-amber-500 mb-1 block" />
+                      )}
+                      {labels[v]}
+                    </button>
+                  );
+                })}
+              </>
+            )}
           </div>
         </div>
       )}
