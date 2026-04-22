@@ -6,6 +6,7 @@ import { QRScanner } from './components/QRScanner';
 import { CommMethodToggle } from './components/CommMethodToggle';
 import { PrivacyPolicy, TermsAndConditions, ContactUs } from './components/LegalPages';
 import { parseScannedData, parseBusinessCard, generateLeadReport } from './services/geminiService';
+import { signInWithGoogle, signInWithLinkedIn, firebaseSignOut } from './firebase';
 
 // Constants for retention and session
 const RETENTION_DAYS = 30;
@@ -551,8 +552,31 @@ const App: React.FC = () => {
     else navigateTo('history');
   };
 
-  const handleLogout = () => {
+  const handleSocialAuth = async (provider: 'google' | 'linkedin') => {
+    try {
+      const result = await (provider === 'google' ? signInWithGoogle() : signInWithLinkedIn());
+      const user = result.user;
+      const userEmail = user.email || '';
+      const userName = user.displayName || '';
+      const authData = { email: userEmail, timestamp: Date.now() };
+      localStorage.setItem(STORAGE_KEY_AUTH, JSON.stringify(authData));
+      const savedProfile = { ...userProfile, email: userEmail, name: userName };
+      localStorage.setItem('memo_profile', JSON.stringify(savedProfile));
+      setIsLoggedIn(true);
+      setUserProfile(savedProfile);
+      setStatusMsg({ type: 'success', text: `Welcome${userName ? `, ${userName.split(' ')[0]}` : ''}!` });
+      if (hasPaid) navigateTo('form');
+      else navigateTo('history');
+    } catch (err: any) {
+      if (err?.code !== 'auth/popup-closed-by-user' && err?.code !== 'auth/cancelled-popup-request') {
+        setStatusMsg({ type: 'error', text: 'Sign-in failed. Please try again.' });
+      }
+    }
+  };
+
+  const handleLogout = async () => {
     localStorage.removeItem(STORAGE_KEY_AUTH);
+    await firebaseSignOut().catch(() => {});
     setIsLoggedIn(false);
     navigateTo('home');
     setStatusMsg({ type: 'success', text: 'Logged out successfully.' });
@@ -1512,9 +1536,9 @@ const App: React.FC = () => {
                   </div>
 
                   <div className="space-y-6">
-                    <button onClick={() => handleAuth()} className="w-full py-4 px-6 border border-slate-200 dark:border-white/10 rounded-full flex items-center justify-center gap-3 font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-white/5 transition-all shadow-sm">
+                    <button onClick={() => handleSocialAuth('google')} className="w-full py-4 px-6 border border-slate-200 dark:border-white/10 rounded-full flex items-center justify-center gap-3 font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-white/5 transition-all shadow-sm">
                       <svg viewBox="0 0 24 24" className="w-5 h-5 flex-shrink-0"><path fill="#EA4335" d="M24 12.25c0-.85-.07-1.71-.22-2.54H12v4.81h6.72c-.29 1.57-1.18 2.9-2.5 3.79v3.15h4.05c2.37-2.18 3.73-5.39 3.73-8.71z"/><path fill="#34A853" d="M12 24c3.24 0 5.97-1.08 7.96-2.92l-4.05-3.15c-1.12.75-2.56 1.19-3.91 1.19-3.02 0-5.58-2.04-6.5-4.79L1.31 17.44C3.25 21.31 7.29 24 12 24z"/><path fill="#FBBC05" d="M5.5 14.33c-.24-.71-.38-1.47-.38-2.33s.14-1.62.38-2.33L1.31 6.53C.47 8.21 0 10.05 0 12s.47 3.79 1.31 5.47l4.19-3.14z"/><path fill="#4285F4" d="M12 4.75c1.76 0 3.35.61 4.59 1.79l3.44-3.44C17.96 1.08 15.24 0 12 0 7.29 0 3.25 2.69 1.31 6.53l4.19 3.14c.92-2.75 3.48-4.79 6.5-4.79z"/></svg>
-                      Sign up with your Google account
+                      Continue with Google
                     </button>
 
                     <div className="flex items-center gap-4 text-slate-300 dark:text-white/10">
@@ -1557,11 +1581,11 @@ const App: React.FC = () => {
                   </form>
 
                   <div className="grid grid-cols-2 gap-4">
-                    <button onClick={() => handleAuth()} className="w-full py-4 px-6 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl flex items-center justify-center gap-3 font-black text-[9px] uppercase tracking-widest hover:bg-slate-50 transition-all shadow-sm">
+                    <button onClick={() => handleSocialAuth('google')} className="w-full py-4 px-6 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl flex items-center justify-center gap-3 font-black text-[9px] uppercase tracking-widest hover:bg-slate-50 transition-all shadow-sm">
                       <svg viewBox="0 0 24 24" className="w-4 h-4"><path fill="#EA4335" d="M24 12.25c0-.85-.07-1.71-.22-2.54H12v4.81h6.72c-.29 1.57-1.18 2.9-2.5 3.79v3.15h4.05c2.37-2.18 3.73-5.39 3.73-8.71z"/><path fill="#34A853" d="M12 24c3.24 0 5.97-1.08 7.96-2.92l-4.05-3.15c-1.12.75-2.56 1.19-3.91 1.19-3.02 0-5.58-2.04-6.5-4.79L1.31 17.44C3.25 21.31 7.29 24 12 24z"/><path fill="#FBBC05" d="M5.5 14.33c-.24-.71-.38-1.47-.38-2.33s.14-1.62.38-2.33L1.31 6.53C.47 8.21 0 10.05 0 12s.47 3.79 1.31 5.47l4.19-3.14z"/><path fill="#4285F4" d="M12 4.75c1.76 0 3.35.61 4.59 1.79l3.44-3.44C17.96 1.08 15.24 0 12 0 7.29 0 3.25 2.69 1.31 6.53l4.19 3.14c.92-2.75 3.48-4.79 6.5-4.79z"/></svg>
                       Google
                     </button>
-                    <button onClick={() => handleAuth()} className="w-full py-4 px-6 bg-[#0077b5] text-white rounded-2xl flex items-center justify-center gap-3 font-black text-[9px] uppercase tracking-widest hover:bg-[#005c8c] transition-all shadow-md">
+                    <button onClick={() => handleSocialAuth('linkedin')} className="w-full py-4 px-6 bg-[#0077b5] text-white rounded-2xl flex items-center justify-center gap-3 font-black text-[9px] uppercase tracking-widest hover:bg-[#005c8c] transition-all shadow-md">
                       LinkedIn
                     </button>
                   </div>
