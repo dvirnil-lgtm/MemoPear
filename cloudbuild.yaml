@@ -5,7 +5,7 @@ steps:
       - '-t'
       - 'gcr.io/$PROJECT_ID/memopear'
       - '--build-arg'
-      - 'VITE_GEMINI_API_KEY=$_GEMINI_API_KEY'
+      - 'VITE_GEMINI_API_KEY=${_GEMINI_API_KEY}'
       - '.'
 
   - name: 'gcr.io/cloud-builders/docker'
@@ -29,3 +29,9 @@ steps:
 
 images:
   - 'gcr.io/$PROJECT_ID/memopear'
+
+substitutions:
+  _GEMINI_API_KEY: ''
+
+options:
+  substitution_option: ALLOW_LOOSE
