@@ -19,6 +19,28 @@ const STORAGE_KEY_TOUR_COMPLETE = 'lcp_tour_done_v1';
 const STORAGE_KEY_SEATS = 'lcp_seats_v1';
 const STORAGE_KEY_TEAM = 'lcp_team_v1';
 
+// Stripe payment links — add a dedicated link per seat count for best UX.
+// Each link should be created in Stripe Dashboard at the correct unit price
+// (e.g. 3 seats → $4.47/mo). Quantities without a dedicated link fall back
+// to the single-seat link, which still works if you enable "Adjust quantity"
+// on the payment link in Stripe Dashboard.
+const STRIPE_LINKS: Record<'monthly' | 'annual', Partial<Record<number, string>>> = {
+  monthly: {
+    1: 'https://buy.stripe.com/aFa28t67J8JNdtr3MrfEk00',
+    // 2: 'https://buy.stripe.com/YOUR_2_SEAT_MONTHLY_LINK',
+    // 3: 'https://buy.stripe.com/YOUR_3_SEAT_MONTHLY_LINK',
+    // 5: 'https://buy.stripe.com/YOUR_5_SEAT_MONTHLY_LINK',
+    // 10: 'https://buy.stripe.com/YOUR_10_SEAT_MONTHLY_LINK',
+  },
+  annual: {
+    1: 'https://buy.stripe.com/eVq3cx7bNf8b2ON5UzfEk01',
+    // 2: 'https://buy.stripe.com/YOUR_2_SEAT_ANNUAL_LINK',
+    // 3: 'https://buy.stripe.com/YOUR_3_SEAT_ANNUAL_LINK',
+    // 5: 'https://buy.stripe.com/YOUR_5_SEAT_ANNUAL_LINK',
+    // 10: 'https://buy.stripe.com/YOUR_10_SEAT_ANNUAL_LINK',
+  },
+};
+
 const TESTIMONIALS = [
   { quote: "NexusGather turned our trade show chaos into a streamlined pipeline. We captured 300% more context than ever before.", author: "Sarah Chen", role: "VP Field Marketing, HyperScale" },
   { quote: "The voice transcription is a game-changer. I don't have to type a single word between meetings.", author: "Mike Ross", role: "Field Event Lead, TechPulse" },
@@ -1166,13 +1188,12 @@ const App: React.FC = () => {
               </div>
 
               <button onClick={() => {
-                const base = paymentCycle === 'annual'
-                  ? 'https://buy.stripe.com/eVq3cx7bNf8b2ON5UzfEk01'
-                  : 'https://buy.stripe.com/aFa28t67J8JNdtr3MrfEk00';
-                const stripeLink = seatQuantity > 1 ? `${base}?quantity=${seatQuantity}` : base;
-                const newSeatCount = seatQuantity;
-                localStorage.setItem(STORAGE_KEY_SEATS, String(newSeatCount));
-                setSeatCount(newSeatCount);
+                const links = STRIPE_LINKS[paymentCycle];
+                const dedicated = links[seatQuantity];
+                const fallback = `${links[1]}?quantity=${seatQuantity}`;
+                const stripeLink = dedicated ?? fallback;
+                localStorage.setItem(STORAGE_KEY_SEATS, String(seatQuantity));
+                setSeatCount(seatQuantity);
                 window.open(stripeLink, '_blank');
               }} className="w-full py-4 bg-pear-600 text-white font-black rounded-2xl shadow-xl hover:scale-[1.02] active:scale-95 transition-all text-[10px] uppercase tracking-widest">
                 {seatQuantity > 1 ? `Get ${seatQuantity} Seats Now` : 'Get Started Now'}
@@ -1408,43 +1429,35 @@ const App: React.FC = () => {
                 </div>
               </div>
 
-              {/* Billing & Invoices */}
+              {/* Billing */}
               <div className="space-y-4">
-                <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest pl-2">Billing & Intelligence Ledger</label>
+                <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest pl-2">Billing</label>
                 <div className="glass p-6 rounded-3xl border border-slate-200 dark:border-white/10">
-                  <div className="flex justify-between items-center mb-6">
-                    <div>
-                      <p className="text-[8px] font-black uppercase text-slate-400 tracking-widest">Plan</p>
-                      <p className="text-xs font-bold">{hasPaid ? `MemoPear Pro${seatCount > 1 ? ` · ${seatCount} seats` : ''}` : 'Free'}</p>
-                      {seatCount > 1 && (
-                        <button onClick={() => navigateTo('team')} className="text-[8px] font-black uppercase text-pear-600 tracking-widest hover:underline mt-0.5">Manage Team →</button>
-                      )}
-                    </div>
-                    <div className="text-right">
-                      <p className="text-[8px] font-black uppercase text-slate-400 tracking-widest">Payment Method</p>
-                      <p className="text-xs font-bold font-mono">**** **** **** 4242</p>
-                    </div>
-                  </div>
-                  
-                  <div className="space-y-3">
-                    <p className="text-[8px] font-black uppercase text-slate-400 tracking-widest mb-2">Recent Invoices</p>
-                    {[
-                      { id: 'INV-2026-003', date: 'Mar 01, 2026', amount: '$1.49', status: 'Paid' },
-                      { id: 'INV-2026-002', date: 'Feb 01, 2026', amount: '$1.49', status: 'Paid' },
-                      { id: 'INV-2026-001', date: 'Jan 01, 2026', amount: '$1.49', status: 'Paid' },
-                    ].map(inv => (
-                      <div key={inv.id} className="flex items-center justify-between py-2 border-b border-slate-100 dark:border-white/5 last:border-0">
+                  {hasPaid ? (
+                    <div className="space-y-4">
+                      <div className="flex justify-between items-start">
                         <div>
-                          <p className="text-[10px] font-bold">{inv.id}</p>
-                          <p className="text-[8px] text-slate-400">{inv.date}</p>
+                          <p className="text-[8px] font-black uppercase text-slate-400 tracking-widest">Active Plan</p>
+                          <p className="text-sm font-black">MemoPear Pro{seatCount > 1 ? ` · ${seatCount} seats` : ''}</p>
+                          {seatCount > 1 && (
+                            <button onClick={() => navigateTo('team')} className="text-[8px] font-black uppercase text-pear-600 tracking-widest hover:underline mt-0.5">Manage Team →</button>
+                          )}
                         </div>
-                        <div className="text-right">
-                          <p className="text-[10px] font-black">{inv.amount}</p>
-                          <span className="text-[7px] font-black uppercase px-1.5 py-0.5 bg-emerald-500/10 text-emerald-500 rounded-full">{inv.status}</span>
-                        </div>
+                        <span className="text-[8px] font-black uppercase px-2.5 py-1 bg-emerald-500/10 text-emerald-500 rounded-full">Active</span>
                       </div>
-                    ))}
-                  </div>
+                      <p className="text-[9px] text-slate-400 leading-relaxed border-t border-slate-100 dark:border-white/5 pt-4">
+                        Receipts and invoices are sent to your email by Stripe. To cancel or update your payment method, reply to any Stripe receipt email.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-[8px] font-black uppercase text-slate-400 tracking-widest">Plan</p>
+                        <p className="text-xs font-bold text-slate-500">No active subscription</p>
+                      </div>
+                      <button onClick={() => navigateTo('pricing')} className="px-4 py-2 bg-pear-600 text-white text-[9px] font-black uppercase rounded-xl shadow-lg hover:scale-105 transition-all">Upgrade</button>
+                    </div>
+                  )}
                 </div>
               </div>
 
