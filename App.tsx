@@ -937,7 +937,7 @@ const App: React.FC = () => {
                 Never lose a contact at a conference again. Scan badges, snap business cards, and follow up in seconds — all with AI.
               </p>
               <div className="flex flex-col sm:flex-row gap-6 w-full max-w-md z-10">
-                <button onClick={() => navigateTo('login')} className="flex-1 py-5 bg-blue-600 text-white font-black rounded-2xl shadow-2xl hover:scale-105 transition-all">Get Started Free</button>
+                <button onClick={() => navigateTo('login')} className="flex-1 py-5 bg-blue-600 text-white font-black rounded-2xl shadow-2xl hover:scale-105 transition-all">Get Started</button>
                 <button onClick={() => setShowTour(true)} className="flex-1 py-5 glass font-bold rounded-2xl border-slate-200 dark:border-white/10 hover:bg-slate-50 dark:hover:bg-white/10 transition-all">See How It Works</button>
               </div>
             </section>
@@ -1070,7 +1070,7 @@ const App: React.FC = () => {
                <div className="relative z-10">
                   <h2 className="text-5xl font-black mb-6 tracking-tighter leading-none">Ready to never miss <br/> a follow-up again?</h2>
                   <p className="text-lg font-medium mb-12 opacity-80 max-w-sm mx-auto">Join thousands of people using MemoPear at conferences, trade shows, and networking events.</p>
-                  <button onClick={() => navigateTo('login')} className="px-12 py-6 bg-white text-blue-600 font-black rounded-3xl shadow-2xl hover:scale-110 transition-transform uppercase text-xs tracking-widest active:scale-95">Get Started Free</button>
+                  <button onClick={() => navigateTo('login')} className="px-12 py-6 bg-white text-blue-600 font-black rounded-3xl shadow-2xl hover:scale-110 transition-transform uppercase text-xs tracking-widest active:scale-95">Get Started</button>
                </div>
             </section>
           </div>
@@ -1169,7 +1169,7 @@ const App: React.FC = () => {
                 const base = paymentCycle === 'annual'
                   ? 'https://buy.stripe.com/eVq3cx7bNf8b2ON5UzfEk01'
                   : 'https://buy.stripe.com/aFa28t67J8JNdtr3MrfEk00';
-                const stripeLink = seatQuantity > 1 ? `${base}?prefilled_quantity=${seatQuantity}` : base;
+                const stripeLink = seatQuantity > 1 ? `${base}?quantity=${seatQuantity}` : base;
                 const newSeatCount = seatQuantity;
                 localStorage.setItem(STORAGE_KEY_SEATS, String(newSeatCount));
                 setSeatCount(newSeatCount);
@@ -1912,18 +1912,20 @@ const App: React.FC = () => {
         {view === 'contact' && <ContactUs onBack={() => navigateTo('home')} />}
       </main>
 
-      <footer className="py-12 border-t border-slate-200 dark:border-white/10 mt-20 pb-32">
-        <div className="max-w-2xl mx-auto px-6 text-center">
-          <div className="flex flex-wrap justify-center gap-6 mb-8">
-            <button onClick={() => navigateTo('privacy')} className="text-[10px] font-black uppercase text-slate-400 hover:text-blue-600 transition-colors tracking-widest">Privacy Policy</button>
-            <button onClick={() => navigateTo('terms')} className="text-[10px] font-black uppercase text-slate-400 hover:text-blue-600 transition-colors tracking-widest">Terms & Conditions</button>
-            <button onClick={() => navigateTo('contact')} className="text-[10px] font-black uppercase text-slate-400 hover:text-blue-600 transition-colors tracking-widest">Contact Us</button>
+      {!['form', 'history', 'team'].includes(view) && (
+        <footer className="py-4 border-t border-slate-200 dark:border-white/10">
+          <div className="max-w-2xl mx-auto px-6 flex flex-wrap items-center justify-between gap-3">
+            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest opacity-60 font-mono">
+              © 2026 MemoPear. All rights reserved.
+            </p>
+            <div className="flex gap-4">
+              <button onClick={() => navigateTo('privacy')} className="text-[9px] font-black uppercase text-slate-400 hover:text-blue-600 transition-colors tracking-widest">Privacy</button>
+              <button onClick={() => navigateTo('terms')} className="text-[9px] font-black uppercase text-slate-400 hover:text-blue-600 transition-colors tracking-widest">Terms</button>
+              <button onClick={() => navigateTo('contact')} className="text-[9px] font-black uppercase text-slate-400 hover:text-blue-600 transition-colors tracking-widest">Contact</button>
+            </div>
           </div>
-          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest opacity-60 leading-relaxed font-mono">
-            © 2026 MemoPear. All rights reserved.<br/>Making conferences less stressful, one contact at a time.
-          </p>
-        </div>
-      </footer>
+        </footer>
+      )}
 
       {/* Editing Modal */}
       {editingLead && (
