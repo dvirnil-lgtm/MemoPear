@@ -26,18 +26,18 @@ const STORAGE_KEY_TEAM = 'lcp_team_v1';
 // on the payment link in Stripe Dashboard.
 const STRIPE_LINKS: Record<'monthly' | 'annual', Partial<Record<number, string>>> = {
   monthly: {
-    1: 'https://buy.stripe.com/aFa28t67J8JNdtr3MrfEk00',
-    // 2: 'https://buy.stripe.com/YOUR_2_SEAT_MONTHLY_LINK',
-    // 3: 'https://buy.stripe.com/YOUR_3_SEAT_MONTHLY_LINK',
-    // 5: 'https://buy.stripe.com/YOUR_5_SEAT_MONTHLY_LINK',
-    // 10: 'https://buy.stripe.com/YOUR_10_SEAT_MONTHLY_LINK',
+    1:  'https://buy.stripe.com/aFa28t67J8JNdtr3MrfEk00',
+    2:  'https://buy.stripe.com/14A8wR7bN4tx2ON0AffEk02',
+    3:  'https://buy.stripe.com/9B628tgMn7FJ0GFfv9fEk03',
+    5:  'https://buy.stripe.com/00w6oJ7bN0dhcpn5UzfEk04',
+    10: 'https://buy.stripe.com/14A00leEf8JNexvbeTfEk05',
   },
   annual: {
-    1: 'https://buy.stripe.com/eVq3cx7bNf8b2ON5UzfEk01',
-    // 2: 'https://buy.stripe.com/YOUR_2_SEAT_ANNUAL_LINK',
-    // 3: 'https://buy.stripe.com/YOUR_3_SEAT_ANNUAL_LINK',
-    // 5: 'https://buy.stripe.com/YOUR_5_SEAT_ANNUAL_LINK',
-    // 10: 'https://buy.stripe.com/YOUR_10_SEAT_ANNUAL_LINK',
+    1:  'https://buy.stripe.com/eVq3cx7bNf8b2ON5UzfEk01',
+    2:  'https://buy.stripe.com/28E5kF8fRgcfexvciXfEk06',
+    3:  'https://buy.stripe.com/3cI14p7bN9NR753er5fEk07',
+    5:  'https://buy.stripe.com/7sY3cxbs3aRVdtr5UzfEk08',
+    10: 'https://buy.stripe.com/eVq5kFeEf1hldtrbeTfEk09',
   },
 };
 
