@@ -568,8 +568,15 @@ const App: React.FC = () => {
       if (hasPaid) navigateTo('form');
       else navigateTo('history');
     } catch (err: any) {
-      if (err?.code !== 'auth/popup-closed-by-user' && err?.code !== 'auth/cancelled-popup-request') {
-        setStatusMsg({ type: 'error', text: 'Sign-in failed. Please try again.' });
+      const code = err?.code || '';
+      console.error('Social auth error:', code, err);
+      if (code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request') return;
+      if (code === 'auth/unauthorized-domain') {
+        setStatusMsg({ type: 'error', text: 'Domain not authorized — add memopear.com to Firebase Auth → Authorized Domains.' });
+      } else if (code === 'auth/popup-blocked') {
+        setStatusMsg({ type: 'error', text: 'Popup was blocked. Please allow popups for this site and try again.' });
+      } else {
+        setStatusMsg({ type: 'error', text: `Sign-in failed (${code || 'unknown'}). Check console for details.` });
       }
     }
   };
@@ -1535,10 +1542,14 @@ const App: React.FC = () => {
                     </p>
                   </div>
 
-                  <div className="space-y-6">
+                  <div className="space-y-4">
                     <button onClick={() => handleSocialAuth('google')} className="w-full py-4 px-6 border border-slate-200 dark:border-white/10 rounded-full flex items-center justify-center gap-3 font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-white/5 transition-all shadow-sm">
                       <svg viewBox="0 0 24 24" className="w-5 h-5 flex-shrink-0"><path fill="#EA4335" d="M24 12.25c0-.85-.07-1.71-.22-2.54H12v4.81h6.72c-.29 1.57-1.18 2.9-2.5 3.79v3.15h4.05c2.37-2.18 3.73-5.39 3.73-8.71z"/><path fill="#34A853" d="M12 24c3.24 0 5.97-1.08 7.96-2.92l-4.05-3.15c-1.12.75-2.56 1.19-3.91 1.19-3.02 0-5.58-2.04-6.5-4.79L1.31 17.44C3.25 21.31 7.29 24 12 24z"/><path fill="#FBBC05" d="M5.5 14.33c-.24-.71-.38-1.47-.38-2.33s.14-1.62.38-2.33L1.31 6.53C.47 8.21 0 10.05 0 12s.47 3.79 1.31 5.47l4.19-3.14z"/><path fill="#4285F4" d="M12 4.75c1.76 0 3.35.61 4.59 1.79l3.44-3.44C17.96 1.08 15.24 0 12 0 7.29 0 3.25 2.69 1.31 6.53l4.19 3.14c.92-2.75 3.48-4.79 6.5-4.79z"/></svg>
                       Continue with Google
+                    </button>
+                    <button onClick={() => handleSocialAuth('linkedin')} className="w-full py-4 px-6 bg-[#0077b5] text-white rounded-full flex items-center justify-center gap-3 font-semibold hover:bg-[#005c8c] transition-all shadow-sm">
+                      <svg viewBox="0 0 24 24" className="w-5 h-5 flex-shrink-0" fill="currentColor"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
+                      Continue with LinkedIn
                     </button>
 
                     <div className="flex items-center gap-4 text-slate-300 dark:text-white/10">
