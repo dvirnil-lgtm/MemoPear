@@ -42,7 +42,7 @@ const STRIPE_LINKS: Record<'monthly' | 'annual', Partial<Record<number, string>>
 };
 
 const TESTIMONIALS = [
-  { quote: "NexusGather turned our trade show chaos into a streamlined pipeline. We captured 300% more context than ever before.", author: "Sarah Chen", role: "VP Field Marketing, HyperScale" },
+  { quote: "MemoPear turned our trade show chaos into a streamlined pipeline. We captured 300% more context than ever before.", author: "Sarah Chen", role: "VP Field Marketing, HyperScale" },
   { quote: "The voice transcription is a game-changer. I don't have to type a single word between meetings.", author: "Mike Ross", role: "Field Event Lead, TechPulse" },
   { quote: "LinkedIn enrichment helps me personalize follow-ups immediately. It's the SDR's dream tool.", author: "Elena Vance", role: "Senior SDR, Zenith Cloud" },
   { quote: "Our data quality shot up instantly. No more messy spreadsheets or lost cards.", author: "David Wu", role: "Marketing Director, Nexus" },
@@ -293,10 +293,10 @@ const App: React.FC = () => {
   const [hasPaid, setHasPaid] = useState(false);
   const [linkedinConnected, setLinkedinConnected] = useState(false);
   const [authMode, setAuthMode] = useState<'login' | 'signup'>('signup');
-  type AppView = 'home' | 'login' | 'pricing' | 'billing' | 'form' | 'history' | 'payment' | 'profile' | 'privacy' | 'terms' | 'contact' | 'team';
+  type AppView = 'home' | 'login' | 'pricing' | 'form' | 'history' | 'payment' | 'profile' | 'privacy' | 'terms' | 'contact' | 'team';
   const [view, setView] = useState<AppView>(() => {
     const pathMap: Record<string, AppView> = {
-      '/': 'home', '/login': 'login', '/pricing': 'pricing', '/gather': 'form',
+      '/': 'home', '/login': 'login', '/pricing': 'pricing', '/billing': 'pricing', '/gather': 'form',
       '/pipeline': 'history', '/payment': 'payment', '/profile': 'profile',
       '/privacy': 'privacy', '/terms': 'terms', '/contact': 'contact', '/team': 'team',
     };
@@ -397,6 +397,9 @@ const App: React.FC = () => {
 
     const savedPaid = localStorage.getItem(STORAGE_KEY_PAID);
     if (savedPaid === 'true') setHasPaid(true);
+
+    const savedSeats = localStorage.getItem(STORAGE_KEY_SEATS);
+    if (savedSeats) setSeatCount(parseInt(savedSeats, 10));
 
     const savedLinkedin = localStorage.getItem(STORAGE_KEY_LINKEDIN);
     if (savedLinkedin === 'true') setLinkedinConnected(true);
@@ -625,7 +628,7 @@ const App: React.FC = () => {
         config: {
           responseModalities: [Modality.AUDIO],
           inputAudioTranscription: {},
-          systemInstruction: `NexusGather Command.`
+          systemInstruction: `You are a note-taking assistant for MemoPear. Transcribe everything the user says accurately.`
         }
       });
       sessionRef.current = await sessionPromise;
@@ -781,8 +784,7 @@ const App: React.FC = () => {
   const VIEW_URLS: Record<string, string> = {
     home: '/', login: '/login', pricing: '/pricing', form: '/gather',
     history: '/pipeline', payment: '/payment', profile: '/profile',
-    privacy: '/privacy', terms: '/terms', contact: '/contact', billing: '/billing',
-    team: '/team',
+    privacy: '/privacy', terms: '/terms', contact: '/contact', team: '/team',
   };
 
   const PAGE_META: Record<string, { title: string; description: string }> = {
@@ -796,7 +798,6 @@ const App: React.FC = () => {
     privacy: { title: 'Privacy Policy | MemoPear', description: 'How MemoPear handles your data and protects your privacy.' },
     terms: { title: 'Terms & Conditions | MemoPear', description: 'MemoPear terms of service and subscription details.' },
     contact: { title: 'Contact Us | MemoPear', description: 'Get in touch with the MemoPear team.' },
-    billing: { title: 'Billing | MemoPear', description: 'Manage your MemoPear subscription and billing.' },
     team: { title: 'Team | MemoPear', description: 'Invite your team members and manage your seats.' },
   };
 
@@ -818,7 +819,7 @@ const App: React.FC = () => {
       if (e.state?.view) setView(e.state.view);
       else {
         const pathMap: Record<string, AppView> = {
-          '/': 'home', '/login': 'login', '/pricing': 'pricing', '/gather': 'form',
+          '/': 'home', '/login': 'login', '/pricing': 'pricing', '/billing': 'pricing', '/gather': 'form',
           '/pipeline': 'history', '/payment': 'payment', '/profile': 'profile',
           '/privacy': 'privacy', '/terms': 'terms', '/contact': 'contact', '/team': 'team',
         };
@@ -1829,25 +1830,32 @@ const App: React.FC = () => {
                     placeholder="colleague@company.com"
                     className="flex-1 px-4 py-3 rounded-xl bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 text-sm font-bold outline-none focus:border-pear-500/50 transition-all"
                     onKeyDown={(e) => {
-                      if (e.key === 'Enter' && inviteEmail.trim()) {
-                        const newMember: TeamMember = { id: crypto.randomUUID(), email: inviteEmail.trim(), status: 'pending', invitedAt: Date.now() };
+                      if (e.key === 'Enter') {
+                        const em = inviteEmail.trim();
+                        if (!em || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em)) {
+                          setStatusMsg({ type: 'error', text: 'Enter a valid email address.' }); return;
+                        }
+                        const newMember: TeamMember = { id: crypto.randomUUID(), email: em, status: 'pending', invitedAt: Date.now() };
                         const updated = [...teamMembers, newMember];
                         setTeamMembers(updated);
                         localStorage.setItem(STORAGE_KEY_TEAM, JSON.stringify(updated));
                         setInviteEmail('');
-                        setStatusMsg({ type: 'success', text: `Invite sent to ${newMember.email}` });
+                        setStatusMsg({ type: 'success', text: `Invite sent to ${em}` });
                       }
                     }}
                   />
                   <button
                     onClick={() => {
-                      if (!inviteEmail.trim()) return;
-                      const newMember: TeamMember = { id: crypto.randomUUID(), email: inviteEmail.trim(), status: 'pending', invitedAt: Date.now() };
+                      const em = inviteEmail.trim();
+                      if (!em || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em)) {
+                        setStatusMsg({ type: 'error', text: 'Enter a valid email address.' }); return;
+                      }
+                      const newMember: TeamMember = { id: crypto.randomUUID(), email: em, status: 'pending', invitedAt: Date.now() };
                       const updated = [...teamMembers, newMember];
                       setTeamMembers(updated);
                       localStorage.setItem(STORAGE_KEY_TEAM, JSON.stringify(updated));
                       setInviteEmail('');
-                      setStatusMsg({ type: 'success', text: `Invite sent to ${newMember.email}` });
+                      setStatusMsg({ type: 'success', text: `Invite sent to ${em}` });
                     }}
                     className="px-5 py-3 bg-pear-600 text-white font-black rounded-xl text-sm shadow-lg hover:scale-[1.02] active:scale-95 transition-all"
                   >
