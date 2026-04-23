@@ -4,6 +4,7 @@ import {
   GoogleAuthProvider,
   OAuthProvider,
   signInWithPopup,
+  browserPopupRedirectResolver,
   UserCredential,
   signOut,
 } from 'firebase/auth';
@@ -29,12 +30,12 @@ linkedinProvider.addScope('openid');
 linkedinProvider.addScope('profile');
 linkedinProvider.addScope('email');
 
-export async function signInWithGoogle(): Promise<UserCredential> {
-  return signInWithPopup(auth, googleProvider);
+export function signInWithGoogle(): Promise<UserCredential> {
+  return signInWithPopup(auth, googleProvider, browserPopupRedirectResolver);
 }
 
-export async function signInWithLinkedIn(): Promise<UserCredential> {
-  return signInWithPopup(auth, linkedinProvider);
+export function signInWithLinkedIn(): Promise<UserCredential> {
+  return signInWithPopup(auth, linkedinProvider, browserPopupRedirectResolver);
 }
 
 export async function firebaseSignOut(): Promise<void> {
