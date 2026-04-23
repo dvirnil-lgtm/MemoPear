@@ -3,9 +3,9 @@ import {
   getAuth,
   GoogleAuthProvider,
   OAuthProvider,
-  signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
   signOut,
-  type UserCredential,
 } from 'firebase/auth';
 
 const firebaseConfig = {
@@ -25,15 +25,21 @@ const googleProvider = new GoogleAuthProvider();
 googleProvider.setCustomParameters({ prompt: 'select_account' });
 
 const linkedinProvider = new OAuthProvider('linkedin.com');
-linkedinProvider.addScope('r_emailaddress');
-linkedinProvider.addScope('r_liteprofile');
+linkedinProvider.addScope('openid');
+linkedinProvider.addScope('profile');
+linkedinProvider.addScope('email');
 
-export async function signInWithGoogle(): Promise<UserCredential> {
-  return signInWithPopup(auth, googleProvider);
+export async function signInWithGoogle(): Promise<void> {
+  await signInWithRedirect(auth, googleProvider);
 }
 
-export async function signInWithLinkedIn(): Promise<UserCredential> {
-  return signInWithPopup(auth, linkedinProvider);
+export async function signInWithLinkedIn(): Promise<void> {
+  await signInWithRedirect(auth, linkedinProvider);
+}
+
+// Called on app load to pick up the result after the redirect comes back
+export async function checkRedirectResult() {
+  return getRedirectResult(auth);
 }
 
 export async function firebaseSignOut(): Promise<void> {
