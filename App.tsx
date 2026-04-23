@@ -6,7 +6,7 @@ import { QRScanner } from './components/QRScanner';
 import { CommMethodToggle } from './components/CommMethodToggle';
 import { PrivacyPolicy, TermsAndConditions, ContactUs } from './components/LegalPages';
 import { parseScannedData, parseBusinessCard, generateLeadReport } from './services/geminiService';
-import { signInWithGoogle, signInWithLinkedIn, firebaseSignOut, checkRedirectResult } from './firebase';
+import { signInWithGoogle, signInWithLinkedIn, firebaseSignOut } from './firebase';
 
 // Constants for retention and session
 const RETENTION_DAYS = 30;
@@ -552,10 +552,9 @@ const App: React.FC = () => {
     else navigateTo('history');
   };
 
-  // Called on mount to capture the user after OAuth redirect returns to the app
-  useEffect(() => {
-    checkRedirectResult().then(result => {
-      if (!result?.user) return;
+  const handleSocialAuth = async (provider: 'google' | 'linkedin') => {
+    try {
+      const result = await (provider === 'google' ? signInWithGoogle() : signInWithLinkedIn());
       const user = result.user;
       const userEmail = user.email || '';
       const userName = user.displayName || '';
@@ -568,21 +567,21 @@ const App: React.FC = () => {
       setStatusMsg({ type: 'success', text: `Welcome${userName ? `, ${userName.split(' ')[0]}` : ''}!` });
       const paid = localStorage.getItem(STORAGE_KEY_PAID) === 'true';
       if (paid) navigateTo('form'); else navigateTo('history');
-    }).catch(err => console.error('Redirect result error:', err?.code, err));
-  }, []);
-
-  const handleSocialAuth = async (provider: 'google' | 'linkedin') => {
-    try {
-      if (provider === 'google') await signInWithGoogle();
-      else await signInWithLinkedIn();
-      // Page will redirect to OAuth provider; result handled in mount useEffect above
     } catch (err: any) {
       const code = err?.code || '';
       console.error('Social auth error:', code, err);
+      if (code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request') {
+        // User dismissed — do nothing
+        return;
+      }
       if (code === 'auth/unauthorized-domain') {
-        setStatusMsg({ type: 'error', text: 'Domain not authorized — add memopear.com to Firebase Auth → Authorized Domains.' });
+        setStatusMsg({ type: 'error', text: 'Domain not authorized in Firebase. Add memopear.com to Firebase Auth → Authorized Domains.' });
+      } else if (code === 'auth/popup-blocked') {
+        setStatusMsg({ type: 'error', text: 'Popup was blocked by the browser. Please allow popups for this site and try again.' });
+      } else if (code === 'auth/network-request-failed') {
+        setStatusMsg({ type: 'error', text: 'Network error during sign-in. Check your connection and try again.' });
       } else {
-        setStatusMsg({ type: 'error', text: `Sign-in failed (${code || 'unknown'}). Check console for details.` });
+        setStatusMsg({ type: 'error', text: `Sign-in failed: ${code || 'unknown error'}. See browser console for details.` });
       }
     }
   };
