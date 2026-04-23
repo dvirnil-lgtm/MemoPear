@@ -553,6 +553,7 @@ const App: React.FC = () => {
   };
 
   const handleSocialAuth = async (provider: 'google' | 'linkedin') => {
+    const popupOpenedAt = Date.now();
     try {
       const result = await (provider === 'google' ? signInWithGoogle() : signInWithLinkedIn());
       const user = result.user;
@@ -569,19 +570,33 @@ const App: React.FC = () => {
       if (paid) navigateTo('form'); else navigateTo('history');
     } catch (err: any) {
       const code = err?.code || '';
-      console.error('Social auth error:', code, err);
-      if (code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request') {
-        // User dismissed — do nothing
+      console.error('[MemoPear] Social auth error:', code, err);
+      if (code === 'auth/cancelled-popup-request') {
+        // A second popup request was made — this one was replaced, the new one proceeds
+        return;
+      }
+      if (code === 'auth/popup-closed-by-user') {
+        // If the popup closed in under 5 s the user had no time to interact —
+        // it was closed automatically by the auth handler, almost always due to
+        // a misconfigured OAuth redirect URI or an unauthorized domain.
+        const elapsed = Date.now() - popupOpenedAt;
+        if (elapsed < 5000) {
+          const host = window.location.hostname;
+          setStatusMsg({ type: 'error', text: `Sign-in window closed automatically. Check: (1) "${host}" is in Firebase Auth → Authorized Domains, (2) the OAuth redirect URI "https://gen-lang-client-0075473844.firebaseapp.com/__/auth/handler" is added in your Google Cloud Console and LinkedIn Developer Portal.` });
+        }
+        // If closed after 5 s the user most likely dismissed it on purpose — stay silent
         return;
       }
       if (code === 'auth/unauthorized-domain') {
-        setStatusMsg({ type: 'error', text: 'Domain not authorized in Firebase. Add memopear.com to Firebase Auth → Authorized Domains.' });
+        setStatusMsg({ type: 'error', text: `Domain not authorized. Add "${window.location.hostname}" to Firebase Console → Authentication → Authorized Domains.` });
       } else if (code === 'auth/popup-blocked') {
         setStatusMsg({ type: 'error', text: 'Popup was blocked by the browser. Please allow popups for this site and try again.' });
+      } else if (code === 'auth/operation-not-allowed') {
+        setStatusMsg({ type: 'error', text: `${provider === 'google' ? 'Google' : 'LinkedIn'} sign-in is not enabled. Enable it in Firebase Console → Authentication → Sign-in method.` });
       } else if (code === 'auth/network-request-failed') {
         setStatusMsg({ type: 'error', text: 'Network error during sign-in. Check your connection and try again.' });
       } else {
-        setStatusMsg({ type: 'error', text: `Sign-in failed: ${code || 'unknown error'}. See browser console for details.` });
+        setStatusMsg({ type: 'error', text: `Sign-in failed (${code || 'unknown error'}). See browser console for details.` });
       }
     }
   };
