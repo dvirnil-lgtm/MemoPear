@@ -356,6 +356,7 @@ const App: React.FC = () => {
   const [paymentMethod, setPaymentMethod] = useState<'google' | 'card' | 'paypal' | null>(null);
   
   const [email, setEmail] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [phone, setPhone] = useState('');
   const [company, setCompany] = useState('');
   const [jobTitle, setJobTitle] = useState('');
@@ -472,7 +473,7 @@ const App: React.FC = () => {
 
   useEffect(() => {
     if (statusMsg) {
-      const timer = setTimeout(() => setStatusMsg(null), 4000);
+      const timer = setTimeout(() => setStatusMsg(null), statusMsg.type === 'error' ? 8000 : 4000);
       return () => clearTimeout(timer);
     }
   }, [statusMsg]);
@@ -538,16 +539,23 @@ const App: React.FC = () => {
 
   const handleAuth = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    const authData = { email, password, timestamp: Date.now() };
+    if (authMode === 'signup') {
+      if (password.length < 8) {
+        setStatusMsg({ type: 'error', text: 'Password must be at least 8 characters.' });
+        return;
+      }
+      if (password !== confirmPassword) {
+        setStatusMsg({ type: 'error', text: 'Passwords do not match.' });
+        return;
+      }
+    }
+    const authData = { email, timestamp: Date.now() };
     localStorage.setItem(STORAGE_KEY_AUTH, JSON.stringify(authData));
-    
-    // Save to "internal database" (localStorage for this environment)
-    const savedProfile = { ...userProfile, email, password };
+    const savedProfile = { ...userProfile, email };
     localStorage.setItem('memo_profile', JSON.stringify(savedProfile));
-    
     setIsLoggedIn(true);
     setUserProfile(savedProfile);
-    setStatusMsg({ type: 'success', text: 'Welcome to MemoPear!' });
+    setStatusMsg({ type: 'success', text: authMode === 'signup' ? 'Account created! Welcome to MemoPear.' : 'Welcome back!' });
     if (hasPaid) navigateTo('form');
     else navigateTo('history');
   };
@@ -1578,17 +1586,33 @@ const App: React.FC = () => {
                       <div className="h-px flex-1 bg-current" />
                     </div>
 
-                    <form onSubmit={handleAuth} className="flex flex-col sm:flex-row gap-3">
-                      <input 
-                        type="email" 
-                        placeholder="Email address" 
-                        required 
-                        value={email} 
-                        onChange={(e) => setEmail(e.target.value)} 
-                        className="flex-1 px-5 py-4 rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 outline-none text-sm font-medium focus:border-blue-500 transition-colors"
+                    <form onSubmit={handleAuth} className="flex flex-col gap-3">
+                      <input
+                        type="email"
+                        placeholder="Email address"
+                        required
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        className="w-full px-5 py-4 rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 outline-none text-sm font-medium focus:border-blue-500 transition-colors"
                       />
-                      <button type="submit" className="sm:w-32 py-4 bg-[#545fc4] text-white font-bold rounded-xl shadow-lg hover:shadow-xl hover:scale-[1.02] active:scale-95 transition-all text-sm">
-                        Sign up
+                      <input
+                        type="password"
+                        placeholder="Password (min. 8 characters)"
+                        required
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        className="w-full px-5 py-4 rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 outline-none text-sm font-medium focus:border-blue-500 transition-colors"
+                      />
+                      <input
+                        type="password"
+                        placeholder="Confirm password"
+                        required
+                        value={confirmPassword}
+                        onChange={(e) => setConfirmPassword(e.target.value)}
+                        className="w-full px-5 py-4 rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 outline-none text-sm font-medium focus:border-blue-500 transition-colors"
+                      />
+                      <button type="submit" className="w-full py-4 bg-[#545fc4] text-white font-bold rounded-xl shadow-lg hover:shadow-xl hover:scale-[1.02] active:scale-95 transition-all text-sm">
+                        Create Account
                       </button>
                     </form>
 
