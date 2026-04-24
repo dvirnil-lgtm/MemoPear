@@ -1,10 +1,11 @@
 import { initializeApp } from 'firebase/app';
 import {
-  getAuth,
+  initializeAuth,
+  browserLocalPersistence,
+  browserPopupRedirectResolver,
   GoogleAuthProvider,
   OAuthProvider,
   signInWithPopup,
-  browserPopupRedirectResolver,
   UserCredential,
   signOut,
 } from 'firebase/auth';
@@ -20,7 +21,13 @@ const firebaseConfig = {
 };
 
 const app = initializeApp(firebaseConfig);
-export const auth = getAuth(app);
+
+// Use initializeAuth with explicit sync persistence and resolver so there
+// is no lazy async initialisation between the click event and window.open().
+export const auth = initializeAuth(app, {
+  persistence: browserLocalPersistence,
+  popupRedirectResolver: browserPopupRedirectResolver,
+});
 
 const googleProvider = new GoogleAuthProvider();
 googleProvider.setCustomParameters({ prompt: 'select_account' });
