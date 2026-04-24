@@ -11,7 +11,7 @@ import {
 } from 'firebase/auth';
 
 const firebaseConfig = {
-  apiKey: "AIzaSyD-BThdsFDMJbD7U5FTbefhVl6VnR5VpY",
+  apiKey: "AIzaSyD-BThdsFFDMJbD7U5FTbefhVl6VnR5VpY",
   authDomain: "gen-lang-client-0075473844.firebaseapp.com",
   projectId: "gen-lang-client-0075473844",
   storageBucket: "gen-lang-client-0075473844.firebasestorage.app",
