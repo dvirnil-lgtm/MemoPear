@@ -6,7 +6,7 @@ import { QRScanner } from './components/QRScanner';
 import { CommMethodToggle } from './components/CommMethodToggle';
 import { PrivacyPolicy, TermsAndConditions, ContactUs } from './components/LegalPages';
 import { parseScannedData, parseBusinessCard, generateLeadReport } from './services/geminiService';
-import { signInWithGoogle, signInWithLinkedIn, firebaseSignOut } from './firebase';
+import { signInWithGoogle, signInWithLinkedIn, firebaseSignOut, auth } from './firebase';
 
 // Constants for retention and session
 const RETENTION_DAYS = 30;
@@ -373,6 +373,8 @@ const App: React.FC = () => {
   const [editingLead, setEditingLead] = useState<Lead | null>(null);
   const [isGeneratingEmail, setIsGeneratingEmail] = useState(false);
   const [statusMsg, setStatusMsg] = useState<{ type: 'success' | 'error', text: string } | null>(null);
+  const [authReady, setAuthReady] = useState(false);
+  const [socialAuthError, setSocialAuthError] = useState<string | null>(null);
   const [showContactFields, setShowContactFields] = useState(false);
   const [showRetentionNotice, setShowRetentionNotice] = useState(false);
 
@@ -479,6 +481,10 @@ const App: React.FC = () => {
   }, [statusMsg]);
 
   useEffect(() => {
+    auth.authStateReady().then(() => setAuthReady(true));
+  }, []);
+
+  useEffect(() => {
     if (isMenuOpen) {
       document.body.style.overflow = 'hidden';
     } else {
@@ -561,6 +567,7 @@ const App: React.FC = () => {
   };
 
   const handleSocialAuth = async (provider: 'google' | 'linkedin') => {
+    setSocialAuthError(null);
     const popupOpenedAt = Date.now();
     try {
       const result = await (provider === 'google' ? signInWithGoogle() : signInWithLinkedIn());
@@ -579,32 +586,25 @@ const App: React.FC = () => {
     } catch (err: any) {
       const code = err?.code || '';
       console.error('[MemoPear] Social auth error:', code, err);
-      if (code === 'auth/cancelled-popup-request') {
-        // A second popup request was made — this one was replaced, the new one proceeds
-        return;
-      }
+      if (code === 'auth/cancelled-popup-request') return;
       if (code === 'auth/popup-closed-by-user') {
-        // If the popup closed in under 5 s the user had no time to interact —
-        // it was closed automatically by the auth handler, almost always due to
-        // a misconfigured OAuth redirect URI or an unauthorized domain.
         const elapsed = Date.now() - popupOpenedAt;
         if (elapsed < 5000) {
           const host = window.location.hostname;
-          setStatusMsg({ type: 'error', text: `Sign-in window closed automatically. Check: (1) "${host}" is in Firebase Auth → Authorized Domains, (2) the OAuth redirect URI "https://gen-lang-client-0075473844.firebaseapp.com/__/auth/handler" is added in your Google Cloud Console and LinkedIn Developer Portal.` });
+          setSocialAuthError(`Sign-in window closed automatically. Verify: (1) "${host}" is listed in Firebase Console → Authentication → Settings → Authorized Domains, and (2) the redirect URI "https://gen-lang-client-0075473844.firebaseapp.com/__/auth/handler" is added in your Google Cloud Console OAuth client and LinkedIn Developer Portal.`);
         }
-        // If closed after 5 s the user most likely dismissed it on purpose — stay silent
         return;
       }
       if (code === 'auth/unauthorized-domain') {
-        setStatusMsg({ type: 'error', text: `Domain not authorized. Add "${window.location.hostname}" to Firebase Console → Authentication → Authorized Domains.` });
+        setSocialAuthError(`Domain not authorized. Add "${window.location.hostname}" to Firebase Console → Authentication → Authorized Domains.`);
       } else if (code === 'auth/popup-blocked') {
-        setStatusMsg({ type: 'error', text: 'Popup was blocked by the browser. Please allow popups for this site and try again.' });
+        setSocialAuthError('Popup was blocked by the browser. Please allow popups for this site and try again.');
       } else if (code === 'auth/operation-not-allowed') {
-        setStatusMsg({ type: 'error', text: `${provider === 'google' ? 'Google' : 'LinkedIn'} sign-in is not enabled. Enable it in Firebase Console → Authentication → Sign-in method.` });
+        setSocialAuthError(`${provider === 'google' ? 'Google' : 'LinkedIn'} sign-in is not enabled. Enable it in Firebase Console → Authentication → Sign-in method.`);
       } else if (code === 'auth/network-request-failed') {
-        setStatusMsg({ type: 'error', text: 'Network error during sign-in. Check your connection and try again.' });
+        setSocialAuthError('Network error during sign-in. Check your connection and try again.');
       } else {
-        setStatusMsg({ type: 'error', text: `Sign-in failed (${code || 'unknown error'}). See browser console for details.` });
+        setSocialAuthError(`Sign-in failed: ${code || 'unknown error'}. See browser console for details.`);
       }
     }
   };
@@ -1537,7 +1537,14 @@ const App: React.FC = () => {
         {view === 'login' && (
           <div className="p-6 md:p-12 flex flex-col items-center justify-center min-h-screen bg-white dark:bg-[#020617] transition-colors duration-500">
             <div className="w-full max-w-lg space-y-10 animate-in fade-in slide-in-from-bottom-8 duration-700">
-              
+
+              {socialAuthError && (
+                <div className="flex gap-3 p-4 rounded-2xl bg-red-50 dark:bg-red-950/50 border border-red-200 dark:border-red-800">
+                  <span className="text-red-500 text-lg flex-shrink-0">⚠</span>
+                  <p className="text-xs font-semibold text-red-700 dark:text-red-300 leading-relaxed">{socialAuthError}</p>
+                </div>
+              )}
+
               {/* Auth Mode Toggle (Slider) */}
               <div className="flex justify-center mb-8">
                 <div className="p-1 bg-slate-100 dark:bg-white/5 rounded-2xl flex relative w-64 shadow-inner">
@@ -1571,11 +1578,11 @@ const App: React.FC = () => {
                   </div>
 
                   <div className="space-y-4">
-                    <button type="button" onClick={() => handleSocialAuth('google')} className="w-full py-4 px-6 border border-slate-200 dark:border-white/10 rounded-full flex items-center justify-center gap-3 font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-white/5 transition-all shadow-sm">
+                    <button type="button" disabled={!authReady} onClick={() => handleSocialAuth('google')} className="w-full py-4 px-6 border border-slate-200 dark:border-white/10 rounded-full flex items-center justify-center gap-3 font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-white/5 transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed">
                       <svg viewBox="0 0 24 24" className="w-5 h-5 flex-shrink-0"><path fill="#EA4335" d="M24 12.25c0-.85-.07-1.71-.22-2.54H12v4.81h6.72c-.29 1.57-1.18 2.9-2.5 3.79v3.15h4.05c2.37-2.18 3.73-5.39 3.73-8.71z"/><path fill="#34A853" d="M12 24c3.24 0 5.97-1.08 7.96-2.92l-4.05-3.15c-1.12.75-2.56 1.19-3.91 1.19-3.02 0-5.58-2.04-6.5-4.79L1.31 17.44C3.25 21.31 7.29 24 12 24z"/><path fill="#FBBC05" d="M5.5 14.33c-.24-.71-.38-1.47-.38-2.33s.14-1.62.38-2.33L1.31 6.53C.47 8.21 0 10.05 0 12s.47 3.79 1.31 5.47l4.19-3.14z"/><path fill="#4285F4" d="M12 4.75c1.76 0 3.35.61 4.59 1.79l3.44-3.44C17.96 1.08 15.24 0 12 0 7.29 0 3.25 2.69 1.31 6.53l4.19 3.14c.92-2.75 3.48-4.79 6.5-4.79z"/></svg>
                       Continue with Google
                     </button>
-                    <button type="button" onClick={() => handleSocialAuth('linkedin')} className="w-full py-4 px-6 bg-[#0077b5] text-white rounded-full flex items-center justify-center gap-3 font-semibold hover:bg-[#005c8c] transition-all shadow-sm">
+                    <button type="button" disabled={!authReady} onClick={() => handleSocialAuth('linkedin')} className="w-full py-4 px-6 bg-[#0077b5] text-white rounded-full flex items-center justify-center gap-3 font-semibold hover:bg-[#005c8c] transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed">
                       <svg viewBox="0 0 24 24" className="w-5 h-5 flex-shrink-0" fill="currentColor"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
                       Continue with LinkedIn
                     </button>
@@ -1636,11 +1643,11 @@ const App: React.FC = () => {
                   </form>
 
                   <div className="grid grid-cols-2 gap-4">
-                    <button type="button" onClick={() => handleSocialAuth('google')} className="w-full py-4 px-6 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl flex items-center justify-center gap-3 font-black text-[9px] uppercase tracking-widest hover:bg-slate-50 transition-all shadow-sm">
+                    <button type="button" disabled={!authReady} onClick={() => handleSocialAuth('google')} className="w-full py-4 px-6 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl flex items-center justify-center gap-3 font-black text-[9px] uppercase tracking-widest hover:bg-slate-50 transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed">
                       <svg viewBox="0 0 24 24" className="w-4 h-4"><path fill="#EA4335" d="M24 12.25c0-.85-.07-1.71-.22-2.54H12v4.81h6.72c-.29 1.57-1.18 2.9-2.5 3.79v3.15h4.05c2.37-2.18 3.73-5.39 3.73-8.71z"/><path fill="#34A853" d="M12 24c3.24 0 5.97-1.08 7.96-2.92l-4.05-3.15c-1.12.75-2.56 1.19-3.91 1.19-3.02 0-5.58-2.04-6.5-4.79L1.31 17.44C3.25 21.31 7.29 24 12 24z"/><path fill="#FBBC05" d="M5.5 14.33c-.24-.71-.38-1.47-.38-2.33s.14-1.62.38-2.33L1.31 6.53C.47 8.21 0 10.05 0 12s.47 3.79 1.31 5.47l4.19-3.14z"/><path fill="#4285F4" d="M12 4.75c1.76 0 3.35.61 4.59 1.79l3.44-3.44C17.96 1.08 15.24 0 12 0 7.29 0 3.25 2.69 1.31 6.53l4.19 3.14c.92-2.75 3.48-4.79 6.5-4.79z"/></svg>
                       Google
                     </button>
-                    <button type="button" onClick={() => handleSocialAuth('linkedin')} className="w-full py-4 px-6 bg-[#0077b5] text-white rounded-2xl flex items-center justify-center gap-3 font-black text-[9px] uppercase tracking-widest hover:bg-[#005c8c] transition-all shadow-md">
+                    <button type="button" disabled={!authReady} onClick={() => handleSocialAuth('linkedin')} className="w-full py-4 px-6 bg-[#0077b5] text-white rounded-2xl flex items-center justify-center gap-3 font-black text-[9px] uppercase tracking-widest hover:bg-[#005c8c] transition-all shadow-md disabled:opacity-50 disabled:cursor-not-allowed">
                       LinkedIn
                     </button>
                   </div>
