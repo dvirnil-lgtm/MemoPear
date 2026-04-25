@@ -1251,10 +1251,12 @@ const App: React.FC = () => {
                 const links = STRIPE_LINKS[paymentCycle];
                 const dedicated = links[seatQuantity];
                 const fallback = `${links[1]}?quantity=${seatQuantity}`;
-                const stripeLink = dedicated ?? fallback;
+                const stripeUrl = new URL(dedicated ?? fallback);
+                if (email) stripeUrl.searchParams.set('prefilled_email', email);
                 localStorage.setItem(STORAGE_KEY_SEATS, String(seatQuantity));
                 setSeatCount(seatQuantity);
-                window.open(stripeLink, '_blank');
+                window.open(stripeUrl.toString(), '_blank');
+                navigateTo('payment');
               }} className="w-full py-4 bg-pear-600 text-white font-black rounded-2xl shadow-xl hover:scale-[1.02] active:scale-95 transition-all text-[10px] uppercase tracking-widest">
                 {seatQuantity > 1 ? `Get ${seatQuantity} Seats Now` : 'Get Started Now'}
               </button>
