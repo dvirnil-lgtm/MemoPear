@@ -19,6 +19,7 @@ const STORAGE_KEY_LINKEDIN = 'lcp_linkedin_connected_v1';
 const STORAGE_KEY_TOUR_COMPLETE = 'lcp_tour_done_v1';
 const STORAGE_KEY_SEATS = 'lcp_seats_v1';
 const STORAGE_KEY_TEAM = 'lcp_team_v1';
+const STORAGE_KEY_RECEIPTS = 'lcp_receipts_v1';
 
 // Stripe payment links — add a dedicated link per seat count for best UX.
 // Each link should be created in Stripe Dashboard at the correct unit price
@@ -313,6 +314,10 @@ const App: React.FC = () => {
   });
   const [seatQuantity, setSeatQuantity] = useState(1);
   const [inviteEmail, setInviteEmail] = useState('');
+  const [receipts, setReceipts] = useState<{id: string; date: number; plan: string; cycle: string; seats: number; amount: string}[]>(() => {
+    const saved = localStorage.getItem(STORAGE_KEY_RECEIPTS);
+    return saved ? JSON.parse(saved) : [];
+  });
   const [leads, setLeads] = useState<Lead[]>([]);
   const [userProfile, setUserProfile] = useState<UserProfile>({
     name: '',
@@ -413,8 +418,9 @@ const App: React.FC = () => {
       const { timestamp } = JSON.parse(savedAuth);
       if (Date.now() - timestamp < SESSION_DAYS * 24 * 60 * 60 * 1000) {
         setIsLoggedIn(true);
+        const currentPath = window.location.pathname;
         if (savedPaid === 'true') { setView('form'); window.history.replaceState({ view: 'form' }, '', '/gather'); }
-        else { setView('history'); window.history.replaceState({ view: 'history' }, '', '/pipeline'); }
+        else if (currentPath !== '/payment') { setView('history'); window.history.replaceState({ view: 'history' }, '', '/pipeline'); }
       }
     }
     const savedLeads = localStorage.getItem(STORAGE_KEY_LEADS);
@@ -625,16 +631,35 @@ const App: React.FC = () => {
     }
   };
 
-  const handlePayment = (e: React.FormEvent) => {
-    e.preventDefault();
+  const activatePlan = () => {
+    sessionStorage.removeItem('lcp_pending_activation');
+    const receipt = { id: `INV-${Date.now()}`, date: Date.now(), plan: 'MemoPear Pro', cycle: paymentCycle, seats: seatCount, amount: paymentCycle === 'monthly' ? '$1.49' : '$16.09' };
+    const updated = [...receipts, receipt];
+    setReceipts(updated);
+    localStorage.setItem(STORAGE_KEY_RECEIPTS, JSON.stringify(updated));
+    setHasPaid(true);
+    localStorage.setItem(STORAGE_KEY_PAID, 'true');
+    setStatusMsg({ type: 'success', text: "You're all set! Start capturing contacts." });
+    navigateTo('form');
+  };
+
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible' && view === 'payment' && sessionStorage.getItem('lcp_pending_activation')) {
+        activatePlan();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => document.removeEventListener('visibilitychange', handleVisibility);
+  }, [view, receipts, paymentCycle, seatCount]);
+
+  const handlePayment = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
     setIsSubmitting(true);
     setTimeout(() => {
-      setHasPaid(true);
-      localStorage.setItem(STORAGE_KEY_PAID, 'true');
+      activatePlan();
       setIsSubmitting(false);
-      setStatusMsg({ type: 'success', text: "You're all set! Start capturing contacts." });
-      navigateTo('form');
-    }, 2000);
+    }, 1500);
   };
 
   const toggleCommMethod = (method: CommMethod) => {
@@ -1251,10 +1276,13 @@ const App: React.FC = () => {
                 const links = STRIPE_LINKS[paymentCycle];
                 const dedicated = links[seatQuantity];
                 const fallback = `${links[1]}?quantity=${seatQuantity}`;
-                const stripeLink = dedicated ?? fallback;
+                const stripeUrl = new URL(dedicated ?? fallback);
+                if (email) stripeUrl.searchParams.set('prefilled_email', email);
                 localStorage.setItem(STORAGE_KEY_SEATS, String(seatQuantity));
                 setSeatCount(seatQuantity);
-                window.open(stripeLink, '_blank');
+                sessionStorage.setItem('lcp_pending_activation', '1');
+                window.open(stripeUrl.toString(), '_blank');
+                navigateTo('payment');
               }} className="w-full py-4 bg-pear-600 text-white font-black rounded-2xl shadow-xl hover:scale-[1.02] active:scale-95 transition-all text-[10px] uppercase tracking-widest">
                 {seatQuantity > 1 ? `Get ${seatQuantity} Seats Now` : 'Get Started Now'}
               </button>
@@ -1270,35 +1298,25 @@ const App: React.FC = () => {
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M15 19l-7-7 7-7" /></svg>
               Go Back
             </button>
-            <h2 className="text-4xl font-black mb-8 tracking-tighter">Complete Activation</h2>
-            
-            <div className="space-y-4">
-              <button onClick={() => setPaymentMethod('google')} className={`w-full py-6 rounded-[2rem] border-2 flex items-center justify-center gap-3 transition-all ${paymentMethod === 'google' ? 'border-pear-600 bg-pear-600/5' : 'border-slate-200 dark:border-white/10'}`}><div className="bg-black text-white px-3 py-1 rounded-md text-sm font-bold flex items-center gap-1">Google <span className="font-black">Pay</span></div></button>
-              <button onClick={() => setPaymentMethod('paypal')} className={`w-full py-6 rounded-[2rem] border-2 flex items-center justify-center gap-3 transition-all ${paymentMethod === 'paypal' ? 'border-pear-600 bg-pear-600/5' : 'border-slate-200 dark:border-white/10'}`}><div className="flex items-center italic"><span className="text-blue-900 font-black">Pay</span><span className="text-blue-500 font-black">Pal</span></div></button>
-              <div className={`rounded-[2rem] border-2 transition-all overflow-hidden ${paymentMethod === 'card' ? 'border-pear-600 bg-pear-600/5' : 'border-slate-200 dark:border-white/10'}`}>
-                <button onClick={() => setPaymentMethod('card')} className="w-full py-6 flex items-center justify-center gap-3 font-black text-xs uppercase tracking-widest"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" /></svg>Credit Card</button>
-                {paymentMethod === 'card' && (
-                  <form onSubmit={handlePayment} className="p-8 pt-0 space-y-4 animate-in slide-in-from-top-4">
-                    <input type="text" placeholder="Card Number" required className="w-full px-5 py-4 rounded-xl bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 outline-none text-sm font-bold" />
-                    <div className="grid grid-cols-2 gap-4">
-                      <input type="text" placeholder="MM / YY" required className="px-5 py-4 rounded-xl bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 outline-none text-sm font-bold" />
-                      <input type="text" placeholder="CVV" required className="px-5 py-4 rounded-xl bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 outline-none text-sm font-bold" />
-                    </div>
-                  </form>
-                )}
+            <h2 className="text-4xl font-black mb-4 tracking-tighter">Activate Your Plan</h2>
+            <p className="text-sm text-slate-500 font-medium mb-12 leading-relaxed">
+              Once your Stripe payment is complete, click below to unlock the platform.
+            </p>
+
+            <div className="rounded-[2rem] border-2 border-pear-200 dark:border-pear-600/30 bg-pear-50 dark:bg-pear-600/5 p-6 mb-10 space-y-3">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-xl bg-pear-600 text-white flex items-center justify-center text-sm flex-shrink-0">✓</div>
+                <p className="text-sm font-black tracking-tight">Payment processed on Stripe</p>
+              </div>
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-xl bg-pear-600 text-white flex items-center justify-center text-sm flex-shrink-0">✓</div>
+                <p className="text-sm font-black tracking-tight">Invoice sent to your email by Stripe</p>
               </div>
             </div>
-            <div className="mt-12 text-center">
-              <p className="text-2xl font-black mb-2">
-                {paymentCycle === 'monthly' ? '$1.49' : '$16.09'} USD
-              </p>
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-8">
-                {paymentCycle === 'monthly' ? 'Billed Monthly' : 'Billed Annually'} • Cancel Anytime
-              </p>
-              <button onClick={handlePayment} disabled={!paymentMethod || isSubmitting} className="w-full py-6 bg-pear-600 text-white font-black rounded-3xl shadow-2xl active:scale-95 transition-all disabled:opacity-30 disabled:grayscale uppercase text-xs tracking-widest">
-                {isSubmitting ? 'Verifying...' : 'Initialize Pipeline'}
-              </button>
-            </div>
+
+            <button onClick={handlePayment} disabled={isSubmitting} className="w-full py-6 bg-pear-600 text-white font-black rounded-3xl shadow-2xl active:scale-95 transition-all disabled:opacity-50 uppercase text-xs tracking-widest">
+              {isSubmitting ? 'Activating...' : 'Activate My Plan'}
+            </button>
           </div>
         )}
 
@@ -1508,6 +1526,22 @@ const App: React.FC = () => {
                       <p className="text-[9px] text-slate-400 leading-relaxed border-t border-slate-100 dark:border-white/5 pt-4">
                         Receipts and invoices are sent to your email by Stripe. To cancel or update your payment method, reply to any Stripe receipt email.
                       </p>
+                      {receipts.length > 0 && (
+                        <div className="pt-4 border-t border-slate-100 dark:border-white/5">
+                          <p className="text-[8px] font-black uppercase text-slate-400 tracking-widest mb-3">Invoices</p>
+                          <div className="space-y-2">
+                            {receipts.map(r => (
+                              <div key={r.id} className="flex items-center justify-between px-4 py-3 rounded-2xl bg-white dark:bg-white/5 border border-slate-100 dark:border-white/5">
+                                <div>
+                                  <p className="text-xs font-black">{r.plan}{r.seats > 1 ? ` · ${r.seats} seats` : ''}</p>
+                                  <p className="text-[9px] text-slate-400 font-medium">{new Date(r.date).toLocaleDateString()} · {r.cycle === 'monthly' ? 'Monthly' : 'Annual'}</p>
+                                </div>
+                                <p className="text-sm font-black text-pear-600">{r.amount}</p>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   ) : (
                     <div className="flex items-center justify-between">
