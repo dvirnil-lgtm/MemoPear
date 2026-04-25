@@ -6,4 +6,4 @@ Disallow: /profile
 Disallow: /team
 Disallow: /payment
 
-Sitemap: https://memopear.app/sitemap.xml
+Sitemap: https://memopear.com/sitemap.xml
