@@ -1272,35 +1272,25 @@ const App: React.FC = () => {
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M15 19l-7-7 7-7" /></svg>
               Go Back
             </button>
-            <h2 className="text-4xl font-black mb-8 tracking-tighter">Complete Activation</h2>
-            
-            <div className="space-y-4">
-              <button onClick={() => setPaymentMethod('google')} className={`w-full py-6 rounded-[2rem] border-2 flex items-center justify-center gap-3 transition-all ${paymentMethod === 'google' ? 'border-pear-600 bg-pear-600/5' : 'border-slate-200 dark:border-white/10'}`}><div className="bg-black text-white px-3 py-1 rounded-md text-sm font-bold flex items-center gap-1">Google <span className="font-black">Pay</span></div></button>
-              <button onClick={() => setPaymentMethod('paypal')} className={`w-full py-6 rounded-[2rem] border-2 flex items-center justify-center gap-3 transition-all ${paymentMethod === 'paypal' ? 'border-pear-600 bg-pear-600/5' : 'border-slate-200 dark:border-white/10'}`}><div className="flex items-center italic"><span className="text-blue-900 font-black">Pay</span><span className="text-blue-500 font-black">Pal</span></div></button>
-              <div className={`rounded-[2rem] border-2 transition-all overflow-hidden ${paymentMethod === 'card' ? 'border-pear-600 bg-pear-600/5' : 'border-slate-200 dark:border-white/10'}`}>
-                <button onClick={() => setPaymentMethod('card')} className="w-full py-6 flex items-center justify-center gap-3 font-black text-xs uppercase tracking-widest"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" /></svg>Credit Card</button>
-                {paymentMethod === 'card' && (
-                  <form onSubmit={handlePayment} className="p-8 pt-0 space-y-4 animate-in slide-in-from-top-4">
-                    <input type="text" placeholder="Card Number" required className="w-full px-5 py-4 rounded-xl bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 outline-none text-sm font-bold" />
-                    <div className="grid grid-cols-2 gap-4">
-                      <input type="text" placeholder="MM / YY" required className="px-5 py-4 rounded-xl bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 outline-none text-sm font-bold" />
-                      <input type="text" placeholder="CVV" required className="px-5 py-4 rounded-xl bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 outline-none text-sm font-bold" />
-                    </div>
-                  </form>
-                )}
+            <h2 className="text-4xl font-black mb-4 tracking-tighter">Activate Your Plan</h2>
+            <p className="text-sm text-slate-500 font-medium mb-12 leading-relaxed">
+              Once your Stripe payment is complete, click below to unlock the platform.
+            </p>
+
+            <div className="rounded-[2rem] border-2 border-pear-200 dark:border-pear-600/30 bg-pear-50 dark:bg-pear-600/5 p-6 mb-10 space-y-3">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-xl bg-pear-600 text-white flex items-center justify-center text-sm flex-shrink-0">✓</div>
+                <p className="text-sm font-black tracking-tight">Payment processed on Stripe</p>
+              </div>
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-xl bg-pear-600 text-white flex items-center justify-center text-sm flex-shrink-0">✓</div>
+                <p className="text-sm font-black tracking-tight">Invoice sent to your email by Stripe</p>
               </div>
             </div>
-            <div className="mt-12 text-center">
-              <p className="text-2xl font-black mb-2">
-                {paymentCycle === 'monthly' ? '$1.49' : '$16.09'} USD
-              </p>
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-8">
-                {paymentCycle === 'monthly' ? 'Billed Monthly' : 'Billed Annually'} • Cancel Anytime
-              </p>
-              <button onClick={handlePayment} disabled={!paymentMethod || isSubmitting} className="w-full py-6 bg-pear-600 text-white font-black rounded-3xl shadow-2xl active:scale-95 transition-all disabled:opacity-30 disabled:grayscale uppercase text-xs tracking-widest">
-                {isSubmitting ? 'Verifying...' : 'Initialize Pipeline'}
-              </button>
-            </div>
+
+            <button onClick={handlePayment} disabled={isSubmitting} className="w-full py-6 bg-pear-600 text-white font-black rounded-3xl shadow-2xl active:scale-95 transition-all disabled:opacity-50 uppercase text-xs tracking-widest">
+              {isSubmitting ? 'Activating...' : 'Activate My Plan'}
+            </button>
           </div>
         )}
 
