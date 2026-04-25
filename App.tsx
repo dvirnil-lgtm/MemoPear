@@ -19,6 +19,7 @@ const STORAGE_KEY_LINKEDIN = 'lcp_linkedin_connected_v1';
 const STORAGE_KEY_TOUR_COMPLETE = 'lcp_tour_done_v1';
 const STORAGE_KEY_SEATS = 'lcp_seats_v1';
 const STORAGE_KEY_TEAM = 'lcp_team_v1';
+const STORAGE_KEY_RECEIPTS = 'lcp_receipts_v1';
 
 // Stripe payment links — add a dedicated link per seat count for best UX.
 // Each link should be created in Stripe Dashboard at the correct unit price
@@ -313,6 +314,10 @@ const App: React.FC = () => {
   });
   const [seatQuantity, setSeatQuantity] = useState(1);
   const [inviteEmail, setInviteEmail] = useState('');
+  const [receipts, setReceipts] = useState<{id: string; date: number; plan: string; cycle: string; seats: number; amount: string}[]>(() => {
+    const saved = localStorage.getItem(STORAGE_KEY_RECEIPTS);
+    return saved ? JSON.parse(saved) : [];
+  });
   const [leads, setLeads] = useState<Lead[]>([]);
   const [userProfile, setUserProfile] = useState<UserProfile>({
     name: '',
@@ -413,8 +418,9 @@ const App: React.FC = () => {
       const { timestamp } = JSON.parse(savedAuth);
       if (Date.now() - timestamp < SESSION_DAYS * 24 * 60 * 60 * 1000) {
         setIsLoggedIn(true);
+        const currentPath = window.location.pathname;
         if (savedPaid === 'true') { setView('form'); window.history.replaceState({ view: 'form' }, '', '/gather'); }
-        else { setView('history'); window.history.replaceState({ view: 'history' }, '', '/pipeline'); }
+        else if (currentPath !== '/payment') { setView('history'); window.history.replaceState({ view: 'history' }, '', '/pipeline'); }
       }
     }
     const savedLeads = localStorage.getItem(STORAGE_KEY_LEADS);
@@ -625,16 +631,35 @@ const App: React.FC = () => {
     }
   };
 
-  const handlePayment = (e: React.FormEvent) => {
-    e.preventDefault();
+  const activatePlan = () => {
+    sessionStorage.removeItem('lcp_pending_activation');
+    const receipt = { id: `INV-${Date.now()}`, date: Date.now(), plan: 'MemoPear Pro', cycle: paymentCycle, seats: seatCount, amount: paymentCycle === 'monthly' ? '$1.49' : '$16.09' };
+    const updated = [...receipts, receipt];
+    setReceipts(updated);
+    localStorage.setItem(STORAGE_KEY_RECEIPTS, JSON.stringify(updated));
+    setHasPaid(true);
+    localStorage.setItem(STORAGE_KEY_PAID, 'true');
+    setStatusMsg({ type: 'success', text: "You're all set! Start capturing contacts." });
+    navigateTo('form');
+  };
+
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible' && view === 'payment' && sessionStorage.getItem('lcp_pending_activation')) {
+        activatePlan();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => document.removeEventListener('visibilitychange', handleVisibility);
+  }, [view, receipts, paymentCycle, seatCount]);
+
+  const handlePayment = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
     setIsSubmitting(true);
     setTimeout(() => {
-      setHasPaid(true);
-      localStorage.setItem(STORAGE_KEY_PAID, 'true');
+      activatePlan();
       setIsSubmitting(false);
-      setStatusMsg({ type: 'success', text: "You're all set! Start capturing contacts." });
-      navigateTo('form');
-    }, 2000);
+    }, 1500);
   };
 
   const toggleCommMethod = (method: CommMethod) => {
@@ -1255,6 +1280,7 @@ const App: React.FC = () => {
                 if (email) stripeUrl.searchParams.set('prefilled_email', email);
                 localStorage.setItem(STORAGE_KEY_SEATS, String(seatQuantity));
                 setSeatCount(seatQuantity);
+                sessionStorage.setItem('lcp_pending_activation', '1');
                 window.open(stripeUrl.toString(), '_blank');
                 navigateTo('payment');
               }} className="w-full py-4 bg-pear-600 text-white font-black rounded-2xl shadow-xl hover:scale-[1.02] active:scale-95 transition-all text-[10px] uppercase tracking-widest">
@@ -1500,6 +1526,22 @@ const App: React.FC = () => {
                       <p className="text-[9px] text-slate-400 leading-relaxed border-t border-slate-100 dark:border-white/5 pt-4">
                         Receipts and invoices are sent to your email by Stripe. To cancel or update your payment method, reply to any Stripe receipt email.
                       </p>
+                      {receipts.length > 0 && (
+                        <div className="pt-4 border-t border-slate-100 dark:border-white/5">
+                          <p className="text-[8px] font-black uppercase text-slate-400 tracking-widest mb-3">Invoices</p>
+                          <div className="space-y-2">
+                            {receipts.map(r => (
+                              <div key={r.id} className="flex items-center justify-between px-4 py-3 rounded-2xl bg-white dark:bg-white/5 border border-slate-100 dark:border-white/5">
+                                <div>
+                                  <p className="text-xs font-black">{r.plan}{r.seats > 1 ? ` · ${r.seats} seats` : ''}</p>
+                                  <p className="text-[9px] text-slate-400 font-medium">{new Date(r.date).toLocaleDateString()} · {r.cycle === 'monthly' ? 'Monthly' : 'Annual'}</p>
+                                </div>
+                                <p className="text-sm font-black text-pear-600">{r.amount}</p>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   ) : (
                     <div className="flex items-center justify-between">
