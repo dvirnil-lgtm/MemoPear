@@ -1,0 +1,31 @@
+# MemoPear
+
+> MemoPear is an AI-powered field intelligence and lead capture platform built for conference and trade show professionals. It turns in-person encounters into structured pipeline data using Gemini AI.
+
+## What MemoPear does
+
+- Captures contact information from business cards via camera (AI OCR)
+- Transcribes spoken notes in real time using Google Gemini Live Audio
+- Generates AI-written personalized follow-up emails per contact
+- Exports leads to Google Sheets in one tap
+- Supports team seat plans with shared pipeline access
+
+## Key pages
+
+- Home: https://memopear.com/
+- Pricing: https://memopear.com/pricing
+- Privacy Policy: https://memopear.com/privacy
+- Terms of Service: https://memopear.com/terms
+- Contact: https://memopear.com/contact
+
+## Technology
+
+- Frontend: React + TypeScript + Vite
+- AI: Google Gemini (vision, live audio, text generation)
+- Auth: Firebase Authentication
+- Payments: Stripe
+- Hosting: Google Cloud Run
+
+## Contact
+
+For questions about data use or API access, visit https://memopear.com/contact

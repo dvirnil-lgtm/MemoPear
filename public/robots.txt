@@ -1,0 +1,9 @@
+User-agent: *
+Allow: /
+Disallow: /gather
+Disallow: /pipeline
+Disallow: /profile
+Disallow: /team
+Disallow: /payment
+
+Sitemap: https://memopear.com/sitemap.xml
