@@ -2,50 +2,195 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ============================================================
+   MemoPear Design System — CSS Custom Properties
+   Warm & humanist. Teal primary, gold accent, cream/ink surfaces.
+   ============================================================ */
+
+:root {
+  /* Brand ramps */
+  --brand-teal-50:  #eef7f6;
+  --brand-teal-100: #d6ecea;
+  --brand-teal-200: #a8d6d2;
+  --brand-teal-300: #7ec0bb;
+  --brand-teal-400: #4fa6a6;
+  --brand-teal-500: #2f8585;
+  --brand-teal-600: #246b6b;
+  --brand-teal-700: #1c5252;
+  --brand-teal-800: #143841;
+
+  --brand-gold-50:  #fbf6e8;
+  --brand-gold-100: #f4e8c4;
+  --brand-gold-200: #e9d394;
+  --brand-gold-300: #dec074;
+  --brand-gold-400: #d7b169;
+  --brand-gold-500: #b8924a;
+  --brand-gold-600: #927238;
+  --brand-gold-700: #6b5326;
+
+  /* Cream / paper */
+  --cream-50:  #fdfaf3;
+  --cream-100: #f8f3e7;
+  --cream-200: #f1e7d0;
+  --cream-300: #e6d8b3;
+
+  /* Ink (dark) */
+  --ink-900: #0b1a20;
+  --ink-800: #0f2128;
+  --ink-700: #143841;
+  --ink-600: #1f4250;
+  --ink-500: #355c69;
+  --ink-400: #5a7d88;
+  --ink-300: #8aa3ab;
+  --ink-200: #b9cdd2;
+  --ink-100: #dde7ea;
+  --ink-50:  #eef3f5;
+
+  /* Semantic — light theme (default) */
+  --bg:            var(--cream-50);
+  --bg-elev:       #ffffff;
+  --bg-sunken:     var(--cream-100);
+  --surface:       #ffffff;
+  --surface-2:     var(--cream-100);
+  --border:        #e8dec5;
+  --border-strong: #d6c69c;
+  --text:          var(--ink-800);
+  --text-muted:    var(--ink-400);
+  --text-subtle:   var(--ink-300);
+  --primary:       var(--brand-teal-500);
+  --primary-hover: var(--brand-teal-600);
+  --primary-soft:  var(--brand-teal-50);
+  --primary-ink:   var(--brand-teal-800);
+  --accent:        var(--brand-gold-400);
+  --accent-soft:   var(--brand-gold-50);
+  --accent-ink:    var(--brand-gold-700);
+
+  --success:      #2f8e6f;
+  --success-soft: #e1f3ec;
+  --warning:      #c98a2b;
+  --warning-soft: #fbf0d9;
+  --danger:       #b94a3d;
+  --danger-soft:  #f7e1dc;
+  --info:         var(--brand-teal-500);
+  --info-soft:    var(--brand-teal-50);
+
+  /* Typography */
+  --font-sans:  "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-mono:  "IBM Plex Mono", ui-monospace, Menlo, monospace;
+  --font-serif: "IBM Plex Serif", Georgia, serif;
+
+  /* Radii */
+  --r-xs:  4px;
+  --r-sm:  6px;
+  --r-md:  10px;
+  --r-lg:  14px;
+  --r-xl:  20px;
+  --r-2xl: 28px;
+  --r-pill: 999px;
+
+  /* Shadows — warm tinted */
+  --shadow-xs: 0 1px 2px rgba(15,33,40,0.04);
+  --shadow-sm: 0 2px 6px rgba(15,33,40,0.06), 0 1px 2px rgba(15,33,40,0.04);
+  --shadow-md: 0 6px 20px rgba(15,33,40,0.08), 0 2px 6px rgba(15,33,40,0.05);
+  --shadow-lg: 0 18px 40px rgba(15,33,40,0.12), 0 4px 10px rgba(15,33,40,0.06);
+  --shadow-glow-teal: 0 0 0 6px rgba(79,166,166,0.14);
+  --shadow-glow-gold: 0 0 0 6px rgba(215,177,105,0.18);
+
+  /* Spacing scale (4px base) */
+  --s-1: 4px;  --s-2: 8px;   --s-3: 12px;  --s-4: 16px;  --s-5: 20px;
+  --s-6: 24px; --s-7: 32px;  --s-8: 40px;  --s-9: 48px;  --s-10: 64px; --s-11: 80px;
+}
+
+/* Dark theme overrides */
+.dark {
+  --bg:            var(--ink-900);
+  --bg-elev:       #112832;
+  --bg-sunken:     #091418;
+  --surface:       #112832;
+  --surface-2:     #163240;
+  --border:        #1f4250;
+  --border-strong: #2a5664;
+  --text:          #f1ece0;
+  --text-muted:    var(--ink-300);
+  --text-subtle:   var(--ink-400);
+  --primary:       var(--brand-teal-400);
+  --primary-hover: var(--brand-teal-300);
+  --primary-soft:  rgba(79,166,166,0.14);
+  --primary-ink:   #d8efed;
+  --accent:        var(--brand-gold-400);
+  --accent-soft:   rgba(215,177,105,0.14);
+  --accent-ink:    #f4e8c4;
+  --success-soft:  rgba(47,142,111,0.18);
+  --warning-soft:  rgba(201,138,43,0.18);
+  --danger-soft:   rgba(185,74,61,0.18);
+  --info-soft:     rgba(79,166,166,0.18);
+  --shadow-xs: 0 1px 2px rgba(0,0,0,0.4);
+  --shadow-sm: 0 2px 6px rgba(0,0,0,0.4), 0 1px 2px rgba(0,0,0,0.3);
+  --shadow-md: 0 6px 20px rgba(0,0,0,0.45), 0 2px 6px rgba(0,0,0,0.35);
+  --shadow-lg: 0 18px 40px rgba(0,0,0,0.55), 0 4px 10px rgba(0,0,0,0.4);
+}
+
+/* ============================================================
+   Base
+   ============================================================ */
+
+*, *::before, *::after { box-sizing: border-box; }
+
 body {
-  transition: background-color 0.3s ease, color 0.3s ease;
+  font-family: var(--font-sans);
+  font-size: 15px;
+  line-height: 1.55;
+  background: var(--bg);
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+  transition: background-color 0.25s ease, color 0.25s ease;
 }
 
-.tech-grid {
-  background-image: radial-gradient(circle at 2px 2px, rgba(132, 204, 22, 0.05) 1px, transparent 0);
-  background-size: 40px 40px;
-}
-
-.dark .tech-grid {
-  background-image: radial-gradient(circle at 2px 2px, rgba(163, 230, 53, 0.03) 1px, transparent 0);
-}
-
-.mesh-gradient {
-  background: radial-gradient(at 0% 0%, hsla(84, 81%, 44%, 0.08) 0px, transparent 50%),
-              radial-gradient(at 100% 0%, hsla(45, 93%, 47%, 0.08) 0px, transparent 50%),
-              radial-gradient(at 100% 100%, hsla(84, 81%, 44%, 0.05) 0px, transparent 50%),
-              radial-gradient(at 0% 100%, hsla(45, 93%, 47%, 0.05) 0px, transparent 50%);
-}
+/* ============================================================
+   Surface / glass helpers — replaced tech vibe with warm neutrals
+   ============================================================ */
 
 .glass {
-  background: rgba(255, 255, 255, 0.8);
+  background: rgba(255, 255, 255, 0.85);
   backdrop-filter: blur(12px);
-  border: 1px solid rgba(132, 204, 22, 0.1);
+  border: 1px solid var(--border);
 }
 
 .dark .glass {
-  background: rgba(26, 46, 5, 0.6);
-  border: 1px solid rgba(163, 230, 53, 0.1);
+  background: rgba(17, 40, 50, 0.75);
+  border: 1px solid var(--border);
 }
 
 .glass-bright {
-  background: rgba(255, 255, 255, 0.9);
+  background: rgba(255, 255, 255, 0.95);
   backdrop-filter: blur(8px);
-  border: 1px solid rgba(132, 204, 22, 0.1);
+  border: 1px solid var(--border);
 }
 
 .dark .glass-bright {
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(17, 40, 50, 0.6);
+  border: 1px solid var(--border);
 }
 
+/* Warm ambient gradient — replaces tech-grid dot pattern */
+.mesh-gradient {
+  background:
+    radial-gradient(at 0% 0%,   rgba(79,166,166,0.07) 0px, transparent 55%),
+    radial-gradient(at 100% 0%,  rgba(215,177,105,0.07) 0px, transparent 55%),
+    radial-gradient(at 100% 100%, rgba(79,166,166,0.04) 0px, transparent 55%),
+    radial-gradient(at 0% 100%,  rgba(215,177,105,0.04) 0px, transparent 55%);
+}
+
+/* ============================================================
+   Glow / pulse utilities
+   ============================================================ */
+
 .glow-pear {
-  box-shadow: 0 0 40px -10px rgba(132, 204, 22, 0.2);
+  box-shadow: var(--shadow-glow-teal);
+}
+
+.glow-gold {
+  box-shadow: var(--shadow-glow-gold);
 }
 
 .animate-pulse-pear {
@@ -62,21 +207,51 @@ body {
 }
 
 @keyframes recording-pulse {
-  0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
-  70% { box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
-  100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+  0%   { box-shadow: 0 0 0 0   rgba(185,74,61,0.7); }
+  70%  { box-shadow: 0 0 0 10px rgba(185,74,61,0);   }
+  100% { box-shadow: 0 0 0 0   rgba(185,74,61,0);    }
 }
+
+/* ============================================================
+   Scrollbar
+   ============================================================ */
 
 .no-scrollbar::-webkit-scrollbar { display: none; }
 .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 
 main { scroll-behavior: smooth; }
 
+/* ============================================================
+   Animations
+   ============================================================ */
+
 @keyframes fade-in-up {
   from { opacity: 0; transform: translateY(20px); }
-  to { opacity: 1; transform: translateY(0); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 
 .animate-tour-content {
   animation: fade-in-up 0.5s ease-out forwards;
+}
+
+/* Cursor blink for live transcription */
+@keyframes blink {
+  50% { opacity: 0; }
+}
+
+/* ============================================================
+   Focus ring — teal glow instead of default browser ring
+   ============================================================ */
+
+:focus-visible {
+  outline: none;
+  box-shadow: var(--shadow-glow-teal);
+}
+
+input:focus,
+textarea:focus,
+select:focus {
+  outline: none;
+  border-color: var(--primary) !important;
+  box-shadow: var(--shadow-glow-teal);
 }
