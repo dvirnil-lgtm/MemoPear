@@ -1410,35 +1410,6 @@ const App: React.FC = () => {
                 <div className="flex justify-between items-center pl-2">
                   <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">My Conferences</label>
                   <div className="flex gap-4">
-                    <button 
-                      onClick={async () => {
-                        setIsSubmitting(true);
-                        try {
-                          const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-                          const response = await ai.models.generateContent({
-                            model: 'gemini-3-flash-preview',
-                            contents: "List 15 major upcoming global conferences from https://10times.com/conferences. Return ONLY a JSON array of strings containing the conference names.",
-                            config: {
-                              tools: [{ urlContext: {} }],
-                              responseMimeType: "application/json",
-                            }
-                          });
-                          const list = JSON.parse(response.text.trim());
-                          if (Array.isArray(list)) {
-                            setSuggestedConferences(list);
-                            setStatusMsg({ type: 'success', text: 'Conferences Synced with 10Times.' });
-                          }
-                        } catch (err) {
-                          console.error(err);
-                          setStatusMsg({ type: 'error', text: 'Sync Failed.' });
-                        } finally {
-                          setIsSubmitting(false);
-                        }
-                      }}
-                      className="text-[10px] font-black uppercase text-blue-600 tracking-widest hover:underline"
-                    >
-                      Sync 10Times
-                    </button>
                     <div className="relative">
                       <button 
                         onClick={() => setShowConfDropdown(!showConfDropdown)}
@@ -1714,27 +1685,6 @@ const App: React.FC = () => {
                          placeholder="Conference name"
                          className="flex-1 min-w-0 px-3 py-2 rounded-xl bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 text-xs font-bold outline-none focus:border-pear-500/50 transition-all"
                        />
-                       <button
-                         type="button"
-                         onClick={async () => {
-                           setIsSubmitting(true);
-                           try {
-                             const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-                             const response = await ai.models.generateContent({
-                               model: 'gemini-3-flash-preview',
-                               contents: "List 15 major upcoming global conferences from https://10times.com/conferences. Return ONLY a JSON array of strings containing the conference names.",
-                               config: { tools: [{ urlContext: {} }], responseMimeType: "application/json" }
-                             });
-                             const list = JSON.parse(response.text.trim());
-                             if (Array.isArray(list)) {
-                               setUserProfile(prev => ({ ...prev, conferences: Array.from(new Set([...prev.conferences, ...list])) }));
-                               setStatusMsg({ type: 'success', text: 'Conferences synced!' });
-                             }
-                           } catch (err) { setStatusMsg({ type: 'error', text: 'Sync failed.' }); }
-                           finally { setIsSubmitting(false); }
-                         }}
-                         className="px-2.5 py-2 bg-blue-600/10 text-blue-600 rounded-xl border border-blue-600/20 text-[8px] font-black uppercase tracking-widest hover:bg-blue-600 hover:text-white transition-all flex-shrink-0"
-                       >Sync</button>
                        <button type="button" onClick={() => setIsScanning(true)} className={`px-3 py-2 rounded-xl bg-pear-600/10 text-pear-600 text-[8px] font-black uppercase border border-pear-600/20 active:scale-95 transition-all flex-shrink-0 ${showTour && tourStep === 0 ? 'ring-2 ring-pear-500 animate-pulse' : ''}`}>QR</button>
                        <button type="button" onClick={() => cardInputRef.current?.click()} className={`px-3 py-2 rounded-xl bg-stem-600/10 text-stem-600 text-[8px] font-black uppercase border border-stem-600/20 active:scale-95 transition-all flex-shrink-0 ${showTour && tourStep === 0 ? 'ring-2 ring-pear-500 animate-pulse' : ''}`}>
                          <input type="file" ref={cardInputRef} className="hidden" accept="image/*" capture="environment" onChange={handleCardCapture} />Scan Card
