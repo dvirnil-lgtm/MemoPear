@@ -597,7 +597,7 @@ const App: React.FC = () => {
         const elapsed = Date.now() - popupOpenedAt;
         if (elapsed < 5000) {
           const host = window.location.hostname;
-          setSocialAuthError(`Sign-in window closed automatically. Verify: (1) "${host}" is listed in Firebase Console → Authentication → Settings → Authorized Domains, and (2) the redirect URI "https://gen-lang-client-0075473844.firebaseapp.com/__/auth/handler" is added in your Google Cloud Console OAuth client and LinkedIn Developer Portal.`);
+          setSocialAuthError(`Sign-in window closed automatically. Verify: (1) "${host}" is listed in Firebase Console → Authentication → Settings → Authorized Domains, and (2) the redirect URI "https://${import.meta.env.VITE_FIREBASE_AUTH_DOMAIN}/__/auth/handler" is added in your Google Cloud Console OAuth client and LinkedIn Developer Portal.`);
         }
         return;
       }
