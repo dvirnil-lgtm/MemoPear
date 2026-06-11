@@ -587,6 +587,11 @@ const App: React.FC = () => {
       setIsLoggedIn(true);
       setUserProfile(savedProfile);
       setStatusMsg({ type: 'success', text: `Welcome${userName ? `, ${userName.split(' ')[0]}` : ''}!` });
+      // Test account: auto-grant paid access for internal QA, bypassing Stripe.
+      if (userEmail === 'dvir.n.il@gmail.com') {
+        localStorage.setItem(STORAGE_KEY_PAID, 'true');
+        setHasPaid(true);
+      }
       const paid = localStorage.getItem(STORAGE_KEY_PAID) === 'true';
       if (paid) navigateTo('form'); else navigateTo('history');
     } catch (err: any) {
@@ -597,7 +602,7 @@ const App: React.FC = () => {
         const elapsed = Date.now() - popupOpenedAt;
         if (elapsed < 5000) {
           const host = window.location.hostname;
-          setSocialAuthError(`Sign-in window closed automatically. Verify: (1) "${host}" is listed in Firebase Console → Authentication → Settings → Authorized Domains, and (2) the redirect URI "https://gen-lang-client-0075473844.firebaseapp.com/__/auth/handler" is added in your Google Cloud Console OAuth client and LinkedIn Developer Portal.`);
+          setSocialAuthError(`Sign-in window closed automatically. Verify: (1) "${host}" is listed in Firebase Console → Authentication → Settings → Authorized Domains, and (2) the redirect URI "https://${import.meta.env.VITE_FIREBASE_AUTH_DOMAIN}/__/auth/handler" is added in your Google Cloud Console OAuth client and LinkedIn Developer Portal.`);
         }
         return;
       }

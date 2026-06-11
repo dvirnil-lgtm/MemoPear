@@ -2,5 +2,8 @@ node_modules
 dist
 .git
 *.md
-.env*
 .DS_Store
+
+# .env is intentionally NOT ignored: the Vite build reads VITE_* vars from it
+# at build time. Only the built dist/ is copied into the final nginx image,
+# so .env never ships in the deployed container.
