@@ -94,6 +94,39 @@ gcloud run domain-mappings list --region us-central1
 
 Visit your domain - it should show the MemoPear site with a valid SSL certificate.
 
+## Email Notifications (SendGrid)
+
+Subscription cancellation requests are emailed to `info@memopear.com` using
+Firebase's **Trigger Email from Firestore** extension, sent through
+SendGrid's SMTP relay.
+
+### Step 1: Install the extension
+
+```bash
+firebase ext:install firebase/firestore-send-email --project YOUR_PROJECT_ID
+```
+
+Or install it from the Firebase Console → **Extensions** → "Trigger Email
+from Firestore". Configure it with:
+
+- **SMTP connection URI**: `smtps://apikey:YOUR_SENDGRID_API_KEY@smtp.sendgrid.net:465`
+- **Email documents collection**: `mail`
+- **Default FROM address**: a verified SendGrid sender, e.g. `MemoPear <no-reply@memopear.com>`
+
+### Step 2: Allow writes to the `mail` collection
+
+Add a rule alongside the existing `cancellationRequests` rule so signed-in
+users can trigger the cancellation email:
+
+```
+match /mail/{id} {
+  allow create: if request.auth != null;
+}
+```
+
+`logCancellationRequest` in `firebase.ts` writes to both
+`cancellationRequests` (audit trail) and `mail` (sends the notification).
+
 ## Project Structure
 
 ```

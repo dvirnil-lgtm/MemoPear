@@ -99,8 +99,9 @@ export async function logLoginEvent(user: User, provider: string): Promise<void>
   }
 }
 
-// Records a cancellation request so the team is notified (e.g. via the
-// Firestore console or a Trigger Email extension watching this collection).
+// Records a cancellation request and emails the team via the "Trigger Email
+// from Firestore" extension (configured with SendGrid SMTP), which sends a
+// message for every document written to the `mail` collection.
 export async function logCancellationRequest(details: {
   email: string;
   seats: number;
@@ -112,6 +113,13 @@ export async function logCancellationRequest(details: {
       uid: auth.currentUser?.uid || '',
       notifyTo: 'info@memopear.com',
       at: serverTimestamp(),
+    });
+    await addDoc(collection(db, 'mail'), {
+      to: ['info@memopear.com'],
+      message: {
+        subject: `MemoPear cancellation request — ${details.email}`,
+        text: `${details.email} requested to cancel their MemoPear Pro subscription (${details.seats} seat${details.seats > 1 ? 's' : ''}, ${details.cycle} billing).`,
+      },
     });
   } catch (err) {
     console.warn('[MemoPear] cancellation logging skipped:', err);

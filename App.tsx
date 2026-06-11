@@ -33,7 +33,7 @@ const TEST_USER_EMAILS = ['dvir.n.il@gmail.com', 'kleingil777@gmail.com'];
 // Stripe Customer Portal (no-code): create it in Stripe Dashboard →
 // Settings → Billing → Customer portal → activate the portal link,
 // then paste it here. Users cancel/update their subscription there.
-const STRIPE_CUSTOMER_PORTAL_URL = 'https://billing.stripe.com/p/login/REPLACE_WITH_YOUR_PORTAL_LINK';
+const STRIPE_CUSTOMER_PORTAL_URL = 'https://billing.stripe.com/p/login/aFa28t67J8JNdtr3MrfEk00';
 
 // Stripe payment links — add a dedicated link per seat count for best UX.
 // Each link should be created in Stripe Dashboard at the correct unit price
@@ -730,9 +730,6 @@ const App: React.FC = () => {
     // Open the portal synchronously so the browser doesn't block the popup.
     window.open(STRIPE_CUSTOMER_PORTAL_URL, '_blank');
     logCancellationRequest({ email: userProfile.email || '', seats: seatCount, cycle: paymentCycle }).catch(() => {});
-    const mail = document.createElement('a');
-    mail.href = `mailto:info@memopear.com?subject=${encodeURIComponent('Subscription cancellation request')}&body=${encodeURIComponent(`Please cancel the MemoPear Pro subscription for ${userProfile.email || 'my account'} (${seatCount} seat${seatCount > 1 ? 's' : ''}, ${paymentCycle} billing).`)}`;
-    mail.click();
     setStatusMsg({ type: 'success', text: 'Cancellation started — finish it in the Stripe portal tab that just opened.' });
   };
 
