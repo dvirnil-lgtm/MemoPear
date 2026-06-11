@@ -587,6 +587,11 @@ const App: React.FC = () => {
       setIsLoggedIn(true);
       setUserProfile(savedProfile);
       setStatusMsg({ type: 'success', text: `Welcome${userName ? `, ${userName.split(' ')[0]}` : ''}!` });
+      // Test account: auto-grant paid access for internal QA, bypassing Stripe.
+      if (userEmail === 'dvir.n.il@gmail.com') {
+        localStorage.setItem(STORAGE_KEY_PAID, 'true');
+        setHasPaid(true);
+      }
       const paid = localStorage.getItem(STORAGE_KEY_PAID) === 'true';
       if (paid) navigateTo('form'); else navigateTo('history');
     } catch (err: any) {
