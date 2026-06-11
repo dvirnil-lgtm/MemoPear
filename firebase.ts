@@ -7,8 +7,18 @@ import {
   OAuthProvider,
   signInWithPopup,
   UserCredential,
+  User,
   signOut,
 } from 'firebase/auth';
+import {
+  getFirestore,
+  collection,
+  addDoc,
+  doc,
+  setDoc,
+  serverTimestamp,
+  arrayUnion,
+} from 'firebase/firestore';
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -47,4 +57,63 @@ export function signInWithLinkedIn(): Promise<UserCredential> {
 
 export async function firebaseSignOut(): Promise<void> {
   return signOut(auth);
+}
+
+export const db = getFirestore(app);
+
+async function fetchClientIp(): Promise<string> {
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 5000);
+    const res = await fetch('https://api.ipify.org?format=json', { signal: controller.signal });
+    clearTimeout(timer);
+    const { ip } = await res.json();
+    return ip || 'unknown';
+  } catch {
+    return 'unknown';
+  }
+}
+
+// Records every sign-in (with IP) to Firestore for trial-abuse review.
+// Must never block or fail the login itself.
+export async function logLoginEvent(user: User, provider: string): Promise<void> {
+  try {
+    const ip = await fetchClientIp();
+    await addDoc(collection(db, 'loginLogs'), {
+      uid: user.uid,
+      email: user.email || '',
+      provider,
+      ip,
+      userAgent: navigator.userAgent,
+      accountCreatedAt: user.metadata.creationTime || '',
+      at: serverTimestamp(),
+    });
+    await setDoc(doc(db, 'users', user.uid), {
+      email: user.email || '',
+      lastLoginAt: serverTimestamp(),
+      accountCreatedAt: user.metadata.creationTime || '',
+      ips: arrayUnion(ip),
+    }, { merge: true });
+  } catch (err) {
+    console.warn('[MemoPear] login logging skipped:', err);
+  }
+}
+
+// Records a cancellation request so the team is notified (e.g. via the
+// Firestore console or a Trigger Email extension watching this collection).
+export async function logCancellationRequest(details: {
+  email: string;
+  seats: number;
+  cycle: string;
+}): Promise<void> {
+  try {
+    await addDoc(collection(db, 'cancellationRequests'), {
+      ...details,
+      uid: auth.currentUser?.uid || '',
+      notifyTo: 'info@memopear.com',
+      at: serverTimestamp(),
+    });
+  } catch (err) {
+    console.warn('[MemoPear] cancellation logging skipped:', err);
+  }
 }

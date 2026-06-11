@@ -6,7 +6,7 @@ import { QRScanner } from './components/QRScanner';
 import { CommMethodToggle } from './components/CommMethodToggle';
 import { PrivacyPolicy, TermsAndConditions, ContactUs } from './components/LegalPages';
 import { parseScannedData, parseBusinessCard, generateLeadReport } from './services/geminiService';
-import { signInWithGoogle, signInWithLinkedIn, firebaseSignOut, auth } from './firebase';
+import { signInWithGoogle, signInWithLinkedIn, firebaseSignOut, auth, logLoginEvent, logCancellationRequest } from './firebase';
 
 // Constants for retention and session
 const RETENTION_DAYS = 30;
@@ -20,6 +20,20 @@ const STORAGE_KEY_TOUR_COMPLETE = 'lcp_tour_done_v1';
 const STORAGE_KEY_SEATS = 'lcp_seats_v1';
 const STORAGE_KEY_TEAM = 'lcp_team_v1';
 const STORAGE_KEY_RECEIPTS = 'lcp_receipts_v1';
+const STORAGE_KEY_TRIAL_START = 'lcp_trial_start_v1';
+
+// Free trial: full access for the first TRIAL_DAYS after account creation,
+// then the app locks until the user subscribes. The trial is anchored to the
+// Firebase account creation time, so clearing localStorage doesn't reset it.
+const TRIAL_DAYS = 2;
+
+// Internal QA accounts — bypass the Stripe paywall on sign-in.
+const TEST_USER_EMAILS = ['dvir.n.il@gmail.com', 'kleingil777@gmail.com'];
+
+// Stripe Customer Portal (no-code): create it in Stripe Dashboard →
+// Settings → Billing → Customer portal → activate the portal link,
+// then paste it here. Users cancel/update their subscription there.
+const STRIPE_CUSTOMER_PORTAL_URL = 'https://billing.stripe.com/p/login/REPLACE_WITH_YOUR_PORTAL_LINK';
 
 // Stripe payment links — add a dedicated link per seat count for best UX.
 // Each link should be created in Stripe Dashboard at the correct unit price
@@ -293,6 +307,25 @@ const App: React.FC = () => {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [password, setPassword] = useState('');
   const [hasPaid, setHasPaid] = useState(false);
+  const [trialStart, setTrialStart] = useState<number | null>(() => {
+    const saved = localStorage.getItem(STORAGE_KEY_TRIAL_START);
+    return saved ? Number(saved) : null;
+  });
+  // Re-evaluated every render; a minute-tick keeps the countdown fresh.
+  const [, setNowTick] = useState(0);
+  useEffect(() => {
+    const t = setInterval(() => setNowTick(n => n + 1), 60_000);
+    return () => clearInterval(t);
+  }, []);
+  const trialMsLeft = trialStart ? Math.max(0, trialStart + TRIAL_DAYS * 24 * 60 * 60 * 1000 - Date.now()) : 0;
+  const trialActive = trialMsLeft > 0;
+  const trialExpired = trialStart !== null && !trialActive;
+  const hasAccess = hasPaid || trialActive;
+  const formatTrialLeft = () => {
+    const hours = Math.ceil(trialMsLeft / (60 * 60 * 1000));
+    if (hours >= 24) { const d = Math.floor(hours / 24); const h = hours % 24; return h ? `${d}d ${h}h` : `${d} day${d > 1 ? 's' : ''}`; }
+    return `${hours}h`;
+  };
   const [linkedinConnected, setLinkedinConnected] = useState(false);
   const [authMode, setAuthMode] = useState<'login' | 'signup'>('signup');
   type AppView = 'home' | 'login' | 'pricing' | 'form' | 'history' | 'payment' | 'profile' | 'privacy' | 'terms' | 'contact' | 'team';
@@ -419,8 +452,15 @@ const App: React.FC = () => {
       if (Date.now() - timestamp < SESSION_DAYS * 24 * 60 * 60 * 1000) {
         setIsLoggedIn(true);
         const currentPath = window.location.pathname;
-        if (savedPaid === 'true') { setView('form'); window.history.replaceState({ view: 'form' }, '', '/gather'); }
-        else if (currentPath !== '/payment') { setView('history'); window.history.replaceState({ view: 'history' }, '', '/pipeline'); }
+        const savedTrialStart = Number(localStorage.getItem(STORAGE_KEY_TRIAL_START)) || 0;
+        const onTrial = savedTrialStart > 0 && savedTrialStart + TRIAL_DAYS * 24 * 60 * 60 * 1000 > Date.now();
+        if (savedPaid === 'true' || onTrial) { setView('form'); window.history.replaceState({ view: 'form' }, '', '/gather'); }
+        else if (currentPath !== '/payment') {
+          // Trial over and not subscribed — lock the app on the pricing page.
+          setView('pricing');
+          window.history.replaceState({ view: 'pricing' }, '', '/pricing');
+          if (savedTrialStart > 0) setStatusMsg({ type: 'error', text: 'Your free trial has ended — subscribe to keep capturing contacts.' });
+        }
       }
     }
     const savedLeads = localStorage.getItem(STORAGE_KEY_LEADS);
@@ -520,7 +560,7 @@ const App: React.FC = () => {
   };
 
   const handleSyncAttempt = (modal: 'sheets' | 'email') => {
-    if (!hasPaid) { navigateTo('pricing'); return; }
+    if (!hasAccess) { navigateTo('pricing'); return; }
     setActiveModal(modal);
   };
 
@@ -568,8 +608,23 @@ const App: React.FC = () => {
     setIsLoggedIn(true);
     setUserProfile(savedProfile);
     setStatusMsg({ type: 'success', text: authMode === 'signup' ? 'Account created! Welcome to MemoPear.' : 'Welcome back!' });
-    if (hasPaid) navigateTo('form');
-    else navigateTo('history');
+    if (TEST_USER_EMAILS.includes(email.toLowerCase())) {
+      localStorage.setItem(STORAGE_KEY_PAID, 'true');
+      setHasPaid(true);
+    }
+    // Local-auth fallback: anchor the trial at first signup, never reset it.
+    let start = Number(localStorage.getItem(STORAGE_KEY_TRIAL_START)) || 0;
+    if (!start) {
+      start = Date.now();
+      localStorage.setItem(STORAGE_KEY_TRIAL_START, String(start));
+      setTrialStart(start);
+    }
+    const paid = localStorage.getItem(STORAGE_KEY_PAID) === 'true';
+    if (paid || start + TRIAL_DAYS * 24 * 60 * 60 * 1000 > Date.now()) navigateTo('form');
+    else {
+      navigateTo('pricing');
+      setStatusMsg({ type: 'error', text: 'Your free trial has ended — subscribe to keep capturing contacts.' });
+    }
   };
 
   const handleSocialAuth = async (provider: 'google' | 'linkedin') => {
@@ -587,13 +642,25 @@ const App: React.FC = () => {
       setIsLoggedIn(true);
       setUserProfile(savedProfile);
       setStatusMsg({ type: 'success', text: `Welcome${userName ? `, ${userName.split(' ')[0]}` : ''}!` });
-      // Test account: auto-grant paid access for internal QA, bypassing Stripe.
-      if (userEmail === 'dvir.n.il@gmail.com') {
+      // Test accounts: auto-grant paid access for internal QA, bypassing Stripe.
+      if (TEST_USER_EMAILS.includes(userEmail.toLowerCase())) {
         localStorage.setItem(STORAGE_KEY_PAID, 'true');
         setHasPaid(true);
       }
+      // Anchor the free trial to the Firebase account creation time so it
+      // survives localStorage clears and re-logins.
+      const createdAt = Date.parse(user.metadata.creationTime || '') || Date.now();
+      localStorage.setItem(STORAGE_KEY_TRIAL_START, String(createdAt));
+      setTrialStart(createdAt);
+      // Audit log (login + IP) for trial-abuse review; never blocks login.
+      logLoginEvent(user, provider).catch(() => {});
       const paid = localStorage.getItem(STORAGE_KEY_PAID) === 'true';
-      if (paid) navigateTo('form'); else navigateTo('history');
+      const onTrial = createdAt + TRIAL_DAYS * 24 * 60 * 60 * 1000 > Date.now();
+      if (paid || onTrial) navigateTo('form');
+      else {
+        navigateTo('pricing');
+        setStatusMsg({ type: 'error', text: 'Your free trial has ended — subscribe to keep capturing contacts.' });
+      }
     } catch (err: any) {
       const code = err?.code || '';
       console.error('[MemoPear] Social auth error:', code, err);
@@ -657,6 +724,17 @@ const App: React.FC = () => {
     document.addEventListener('visibilitychange', handleVisibility);
     return () => document.removeEventListener('visibilitychange', handleVisibility);
   }, [view, receipts, paymentCycle, seatCount]);
+
+  const handleCancelSubscription = () => {
+    if (!window.confirm('Cancel your MemoPear Pro subscription? You keep access until the end of the current billing period.')) return;
+    // Open the portal synchronously so the browser doesn't block the popup.
+    window.open(STRIPE_CUSTOMER_PORTAL_URL, '_blank');
+    logCancellationRequest({ email: userProfile.email || '', seats: seatCount, cycle: paymentCycle }).catch(() => {});
+    const mail = document.createElement('a');
+    mail.href = `mailto:info@memopear.com?subject=${encodeURIComponent('Subscription cancellation request')}&body=${encodeURIComponent(`Please cancel the MemoPear Pro subscription for ${userProfile.email || 'my account'} (${seatCount} seat${seatCount > 1 ? 's' : ''}, ${paymentCycle} billing).`)}`;
+    mail.click();
+    setStatusMsg({ type: 'success', text: 'Cancellation started — finish it in the Stripe portal tab that just opened.' });
+  };
 
   const handlePayment = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
@@ -728,7 +806,7 @@ const App: React.FC = () => {
   };
 
   const handleQRScan = async (decodedText: string) => {
-    if (!hasPaid) return;
+    if (!hasAccess) return;
     setIsScanning(false);
     setIsSubmitting(true);
     try {
@@ -751,7 +829,7 @@ const App: React.FC = () => {
   };
 
   const handleCardCapture = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!hasPaid) return;
+    if (!hasAccess) return;
     const file = e.target.files?.[0];
     if (!file) return;
     setIsSubmitting(true);
@@ -851,9 +929,9 @@ const App: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!hasPaid) {
+    if (!hasAccess) {
       navigateTo('pricing');
-      setStatusMsg({ type: 'error', text: 'Upgrade to Pro to save contacts.' });
+      setStatusMsg({ type: 'error', text: trialExpired ? 'Your free trial has ended — subscribe to keep capturing contacts.' : 'Upgrade to Pro to save contacts.' });
       return;
     }
     if (!firstName || !lastName) { setStatusMsg({ type: 'error', text: 'Identity required.' }); return; }
@@ -1049,7 +1127,7 @@ const App: React.FC = () => {
                 Never lose a contact at a conference again. Scan badges, snap business cards, and follow up in seconds — all with AI.
               </p>
               <div className="flex flex-col sm:flex-row gap-6 w-full max-w-md z-10">
-                <button onClick={() => navigateTo('login')} className="flex-1 py-5 bg-blue-600 text-white font-black rounded-2xl shadow-2xl hover:scale-105 transition-all">Get Started</button>
+                <button onClick={() => navigateTo('login')} className="flex-1 py-5 bg-blue-600 text-white font-black rounded-2xl shadow-2xl hover:scale-105 transition-all">Start Free — First {TRIAL_DAYS} Days On Us</button>
                 <button onClick={() => setShowTour(true)} className="flex-1 py-5 glass font-bold rounded-2xl border-slate-200 dark:border-white/10 hover:bg-slate-50 dark:hover:bg-white/10 transition-all">See How It Works</button>
               </div>
             </section>
@@ -1182,7 +1260,7 @@ const App: React.FC = () => {
                <div className="relative z-10">
                   <h2 className="text-5xl font-black mb-6 tracking-tighter leading-none">Ready to never miss <br/> a follow-up again?</h2>
                   <p className="text-lg font-medium mb-12 opacity-80 max-w-sm mx-auto">Join thousands of people using MemoPear at conferences, trade shows, and networking events.</p>
-                  <button onClick={() => navigateTo('login')} className="px-12 py-6 bg-white text-blue-600 font-black rounded-3xl shadow-2xl hover:scale-110 transition-transform uppercase text-xs tracking-widest active:scale-95">Get Started</button>
+                  <button onClick={() => navigateTo('login')} className="px-12 py-6 bg-white text-blue-600 font-black rounded-3xl shadow-2xl hover:scale-110 transition-transform uppercase text-xs tracking-widest active:scale-95">Start Free — First {TRIAL_DAYS} Days On Us</button>
                </div>
             </section>
           </div>
@@ -1191,7 +1269,8 @@ const App: React.FC = () => {
         {view === 'pricing' && (
           <div className="p-4 md:p-8 text-center max-w-4xl mx-auto animate-in fade-in duration-500">
             <h2 className="text-4xl md:text-5xl font-black mb-4 tracking-tighter text-pear-600 dark:text-pear-400">Simple Pricing</h2>
-            <p className="text-sm md:text-lg text-slate-500 mb-8 font-medium">One plan. Everything included. No surprises.</p>
+            <p className="text-sm md:text-lg text-slate-500 mb-2 font-medium">One plan. Everything included. No surprises.</p>
+            <p className="text-xs md:text-sm font-black text-pear-600 dark:text-pear-400 uppercase tracking-widest mb-8">Your first {TRIAL_DAYS} days are free — no card needed</p>
 
             {/* Billing cycle toggle */}
             <div className="flex justify-center gap-3 mb-6">
@@ -1291,6 +1370,11 @@ const App: React.FC = () => {
               }} className="w-full py-4 bg-pear-600 text-white font-black rounded-2xl shadow-xl hover:scale-[1.02] active:scale-95 transition-all text-[10px] uppercase tracking-widest">
                 {seatQuantity > 1 ? `Get ${seatQuantity} Seats Now` : 'Get Started Now'}
               </button>
+              {!isLoggedIn && (
+                <button onClick={() => navigateTo('login')} className="w-full mt-3 py-4 border-2 border-pear-600 text-pear-600 font-black rounded-2xl hover:bg-pear-600/5 active:scale-95 transition-all text-[10px] uppercase tracking-widest">
+                  Start Free — First {TRIAL_DAYS} Days On Us
+                </button>
+              )}
             </div>
             
             <button onClick={() => navigateTo('home')} className="text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-pear-600 transition-colors">Back to Home</button>
@@ -1500,8 +1584,11 @@ const App: React.FC = () => {
                         <span className="text-[8px] font-black uppercase px-2.5 py-1 bg-emerald-500/10 text-emerald-500 rounded-full">Active</span>
                       </div>
                       <p className="text-[9px] text-slate-400 leading-relaxed border-t border-slate-100 dark:border-white/5 pt-4">
-                        Receipts and invoices are sent to your email by Stripe. To cancel or update your payment method, reply to any Stripe receipt email.
+                        Receipts and invoices are sent to your email by Stripe. Cancel anytime below — you keep access until the end of your billing period.
                       </p>
+                      <button onClick={handleCancelSubscription} className="w-full py-3 border border-rose-300 dark:border-rose-500/30 text-rose-500 text-[9px] font-black uppercase tracking-widest rounded-xl hover:bg-rose-500/5 transition-all">
+                        Cancel Subscription
+                      </button>
                       {receipts.length > 0 && (
                         <div className="pt-4 border-t border-slate-100 dark:border-white/5">
                           <p className="text-[8px] font-black uppercase text-slate-400 tracking-widest mb-3">Invoices</p>
@@ -1672,12 +1759,18 @@ const App: React.FC = () => {
            <div className={view === 'form' ? 'h-full flex flex-col' : 'p-3 md:p-6'}>
               {view === 'form' && (
                  <form onSubmit={handleSubmit} className="relative h-full flex flex-col max-w-2xl mx-auto w-full px-3 py-2 gap-2">
-                    {!hasPaid && (
+                    {!hasAccess && (
                        <div className="absolute inset-0 z-[60] glass p-10 flex flex-col items-center justify-center text-center rounded-[2rem]">
                           <div className="w-20 h-20 bg-pear-600/10 rounded-full flex items-center justify-center mb-6 text-4xl">🍐</div>
-                          <h2 className="text-2xl font-black mb-2 text-pear-700 dark:text-pear-300">Unlock Contact Capture</h2>
-                          <p className="text-sm text-slate-500 mb-6">Upgrade to Pro to save contacts, scan badges, and use voice notes.</p>
-                          <button onClick={() => navigateTo('pricing')} className="w-full py-4 bg-pear-600 text-white font-black rounded-2xl shadow-xl hover:scale-105 transition-all max-w-xs uppercase text-xs tracking-widest">Upgrade to Pro — $1.49/mo</button>
+                          <h2 className="text-2xl font-black mb-2 text-pear-700 dark:text-pear-300">{trialExpired ? 'Your Free Trial Has Ended' : 'Unlock Contact Capture'}</h2>
+                          <p className="text-sm text-slate-500 mb-6">{trialExpired ? 'Subscribe to keep saving contacts, scanning badges, and using voice notes.' : 'Upgrade to Pro to save contacts, scan badges, and use voice notes.'}</p>
+                          <button onClick={() => navigateTo('pricing')} className="w-full py-4 bg-pear-600 text-white font-black rounded-2xl shadow-xl hover:scale-105 transition-all max-w-xs uppercase text-xs tracking-widest">{trialExpired ? 'Subscribe — $1.49/mo' : 'Upgrade to Pro — $1.49/mo'}</button>
+                       </div>
+                    )}
+                    {!hasPaid && trialActive && (
+                       <div className="flex items-center justify-between gap-3 px-4 py-2 rounded-xl bg-pear-600/10 border border-pear-600/20 flex-shrink-0">
+                          <p className="text-[9px] font-black uppercase tracking-widest text-pear-700 dark:text-pear-300">Free trial — {formatTrialLeft()} left</p>
+                          <button type="button" onClick={() => navigateTo('pricing')} className="text-[9px] font-black uppercase tracking-widest text-pear-600 hover:underline flex-shrink-0">Subscribe</button>
                        </div>
                     )}
 
