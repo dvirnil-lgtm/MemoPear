@@ -69,24 +69,54 @@ const TESTIMONIALS = [
 
 const TOUR_STEPS = [
   {
-    title: "Hey, welcome to MemoPear! 👋",
-    description: "We help you remember every person you meet at conferences. Let's show you how it works in 30 seconds.",
+    title: "Welcome to MemoPear! 👋",
+    description: "You're all set up. Let's take 60 seconds to walk through every button so you can capture contacts like a pro. You can stop anytime.",
     icon: "🍐"
   },
   {
-    title: "Scan any business card",
-    description: "Just snap a photo and our AI reads the card instantly — name, email, phone, company, all of it.",
+    title: "Scan a badge — the QR button",
+    description: "Tap the QR button at the top of the form to scan a conference badge's QR code. We instantly fill in the name, company and contact details.",
+    icon: "🔳"
+  },
+  {
+    title: "Snap a business card",
+    description: "Tap the card button next to QR to photograph a business card. Our AI reads every field — name, email, phone, company — and fills the form for you.",
     icon: "📸"
   },
   {
-    title: "Talk through your notes",
-    description: "Hit record after a meeting and just talk. We'll transcribe everything so you can stay present.",
+    title: "Edit the contact details",
+    description: "Type or fix anything in the name, company, title, email and phone fields. Whatever the scan missed, you can add by hand.",
+    icon: "✍️"
+  },
+  {
+    title: "Pick how you'll follow up",
+    description: "Choose the best follow-up channels — LinkedIn, email, WhatsApp and more — then drop in the handle so you never lose track.",
+    icon: "🔗"
+  },
+  {
+    title: "Record a voice note",
+    description: "Press and HOLD the record button under the notes box and just talk. We transcribe it live into your notes. Release to stop.",
     icon: "🎙️"
   },
   {
-    title: "Set up your profile",
-    description: "Add your name and the conferences you're attending so your contacts are organized from day one.",
+    title: "Save the contact",
+    description: "Hit Save Contact to store them. Everything is kept privately on your device — nothing is uploaded to our servers.",
+    icon: "💾"
+  },
+  {
+    title: "Your Contacts tab",
+    description: "Open the Contacts tab to see everyone you've saved. Select people to bulk-export to Google Sheets or fire off follow-up emails.",
+    icon: "📇"
+  },
+  {
+    title: "Team & Profile",
+    description: "Invite teammates from the Team tab, and set your name and the conferences you're attending in Profile so contacts stay organized.",
     icon: "👤"
+  },
+  {
+    title: "You're ready! 🎉",
+    description: "That's the whole app. Need a refresher? Tap the ❓ button anytime during your first week to replay this tour.",
+    icon: "✅"
   }
 ];
 
@@ -342,6 +372,8 @@ const App: React.FC = () => {
   const trialActive = trialMsLeft > 0;
   const trialExpired = trialStart !== null && !trialActive;
   const hasAccess = hasPaid || trialActive;
+  // Show the replayable tour entry point for the first week after sign-up.
+  const withinFirstWeek = trialStart !== null && (Date.now() - trialStart) < 7 * 24 * 60 * 60 * 1000;
   const formatTrialLeft = () => {
     const hours = Math.ceil(trialMsLeft / (60 * 60 * 1000));
     if (hours >= 24) { const d = Math.floor(hours / 24); const h = hours % 24; return h ? `${d}d ${h}h` : `${d} day${d > 1 ? 's' : ''}`; }
@@ -444,6 +476,8 @@ const App: React.FC = () => {
   const sessionRef = useRef<any>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  // Tracks whether the push-to-talk button is currently held down.
+  const pttActiveRef = useRef(false);
 
   const toggleTheme = () => {
     const newTheme = theme === 'light' ? 'dark' : 'light';
@@ -491,7 +525,7 @@ const App: React.FC = () => {
       setLeads(filteredLeads);
     }
     if (!localStorage.getItem(STORAGE_KEY_NOTICE)) setShowNotice(true);
-    if (!localStorage.getItem(STORAGE_KEY_TOUR_COMPLETE) && isLoggedIn) setShowTour(true);
+    if (!localStorage.getItem(STORAGE_KEY_TOUR_COMPLETE) && isLoggedIn) { setTourStep(0); setShowTour(true); }
   }, [isLoggedIn]);
 
   // Scroll Progress Logic
@@ -851,11 +885,29 @@ const App: React.FC = () => {
         }
       });
       sessionRef.current = await sessionPromise;
+      // If the user released the button before the session finished connecting,
+      // stop immediately so a quick tap doesn't leave the mic recording.
+      if (!pttActiveRef.current) stopTranscription();
     } catch (err) {
       console.error('Failed to start transcription:', err);
       setStatusMsg({ type: 'error', text: isQuotaError(err) ? QUOTA_ERROR_MESSAGE : 'Could not start transcription. Please try again.' });
       stopTranscription();
     }
+  };
+
+  // Push-to-talk: hold the record button to capture, release to stop.
+  const handleRecordPress = (e: React.PointerEvent) => {
+    e.preventDefault();
+    try { (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId); } catch {}
+    pttActiveRef.current = true;
+    if (!isTranscribing) startTranscription();
+  };
+
+  const handleRecordRelease = (e: React.PointerEvent) => {
+    e.preventDefault();
+    if (!pttActiveRef.current) return;
+    pttActiveRef.current = false;
+    stopTranscription();
   };
 
   const handleQRScan = async (decodedText: string) => {
@@ -1063,6 +1115,15 @@ const App: React.FC = () => {
     setShowTour(false);
   };
 
+  // (Re)start the guided tour from the beginning. Walks through the Add-Contact
+  // form, so make sure that view is active.
+  const startTour = () => {
+    if (isLoggedIn) setView('form');
+    setIsMenuOpen(false);
+    setTourStep(0);
+    setShowTour(true);
+  };
+
   const nextTourStep = () => {
     if (tourStep < TOUR_STEPS.length - 1) setTourStep(tourStep + 1);
     else completeTour();
@@ -1181,7 +1242,7 @@ const App: React.FC = () => {
               </p>
               <div className="flex flex-col sm:flex-row gap-6 w-full max-w-md z-10">
                 <button onClick={() => navigateTo('login')} className="flex-1 py-5 bg-blue-600 text-white font-black rounded-2xl shadow-2xl hover:scale-105 transition-all">Start Free — First {TRIAL_DAYS} Days On Us</button>
-                <button onClick={() => setShowTour(true)} className="flex-1 py-5 glass font-bold rounded-2xl border-slate-200 dark:border-white/10 hover:bg-slate-50 dark:hover:bg-white/10 transition-all">See How It Works</button>
+                <button onClick={startTour} className="flex-1 py-5 glass font-bold rounded-2xl border-slate-200 dark:border-white/10 hover:bg-slate-50 dark:hover:bg-white/10 transition-all">See How It Works</button>
               </div>
             </section>
 
@@ -1836,8 +1897,8 @@ const App: React.FC = () => {
                          placeholder="Conference name"
                          className="flex-1 min-w-0 px-3 py-2 rounded-xl bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 text-xs font-bold outline-none focus:border-pear-500/50 transition-all"
                        />
-                       <button type="button" onClick={() => setIsScanning(true)} className={`px-3 py-2 rounded-xl bg-pear-600/10 text-pear-600 text-[8px] font-black uppercase border border-pear-600/20 active:scale-95 transition-all flex-shrink-0 ${showTour && tourStep === 0 ? 'ring-2 ring-pear-500 animate-pulse' : ''}`}>QR</button>
-                       <button type="button" onClick={() => cardInputRef.current?.click()} className={`px-3 py-2 rounded-xl bg-stem-600/10 text-stem-600 text-[8px] font-black uppercase border border-stem-600/20 active:scale-95 transition-all flex-shrink-0 ${showTour && tourStep === 0 ? 'ring-2 ring-pear-500 animate-pulse' : ''}`}>
+                       <button type="button" onClick={() => setIsScanning(true)} className={`px-3 py-2 rounded-xl bg-pear-600/10 text-pear-600 text-[8px] font-black uppercase border border-pear-600/20 active:scale-95 transition-all flex-shrink-0 ${showTour && tourStep === 1 ? 'ring-2 ring-pear-500 animate-pulse' : ''}`}>QR</button>
+                       <button type="button" onClick={() => cardInputRef.current?.click()} className={`px-3 py-2 rounded-xl bg-stem-600/10 text-stem-600 text-[8px] font-black uppercase border border-stem-600/20 active:scale-95 transition-all flex-shrink-0 ${showTour && tourStep === 2 ? 'ring-2 ring-pear-500 animate-pulse' : ''}`}>
                          <input type="file" ref={cardInputRef} className="hidden" accept="image/*" capture="environment" onChange={handleCardCapture} />Scan Card
                        </button>
                        <div className="absolute top-full left-0 right-0 z-50 mt-1 glass rounded-xl border border-pear-100 dark:border-white/10 shadow-2xl max-h-40 overflow-y-auto hidden group-focus-within:block">
@@ -1866,7 +1927,7 @@ const App: React.FC = () => {
                     </div>
 
                     {/* Row 5: Follow-up channels */}
-                    <div className={`flex-shrink-0 transition-all duration-500 ${showTour && tourStep === 1 ? 'ring-2 ring-pear-500 rounded-xl animate-pulse' : ''}`}>
+                    <div className={`flex-shrink-0 transition-all duration-500 ${showTour && tourStep === 4 ? 'ring-2 ring-pear-500 rounded-xl animate-pulse' : ''}`}>
                        <label className="text-[8px] font-black uppercase text-slate-400 tracking-widest pl-1 mb-1 block">Best way to follow up</label>
                        <div className="flex flex-wrap gap-1">
                           {Object.values(CommMethod).map(method => (
@@ -1889,27 +1950,30 @@ const App: React.FC = () => {
                        )}
                     </div>
 
-                    {/* Row 6: Notes + Voice — fills remaining space */}
-                    <div className={`flex gap-2 flex-1 min-h-0 transition-all duration-500 ${showTour && tourStep === 1 ? 'ring-2 ring-pear-500 rounded-xl animate-pulse' : ''}`}>
+                    {/* Row 6: Notes + Voice — textarea fills space, hold-to-record button beneath */}
+                    <div className={`flex flex-col gap-2 flex-1 min-h-0 transition-all duration-500 ${showTour && tourStep === 5 ? 'ring-2 ring-pear-500 rounded-xl animate-pulse' : ''}`}>
                        <textarea
                          value={notes}
                          onChange={(e) => setNotes(e.target.value)}
                          placeholder="What did you talk about? Any next steps?"
-                         className={`flex-1 min-h-0 p-3 rounded-xl bg-white dark:bg-white/5 border outline-none text-xs leading-relaxed resize-none transition-all ${showTour && tourStep === 1 ? 'border-pear-500' : 'border-slate-200 dark:border-white/10 focus:border-pear-500/50'}`}
+                         className={`flex-1 min-h-0 p-3 rounded-xl bg-white dark:bg-white/5 border outline-none text-xs leading-relaxed resize-none transition-all ${showTour && tourStep === 5 ? 'border-pear-500' : 'border-slate-200 dark:border-white/10 focus:border-pear-500/50'}`}
                        />
                        <button
                          type="button"
-                         onClick={isTranscribing ? stopTranscription : startTranscription}
-                         className={`flex-shrink-0 w-16 rounded-xl border-2 active:scale-95 transition-all flex flex-col items-center justify-center gap-1 shadow-lg ${isTranscribing ? 'bg-red-500 text-white border-red-500 recording-pulse' : 'bg-pear-600 text-white border-pear-600 hover:bg-pear-700'}`}
-                         title={isTranscribing ? 'Stop recording' : 'Record voice note'}
+                         onPointerDown={handleRecordPress}
+                         onPointerUp={handleRecordRelease}
+                         onPointerCancel={handleRecordRelease}
+                         onContextMenu={(e) => e.preventDefault()}
+                         className={`flex-shrink-0 w-full py-3 rounded-xl border-2 select-none touch-none active:scale-[0.99] transition-all flex items-center justify-center gap-2 shadow-lg ${isTranscribing ? 'bg-red-500 text-white border-red-500 recording-pulse' : 'bg-pear-600 text-white border-pear-600 hover:bg-pear-700'}`}
+                         title="Hold to record a voice note, release to stop"
                        >
-                         <span className="text-xl leading-none">🎙</span>
-                         <span className="text-[8px] font-black uppercase tracking-wider">{isTranscribing ? 'Stop' : 'Record'}</span>
+                         <span className="text-lg leading-none">🎙</span>
+                         <span className="text-[11px] font-black uppercase tracking-wider">{isTranscribing ? 'Recording… release to stop' : 'Hold to record'}</span>
                        </button>
                     </div>
 
                     {/* Row 7: Submit */}
-                    <div className="flex-shrink-0 pb-1">
+                    <div className={`flex-shrink-0 pb-1 rounded-xl transition-all duration-500 ${showTour && tourStep === 6 ? 'ring-2 ring-pear-500 animate-pulse' : ''}`}>
                        <button type="submit" disabled={isSubmitting} className="w-full py-3 bg-pear-600 text-white font-black rounded-xl text-sm shadow-xl active:scale-95 transition-all disabled:opacity-50 uppercase tracking-widest">
                          {isSubmitting ? 'Saving...' : 'Save Contact'}
                        </button>
@@ -1919,7 +1983,7 @@ const App: React.FC = () => {
               
               {view === 'history' && (
                  <div className="space-y-12 animate-in slide-in-from-bottom-8 max-w-2xl mx-auto pt-10">
-                    <div className={`sticky top-20 z-30 glass p-5 rounded-[2.5rem] border border-pear-600/20 shadow-2xl ${selectedLeadIds.size > 0 ? 'block' : 'hidden'} transition-all duration-500 ${showTour && tourStep === 2 ? 'ring-4 ring-pear-500 ring-offset-4 dark:ring-offset-[#020617] animate-pulse scale-105' : ''}`}>
+                    <div className={`sticky top-20 z-30 glass p-5 rounded-[2.5rem] border border-pear-600/20 shadow-2xl ${selectedLeadIds.size > 0 ? 'block' : 'hidden'} transition-all duration-500 ${showTour && tourStep === 7 ? 'ring-4 ring-pear-500 ring-offset-4 dark:ring-offset-[#020617] animate-pulse scale-105' : ''}`}>
                        <div className="flex items-center justify-between mb-4">
                           <div className="flex items-center gap-4">
                              <div className="w-10 h-10 bg-blue-600 text-white rounded-2xl flex items-center justify-center font-black text-sm">{selectedLeadIds.size}</div>
@@ -2255,6 +2319,17 @@ const App: React.FC = () => {
         </div>
       )}
 
+      {/* Replay-tour button — available to new users for their first week */}
+      {isLoggedIn && withinFirstWeek && !showTour && !isMenuOpen && !['login', 'pricing', 'payment', 'privacy', 'terms', 'contact'].includes(view) && (
+        <button
+          onClick={startTour}
+          title="Replay the app tour"
+          className="fixed bottom-28 right-5 z-[70] w-12 h-12 rounded-full bg-pear-600 text-white text-xl shadow-2xl border-2 border-white/30 flex items-center justify-center active:scale-95 hover:bg-pear-700 transition-all"
+        >
+          ❓
+        </button>
+      )}
+
       {/* Platform Tour Modal */}
       {showTour && (
          <div className="fixed inset-0 z-[300] flex items-center justify-center p-6 bg-slate-900/95 backdrop-blur-3xl animate-in fade-in duration-500">
@@ -2280,7 +2355,7 @@ const App: React.FC = () => {
                   {tourStep === TOUR_STEPS.length - 1 ? "Let's Go!" : 'Next'}
                </button>
                
-               <button onClick={completeTour} className="mt-6 text-slate-500 font-black text-[10px] uppercase tracking-widest hover:text-white transition-colors">Skip for now</button>
+               <button onClick={completeTour} className="mt-6 text-slate-500 font-black text-[10px] uppercase tracking-widest hover:text-white transition-colors">Stop tour</button>
             </div>
          </div>
       )}
