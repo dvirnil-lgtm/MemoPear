@@ -404,7 +404,7 @@ const RecordingWaveform: React.FC<{ analyserRef: React.MutableRefObject<Analyser
     return () => cancelAnimationFrame(raf);
   }, [analyserRef]);
 
-  return <canvas ref={canvasRef} width={600} height={120} className="w-full h-16" />;
+  return <canvas ref={canvasRef} width={600} height={120} className="w-full h-full block" />;
 };
 
 const App: React.FC = () => {
@@ -2017,7 +2017,7 @@ const App: React.FC = () => {
                        )}
                     </div>
 
-                    {/* Row 6: Notes + Voice — textarea fills space, hold-to-record button beneath */}
+                    {/* Row 6: Notes + Voice — textarea fills space; waves (left) + record button (right) beneath */}
                     <div className={`flex flex-col gap-2 flex-1 min-h-0 transition-all duration-500 ${showTour && tourStep === 5 ? 'ring-2 ring-pear-500 rounded-xl animate-pulse' : ''}`}>
                        <textarea
                          value={notes}
@@ -2025,33 +2025,25 @@ const App: React.FC = () => {
                          placeholder="What did you talk about? Any next steps?"
                          className={`flex-1 min-h-0 p-3 rounded-xl bg-white dark:bg-white/5 border outline-none text-xs leading-relaxed resize-none transition-all ${showTour && tourStep === 5 ? 'border-pear-500' : 'border-slate-200 dark:border-white/10 focus:border-pear-500/50'}`}
                        />
-                       {/* Live sound-wave visualizer while recording */}
-                       {isTranscribing && (
-                         <div className="flex-shrink-0 rounded-xl bg-slate-900 border-2 border-red-500/50 px-4 py-3 shadow-inner">
-                           <RecordingWaveform analyserRef={analyserRef} />
-                         </div>
-                       )}
-                       <button
-                         type="button"
-                         onPointerDown={handleRecordPress}
-                         onPointerUp={handleRecordRelease}
-                         onPointerCancel={handleRecordRelease}
-                         onContextMenu={(e) => e.preventDefault()}
-                         className={`flex-shrink-0 w-full py-3 rounded-xl border-2 select-none touch-none active:scale-[0.99] transition-all flex items-center justify-center gap-2 shadow-lg ${isTranscribing ? 'bg-slate-900 text-white border-red-500 recording-pulse' : 'bg-pear-600 text-white border-pear-600 hover:bg-pear-700'}`}
-                         title="Hold to record a voice note, release to stop"
-                       >
-                         {isTranscribing ? (
-                           <>
-                             <span className="w-4 h-4 bg-red-500 rounded-[4px]" />
-                             <span className="text-[11px] font-black uppercase tracking-wider">Recording… release to stop</span>
-                           </>
-                         ) : (
-                           <>
-                             <span className="text-lg leading-none">🎙</span>
-                             <span className="text-[11px] font-black uppercase tracking-wider">Hold to record</span>
-                           </>
-                         )}
-                       </button>
+                       <div className="flex-shrink-0 flex gap-2 h-20">
+                          {/* Left half: live sound-wave visualizer */}
+                          <div className="flex-1 rounded-xl bg-slate-900 border-2 border-red-500/40 px-3 flex items-center overflow-hidden">
+                             <RecordingWaveform analyserRef={analyserRef} />
+                          </div>
+                          {/* Right half: red record button with a big mic */}
+                          <button
+                            type="button"
+                            onPointerDown={handleRecordPress}
+                            onPointerUp={handleRecordRelease}
+                            onPointerCancel={handleRecordRelease}
+                            onContextMenu={(e) => e.preventDefault()}
+                            className={`flex-1 rounded-xl border-2 select-none touch-none active:scale-95 transition-all flex flex-col items-center justify-center gap-1 shadow-lg text-white ${isTranscribing ? 'bg-red-600 border-red-600 recording-pulse' : 'bg-red-500 border-red-500 hover:bg-red-600'}`}
+                            title="Hold to record a voice note, release to stop"
+                          >
+                            <span className="text-4xl leading-none">🎙️</span>
+                            <span className="text-[10px] font-black uppercase tracking-wider">{isTranscribing ? 'Recording…' : 'Hold to record'}</span>
+                          </button>
+                       </div>
                     </div>
 
                     {/* Row 7: Submit */}
