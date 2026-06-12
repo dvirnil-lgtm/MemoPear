@@ -302,7 +302,7 @@ const App: React.FC = () => {
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
     const saved = localStorage.getItem('lcp_theme');
     if (saved === 'light' || saved === 'dark') return saved;
-    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    return 'light';
   });
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [password, setPassword] = useState('');
@@ -433,7 +433,7 @@ const App: React.FC = () => {
 
   useEffect(() => {
     const savedTheme = localStorage.getItem('lcp_theme') as 'light' | 'dark' | null;
-    const initialTheme = savedTheme || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    const initialTheme = savedTheme || 'light';
     setTheme(initialTheme);
     document.documentElement.classList.toggle('dark', initialTheme === 'dark');
 
@@ -760,13 +760,30 @@ const App: React.FC = () => {
   };
 
   const startTranscription = async () => {
+    if (!process.env.API_KEY) {
+      setStatusMsg({ type: 'error', text: 'Transcription unavailable: AI key not configured.' });
+      return;
+    }
+
+    // Request the mic first so permission errors are reported distinctly from
+    // connection/API errors below.
+    let stream: MediaStream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    } catch (err) {
+      setStatusMsg({ type: 'error', text: 'Microphone access denied. Enable mic permissions to record.' });
+      return;
+    }
+
     try {
       setIsTranscribing(true);
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       streamRef.current = stream;
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 16000 });
       audioContextRef.current = audioCtx;
+      // Some browsers (notably mobile Safari) start the AudioContext suspended
+      // until it is explicitly resumed after a user gesture.
+      if (audioCtx.state === 'suspended') await audioCtx.resume();
       const sessionPromise = ai.live.connect({
         model: 'gemini-2.5-flash-native-audio-preview-12-2025',
         callbacks: {
@@ -783,10 +800,14 @@ const App: React.FC = () => {
           onmessage: (message) => {
             if (message.serverContent?.inputTranscription) {
               const text = message.serverContent.inputTranscription.text;
-              setNotes(prev => prev + (prev.endsWith(' ') || prev === '' ? '' : ' ') + text);
+              if (text) setNotes(prev => prev + (prev === '' || prev.endsWith(' ') ? '' : ' ') + text);
             }
           },
-          onerror: () => stopTranscription(),
+          onerror: (e: any) => {
+            console.error('Transcription error:', e);
+            setStatusMsg({ type: 'error', text: 'Transcription connection failed. Please try again.' });
+            stopTranscription();
+          },
           onclose: () => stopTranscription()
         },
         config: {
@@ -797,7 +818,8 @@ const App: React.FC = () => {
       });
       sessionRef.current = await sessionPromise;
     } catch (err) {
-      setStatusMsg({ type: 'error', text: 'Mic permissions required.' });
+      console.error('Failed to start transcription:', err);
+      setStatusMsg({ type: 'error', text: 'Could not start transcription. Please try again.' });
       stopTranscription();
     }
   };
@@ -1844,9 +1866,12 @@ const App: React.FC = () => {
                        <button
                          type="button"
                          onClick={isTranscribing ? stopTranscription : startTranscription}
-                         className={`flex-shrink-0 w-14 rounded-xl border text-lg active:scale-95 transition-all flex items-center justify-center ${isTranscribing ? 'bg-red-500 text-white border-red-500 recording-pulse' : 'bg-pear-600/10 text-pear-600 border-pear-600/20'}`}
+                         className={`flex-shrink-0 w-16 rounded-xl border-2 active:scale-95 transition-all flex flex-col items-center justify-center gap-1 shadow-lg ${isTranscribing ? 'bg-red-500 text-white border-red-500 recording-pulse' : 'bg-pear-600 text-white border-pear-600 hover:bg-pear-700'}`}
                          title={isTranscribing ? 'Stop recording' : 'Record voice note'}
-                       >🎙</button>
+                       >
+                         <span className="text-xl leading-none">🎙</span>
+                         <span className="text-[8px] font-black uppercase tracking-wider">{isTranscribing ? 'Stop' : 'Record'}</span>
+                       </button>
                     </div>
 
                     {/* Row 7: Submit */}
