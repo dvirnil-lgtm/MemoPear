@@ -290,12 +290,33 @@ function createBlob(data: Float32Array): any {
   const l = data.length;
   const int16 = new Int16Array(l);
   for (let i = 0; i < l; i++) {
-    int16[i] = data[i] * 32768;
+    // Clamp to the valid range to avoid wrap-around distortion on loud peaks.
+    const s = Math.max(-1, Math.min(1, data[i]));
+    int16[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
   }
   return {
     data: encode(new Uint8Array(int16.buffer)),
     mimeType: 'audio/pcm;rate=16000',
   };
+}
+
+// Gemini Live expects 16kHz PCM. Mobile Safari refuses to create an
+// AudioContext at a forced sample rate, so we capture at the device's native
+// rate and linearly downsample each chunk to 16kHz here.
+function downsampleTo16k(input: Float32Array, inputRate: number): Float32Array {
+  if (inputRate === 16000) return input;
+  if (inputRate < 16000) return input; // upsampling not needed for speech
+  const ratio = inputRate / 16000;
+  const newLen = Math.round(input.length / ratio);
+  const result = new Float32Array(newLen);
+  for (let i = 0; i < newLen; i++) {
+    const idx = i * ratio;
+    const i0 = Math.floor(idx);
+    const i1 = Math.min(i0 + 1, input.length - 1);
+    const frac = idx - i0;
+    result[i] = input[i0] * (1 - frac) + input[i1] * frac;
+  }
+  return result;
 }
 
 const App: React.FC = () => {
@@ -779,7 +800,9 @@ const App: React.FC = () => {
       setIsTranscribing(true);
       streamRef.current = stream;
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-      const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 16000 });
+      // Do NOT force a 16kHz sample rate here: iOS Safari throws when the
+      // requested rate differs from the hardware rate. We downsample per-chunk.
+      const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
       audioContextRef.current = audioCtx;
       // Some browsers (notably mobile Safari) start the AudioContext suspended
       // until it is explicitly resumed after a user gesture.
@@ -792,7 +815,8 @@ const App: React.FC = () => {
             const processor = audioCtx.createScriptProcessor(4096, 1, 1);
             processor.onaudioprocess = (e) => {
               const inputData = e.inputBuffer.getChannelData(0);
-              sessionPromise.then(session => session.sendRealtimeInput({ media: createBlob(inputData) }));
+              const pcm16k = downsampleTo16k(inputData, audioCtx.sampleRate);
+              sessionPromise.then(session => session.sendRealtimeInput({ media: createBlob(pcm16k) }));
             };
             source.connect(processor);
             processor.connect(audioCtx.destination);
