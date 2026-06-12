@@ -3,6 +3,38 @@ import { GoogleGenAI, Type } from "@google/genai";
 import { Lead, ScannedLeadData } from "../types";
 
 /**
+ * User-facing message shown when the Gemini API rejects a request because the
+ * project's billing/quota is exhausted (HTTP 429 RESOURCE_EXHAUSTED).
+ */
+export const QUOTA_ERROR_MESSAGE = "AI quota exhausted — check Gemini API billing.";
+
+/** Error thrown by the service helpers when the Gemini API returns a quota/billing failure. */
+export class QuotaError extends Error {
+  constructor(message: string = QUOTA_ERROR_MESSAGE) {
+    super(message);
+    this.name = "QuotaError";
+  }
+}
+
+/**
+ * Detects whether an error from the Gemini SDK is a quota/billing failure
+ * (429 / RESOURCE_EXHAUSTED / depleted prepayment credits).
+ */
+export const isQuotaError = (error: unknown): boolean => {
+  if (!error) return false;
+  const status = (error as any)?.status;
+  if (status === 429 || status === "RESOURCE_EXHAUSTED") return true;
+  const text = (typeof error === "string" ? error : (error as any)?.message ?? "").toLowerCase();
+  return (
+    text.includes("resource_exhausted") ||
+    text.includes("quota") ||
+    text.includes("credits are depleted") ||
+    text.includes("billing") ||
+    text.includes("429")
+  );
+};
+
+/**
  * Uses Gemini to parse raw text (often vCard or unstructured) from a conference badge QR code.
  */
 export const parseScannedData = async (rawText: string): Promise<ScannedLeadData> => {
@@ -33,6 +65,7 @@ export const parseScannedData = async (rawText: string): Promise<ScannedLeadData
     return JSON.parse(response.text.trim());
   } catch (error) {
     console.error("Error parsing scanned data:", error);
+    if (isQuotaError(error)) throw new QuotaError();
     return {};
   }
 };
@@ -86,6 +119,7 @@ export const parseBusinessCard = async (base64Image: string): Promise<ScannedLea
     return JSON.parse(jsonStr);
   } catch (error) {
     console.error("Error parsing business card:", error);
+    if (isQuotaError(error)) throw new QuotaError();
     return {};
   }
 };
@@ -116,6 +150,7 @@ export const generateLeadReport = async (lead: Lead): Promise<string> => {
     return response.text || "Summary generation failed.";
   } catch (error) {
     console.error("Error generating lead report:", error);
+    if (isQuotaError(error)) return `AI summary unavailable — ${QUOTA_ERROR_MESSAGE}`;
     return "Could not generate AI summary.";
   }
 };

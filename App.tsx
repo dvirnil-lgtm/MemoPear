@@ -5,7 +5,7 @@ import { Lead, CommMethod, UserProfile, PaymentCycle, TeamMember } from './types
 import { QRScanner } from './components/QRScanner';
 import { CommMethodToggle } from './components/CommMethodToggle';
 import { PrivacyPolicy, TermsAndConditions, ContactUs } from './components/LegalPages';
-import { parseScannedData, parseBusinessCard, generateLeadReport } from './services/geminiService';
+import { parseScannedData, parseBusinessCard, generateLeadReport, QuotaError, QUOTA_ERROR_MESSAGE, isQuotaError } from './services/geminiService';
 import { signInWithGoogle, signInWithLinkedIn, firebaseSignOut, auth, logLoginEvent, logCancellationRequest } from './firebase';
 
 // Constants for retention and session
@@ -829,10 +829,20 @@ const App: React.FC = () => {
           },
           onerror: (e: any) => {
             console.error('Transcription error:', e);
-            setStatusMsg({ type: 'error', text: 'Transcription connection failed. Please try again.' });
+            setStatusMsg({
+              type: 'error',
+              text: isQuotaError(e?.message ?? e) ? QUOTA_ERROR_MESSAGE : 'Transcription connection failed. Please try again.',
+            });
             stopTranscription();
           },
-          onclose: () => stopTranscription()
+          onclose: (e: any) => {
+            // The server closes the socket (often with no prior error) when the
+            // Gemini project's quota/billing is exhausted — surface that clearly.
+            if (isQuotaError(e?.reason ?? e)) {
+              setStatusMsg({ type: 'error', text: QUOTA_ERROR_MESSAGE });
+            }
+            stopTranscription();
+          }
         },
         config: {
           responseModalities: [Modality.AUDIO],
@@ -843,7 +853,7 @@ const App: React.FC = () => {
       sessionRef.current = await sessionPromise;
     } catch (err) {
       console.error('Failed to start transcription:', err);
-      setStatusMsg({ type: 'error', text: 'Could not start transcription. Please try again.' });
+      setStatusMsg({ type: 'error', text: isQuotaError(err) ? QUOTA_ERROR_MESSAGE : 'Could not start transcription. Please try again.' });
       stopTranscription();
     }
   };
@@ -867,7 +877,7 @@ const App: React.FC = () => {
       }
       setStatusMsg({ type: 'success', text: 'Intel Extracted.' });
     } catch (error) {
-      setStatusMsg({ type: 'error', text: 'Parsing Failed.' });
+      setStatusMsg({ type: 'error', text: error instanceof QuotaError ? QUOTA_ERROR_MESSAGE : 'Parsing Failed.' });
     } finally { setIsSubmitting(false); }
   };
 
@@ -896,7 +906,7 @@ const App: React.FC = () => {
           setStatusMsg({ type: 'success', text: 'Card Extracted.' });
         } catch (err) {
           console.error(err);
-          setStatusMsg({ type: 'error', text: 'Vision Parsing Failed.' });
+          setStatusMsg({ type: 'error', text: err instanceof QuotaError ? QUOTA_ERROR_MESSAGE : 'Vision Parsing Failed.' });
         } finally {
           setIsSubmitting(false);
         }
@@ -926,7 +936,7 @@ const App: React.FC = () => {
       setStatusMsg({ type: 'success', text: 'Intel Extracted.' });
     } catch (err) {
       console.error(err);
-      setStatusMsg({ type: 'error', text: 'Parsing Failed.' });
+      setStatusMsg({ type: 'error', text: err instanceof QuotaError ? QUOTA_ERROR_MESSAGE : 'Parsing Failed.' });
     } finally {
       setIsSubmitting(false);
     }
@@ -964,7 +974,7 @@ const App: React.FC = () => {
       setStatusMsg({ type: 'success', text: 'Email Protocol Generated.' });
     } catch (err) {
       console.error(err);
-      setStatusMsg({ type: 'error', text: 'Email Generation Failed.' });
+      setStatusMsg({ type: 'error', text: isQuotaError(err) ? QUOTA_ERROR_MESSAGE : 'Email Generation Failed.' });
     } finally {
       setIsGeneratingEmail(false);
     }
