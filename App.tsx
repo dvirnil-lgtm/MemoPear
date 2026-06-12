@@ -349,6 +349,64 @@ function downsampleTo16k(input: Float32Array, inputRate: number): Float32Array {
   return result;
 }
 
+/**
+ * Live recording visualizer — draws animated red sound-wave bars driven by the
+ * mic's AnalyserNode while a voice note is being recorded.
+ */
+const RecordingWaveform: React.FC<{ analyserRef: React.MutableRefObject<AnalyserNode | null> }> = ({ analyserRef }) => {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    const ctx = canvas?.getContext('2d');
+    if (!canvas || !ctx) return;
+    let raf = 0;
+    const BARS = 56;
+
+    const draw = () => {
+      raf = requestAnimationFrame(draw);
+      const w = canvas.width;
+      const h = canvas.height;
+      ctx.clearRect(0, 0, w, h);
+
+      const analyser = analyserRef.current;
+      let data: Uint8Array | null = null;
+      if (analyser) {
+        data = new Uint8Array(analyser.frequencyBinCount);
+        analyser.getByteFrequencyData(data);
+      }
+
+      const gap = 2;
+      const barW = (w - gap * (BARS - 1)) / BARS;
+      for (let i = 0; i < BARS; i++) {
+        // Sample the lower ~70% of the spectrum where speech energy lives.
+        let level = 0.04;
+        if (data) {
+          const idx = Math.floor((i / BARS) * data.length * 0.7);
+          level = data[idx] / 255;
+        }
+        const barH = Math.max(barW, level * h);
+        const x = i * (barW + gap);
+        const y = (h - barH) / 2;
+        ctx.fillStyle = '#ef4444';
+        // rounded bars, falling back to a plain rect on older browsers
+        if (typeof ctx.roundRect === 'function') {
+          const r = Math.min(barW / 2, barH / 2);
+          ctx.beginPath();
+          ctx.roundRect(x, y, barW, barH, r);
+          ctx.fill();
+        } else {
+          ctx.fillRect(x, y, barW, barH);
+        }
+      }
+    };
+    draw();
+    return () => cancelAnimationFrame(raf);
+  }, [analyserRef]);
+
+  return <canvas ref={canvasRef} width={600} height={120} className="w-full h-16" />;
+};
+
 const App: React.FC = () => {
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
     const saved = localStorage.getItem('lcp_theme');
@@ -476,6 +534,8 @@ const App: React.FC = () => {
   const sessionRef = useRef<any>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  // Drives the live recording waveform visualization.
+  const analyserRef = useRef<AnalyserNode | null>(null);
   // Tracks whether the push-to-talk button is currently held down.
   const pttActiveRef = useRef(false);
 
@@ -811,6 +871,7 @@ const App: React.FC = () => {
     if (sessionRef.current) { sessionRef.current.close(); sessionRef.current = null; }
     if (streamRef.current) { streamRef.current.getTracks().forEach(track => track.stop()); streamRef.current = null; }
     if (audioContextRef.current) { audioContextRef.current.close(); audioContextRef.current = null; }
+    analyserRef.current = null;
     setIsTranscribing(false);
   };
 
@@ -846,6 +907,12 @@ const App: React.FC = () => {
         callbacks: {
           onopen: () => {
             const source = audioCtx.createMediaStreamSource(stream);
+            // Tap the live mic into an analyser so we can draw the waveform.
+            const analyser = audioCtx.createAnalyser();
+            analyser.fftSize = 256;
+            analyser.smoothingTimeConstant = 0.6;
+            source.connect(analyser);
+            analyserRef.current = analyser;
             const processor = audioCtx.createScriptProcessor(4096, 1, 1);
             processor.onaudioprocess = (e) => {
               const inputData = e.inputBuffer.getChannelData(0);
@@ -1060,7 +1127,7 @@ const App: React.FC = () => {
   };
 
   const PAGE_META: Record<string, { title: string; description: string }> = {
-    home: { title: 'MemoPear | Capture Conference Contacts with AI', description: 'Stop losing contacts at conferences. MemoPear lets you scan badges, snap business cards, and record notes — all in one place.' },
+    home: { title: 'MemoPear: Simply Better Lead Collection', description: 'Stop losing contacts at conferences. MemoPear lets you scan badges, snap business cards, and record notes — all in one place.' },
     login: { title: 'Sign In | MemoPear', description: 'Log in or create your MemoPear account to start capturing conference contacts.' },
     pricing: { title: 'Pricing | MemoPear', description: 'One simple plan. Scan badges, use voice notes, sync to Google Sheets, and more for just $1.49/month.' },
     form: { title: 'Add a Contact | MemoPear', description: 'Quickly add a new contact from a conference — scan a badge, snap a card, or just type their info.' },
@@ -1958,17 +2025,32 @@ const App: React.FC = () => {
                          placeholder="What did you talk about? Any next steps?"
                          className={`flex-1 min-h-0 p-3 rounded-xl bg-white dark:bg-white/5 border outline-none text-xs leading-relaxed resize-none transition-all ${showTour && tourStep === 5 ? 'border-pear-500' : 'border-slate-200 dark:border-white/10 focus:border-pear-500/50'}`}
                        />
+                       {/* Live sound-wave visualizer while recording */}
+                       {isTranscribing && (
+                         <div className="flex-shrink-0 rounded-xl bg-slate-900 border-2 border-red-500/50 px-4 py-3 shadow-inner">
+                           <RecordingWaveform analyserRef={analyserRef} />
+                         </div>
+                       )}
                        <button
                          type="button"
                          onPointerDown={handleRecordPress}
                          onPointerUp={handleRecordRelease}
                          onPointerCancel={handleRecordRelease}
                          onContextMenu={(e) => e.preventDefault()}
-                         className={`flex-shrink-0 w-full py-3 rounded-xl border-2 select-none touch-none active:scale-[0.99] transition-all flex items-center justify-center gap-2 shadow-lg ${isTranscribing ? 'bg-red-500 text-white border-red-500 recording-pulse' : 'bg-pear-600 text-white border-pear-600 hover:bg-pear-700'}`}
+                         className={`flex-shrink-0 w-full py-3 rounded-xl border-2 select-none touch-none active:scale-[0.99] transition-all flex items-center justify-center gap-2 shadow-lg ${isTranscribing ? 'bg-slate-900 text-white border-red-500 recording-pulse' : 'bg-pear-600 text-white border-pear-600 hover:bg-pear-700'}`}
                          title="Hold to record a voice note, release to stop"
                        >
-                         <span className="text-lg leading-none">🎙</span>
-                         <span className="text-[11px] font-black uppercase tracking-wider">{isTranscribing ? 'Recording… release to stop' : 'Hold to record'}</span>
+                         {isTranscribing ? (
+                           <>
+                             <span className="w-4 h-4 bg-red-500 rounded-[4px]" />
+                             <span className="text-[11px] font-black uppercase tracking-wider">Recording… release to stop</span>
+                           </>
+                         ) : (
+                           <>
+                             <span className="text-lg leading-none">🎙</span>
+                             <span className="text-[11px] font-black uppercase tracking-wider">Hold to record</span>
+                           </>
+                         )}
                        </button>
                     </div>
 
