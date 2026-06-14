@@ -42,18 +42,18 @@ const STRIPE_CUSTOMER_PORTAL_URL = 'https://billing.stripe.com/p/login/aFa28t67J
 // on the payment link in Stripe Dashboard.
 const STRIPE_LINKS: Record<'monthly' | 'annual', Partial<Record<number, string>>> = {
   monthly: {
-    1:  'https://buy.stripe.com/aFa28t67J8JNdtr3MrfEk00',
-    2:  'https://buy.stripe.com/14A8wR7bN4tx2ON0AffEk02',
-    3:  'https://buy.stripe.com/9B628tgMn7FJ0GFfv9fEk03',
-    5:  'https://buy.stripe.com/00w6oJ7bN0dhcpn5UzfEk04',
-    10: 'https://buy.stripe.com/14A00leEf8JNexvbeTfEk05',
+    1:  'https://buy.stripe.com/9B614panZ1hl60ZgzdfEk0a',
+    2:  'https://buy.stripe.com/aFafZj9jVd031KJfv9fEk0b',
+    3:  'https://buy.stripe.com/eVqdRb2Vx7FJcpn2InfEk0d',
+    5:  'https://buy.stripe.com/eVq28t53Ff8bgFD82HfEk0f',
+    10: 'https://buy.stripe.com/9B68wReEf8JN897ciXfEk0g',
   },
   annual: {
-    1:  'https://buy.stripe.com/eVq3cx7bNf8b2ON5UzfEk01',
-    2:  'https://buy.stripe.com/28E5kF8fRgcfexvciXfEk06',
-    3:  'https://buy.stripe.com/3cI14p7bN9NR753er5fEk07',
-    5:  'https://buy.stripe.com/7sY3cxbs3aRVdtr5UzfEk08',
-    10: 'https://buy.stripe.com/eVq5kFeEf1hldtrbeTfEk09',
+    1:  'https://buy.stripe.com/fZueVfdAb7FJbljgzdfEk0e',
+    2:  'https://buy.stripe.com/eVq28tfIj3pt897aaPfEk0h',
+    3:  'https://buy.stripe.com/6oUeVf67Je477535UzfEk0c',
+    5:  'https://buy.stripe.com/3cIeVfdAbf8b75382HfEk0i',
+    10: 'https://buy.stripe.com/7sYeVf67J9NR60Z82HfEk0j',
   },
 };
 
