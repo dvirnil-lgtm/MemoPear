@@ -314,6 +314,69 @@ export async function emailLeadsExport(
   });
 }
 
+// ── Google Sheets export ────────────────────────────────────────────────────
+// Pushes leads into a brand-new Google Spreadsheet in the user's own Drive.
+// Uses Google Identity Services (loaded in index.html) to obtain a short-lived
+// OAuth access token with the drive.file scope (only files this app creates),
+// then the Sheets REST API to create the sheet and write the rows.
+
+const GOOGLE_OAUTH_CLIENT_ID = import.meta.env.VITE_GOOGLE_OAUTH_CLIENT_ID as string | undefined;
+const SHEETS_SCOPE = 'https://www.googleapis.com/auth/drive.file';
+
+function getGoogleAccessToken(): Promise<string> {
+  return new Promise((resolve, reject) => {
+    if (!GOOGLE_OAUTH_CLIENT_ID) {
+      reject(new Error('missing-client-id'));
+      return;
+    }
+    const google = (window as any).google;
+    if (!google?.accounts?.oauth2) {
+      reject(new Error('gis-not-loaded'));
+      return;
+    }
+    try {
+      const client = google.accounts.oauth2.initTokenClient({
+        client_id: GOOGLE_OAUTH_CLIENT_ID,
+        scope: SHEETS_SCOPE,
+        callback: (resp: any) => {
+          if (resp.error) reject(new Error(resp.error));
+          else resolve(resp.access_token as string);
+        },
+        error_callback: (err: any) => reject(new Error(err?.type || 'oauth-error')),
+      });
+      client.requestAccessToken({ prompt: '' });
+    } catch (err: any) {
+      reject(err instanceof Error ? err : new Error('oauth-init-failed'));
+    }
+  });
+}
+
+// Returns the URL of the created spreadsheet so the UI can link straight to it.
+export async function exportLeadsToGoogleSheet(
+  title: string,
+  rows: string[][],
+): Promise<string> {
+  const token = await getGoogleAccessToken();
+  const authHeader = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
+
+  const createRes = await fetch('https://sheets.googleapis.com/v4/spreadsheets', {
+    method: 'POST',
+    headers: authHeader,
+    body: JSON.stringify({ properties: { title } }),
+  });
+  if (!createRes.ok) throw new Error(`create-failed-${createRes.status}`);
+  const sheet = await createRes.json();
+  const spreadsheetId = sheet.spreadsheetId as string;
+
+  const writeRes = await fetch(
+    `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/Sheet1!A1?valueInputOption=RAW`,
+    { method: 'PUT', headers: authHeader, body: JSON.stringify({ values: rows }) },
+  );
+  if (!writeRes.ok) throw new Error(`write-failed-${writeRes.status}`);
+
+  return sheet.spreadsheetUrl as string;
+}
+
 export async function logCancellationRequest(details: {
   email: string;
   seats: number;
