@@ -228,36 +228,32 @@ export async function removeSeatMember(ownerUid: string, email: string): Promise
 
 // Teammate: claim a seat on the owner's subscription via the invite link.
 // Enforces the seat cap atomically so the link dies once seats are exhausted.
+// Throws on permission/network errors so the caller can surface the reason.
 export async function claimSeat(
   ownerUid: string,
   token: string,
   uid: string,
   email: string,
 ): Promise<ClaimResult> {
-  try {
-    return await runTransaction<ClaimResult>(db, async (tx) => {
-      const ref = doc(db, 'subscriptions', ownerUid);
-      const snap = await tx.get(ref);
-      if (!snap.exists()) return 'invalid';
-      const data = snap.data() as SubscriptionDoc;
-      if (!token || data.inviteToken !== token) return 'invalid';
-      const members = data.members || [];
-      // Already on this team — just (re)issue the access pointer.
-      if (members.some((m) => m.uid === uid || m.email === email)) {
-        tx.set(doc(db, 'seatClaims', uid), { ownerUid, email, joinedAt: Date.now() }, { merge: true });
-        return 'already';
-      }
-      // Owner takes one seat; reject once every remaining seat is filled.
-      if (members.length + 1 >= data.seats) return 'full';
-      const member: SeatMember = { email, uid, joinedAt: Date.now() };
-      tx.set(ref, { members: [...members, member], updatedAt: serverTimestamp() }, { merge: true });
-      tx.set(doc(db, 'seatClaims', uid), { ownerUid, email, joinedAt: Date.now() });
-      return 'ok';
-    });
-  } catch (err) {
-    console.warn('[MemoPear] claimSeat failed:', err);
-    return 'error';
-  }
+  return await runTransaction<ClaimResult>(db, async (tx) => {
+    const ref = doc(db, 'subscriptions', ownerUid);
+    const snap = await tx.get(ref);
+    if (!snap.exists()) return 'invalid';
+    const data = snap.data() as SubscriptionDoc;
+    if (!token || data.inviteToken !== token) return 'invalid';
+    const members = data.members || [];
+    // Already on this team — just (re)issue the access pointer.
+    if (members.some((m) => m.uid === uid || m.email === email)) {
+      tx.set(doc(db, 'seatClaims', uid), { ownerUid, email, joinedAt: Date.now() }, { merge: true });
+      return 'already';
+    }
+    // Owner takes one seat; reject once every remaining seat is filled.
+    if (members.length + 1 >= data.seats) return 'full';
+    const member: SeatMember = { email, uid, joinedAt: Date.now() };
+    tx.set(ref, { members: [...members, member], updatedAt: serverTimestamp() }, { merge: true });
+    tx.set(doc(db, 'seatClaims', uid), { ownerUid, email, joinedAt: Date.now() });
+    return 'ok';
+  });
 }
 
 // Returns the subscription a signed-in user belongs to as a teammate, if any.

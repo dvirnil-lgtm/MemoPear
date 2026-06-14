@@ -892,8 +892,18 @@ const App: React.FC = () => {
 
   // Claim a team seat from an invite link once the user is authenticated.
   const attemptClaim = async (acct: string, email: string, intent: { ownerUid: string; token: string }) => {
-    const result = await claimSeat(intent.ownerUid, intent.token, acct, email);
     const clearIntent = () => { setJoinIntent(null); sessionStorage.removeItem('lcp_join_intent'); };
+    let result: string;
+    try {
+      result = await claimSeat(intent.ownerUid, intent.token, acct, email);
+    } catch (err: any) {
+      // Surface the real Firebase reason so config gaps are diagnosable.
+      const code = err?.code || err?.message || 'unknown error';
+      const authed = !!auth.currentUser;
+      console.error('[MemoPear] claimSeat error:', code, 'firebaseAuthed=', authed, err);
+      setStatusMsg({ type: 'error', text: `Couldn't join the team (${code}${authed ? '' : ', not signed in to Firebase'}). Enable Anonymous sign-in and publish the Firestore rules, then reopen the link.` });
+      return;
+    }
     if (result === 'ok' || result === 'already') {
       clearIntent();
       setIsSeatMember(true);
@@ -903,13 +913,9 @@ const App: React.FC = () => {
     } else if (result === 'full') {
       clearIntent();
       setStatusMsg({ type: 'error', text: 'All seats are taken — ask the team owner to free a seat or add more.' });
-    } else if (result === 'invalid') {
-      clearIntent();
-      setStatusMsg({ type: 'error', text: 'This invite link is no longer valid.' });
     } else {
-      // Transient (often a permissions/network issue) — keep the intent so the
-      // user can retry by reopening the link after signing in.
-      setStatusMsg({ type: 'error', text: "Couldn't join the team. Make sure you're signed in, then reopen the invite link." });
+      clearIntent();
+      setStatusMsg({ type: 'error', text: 'This invite link is no longer valid (subscription or token not found).' });
     }
   };
 
