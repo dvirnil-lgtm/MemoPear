@@ -6,6 +6,7 @@ import {
   GoogleAuthProvider,
   OAuthProvider,
   signInWithPopup,
+  signInAnonymously,
   UserCredential,
   User,
   signOut,
@@ -60,6 +61,21 @@ export function signInWithLinkedIn(): Promise<UserCredential> {
 
 export async function firebaseSignOut(): Promise<void> {
   return signOut(auth);
+}
+
+// Ensures there is a Firebase Auth session so Firestore rules that require
+// `request.auth` pass even for email/password users (who otherwise only live in
+// localStorage). Returns the existing uid, or an anonymous one as a fallback.
+// Requires the Anonymous sign-in provider to be enabled in the Firebase console.
+export async function ensureFirebaseSession(): Promise<string | null> {
+  if (auth.currentUser) return auth.currentUser.uid;
+  try {
+    const cred = await signInAnonymously(auth);
+    return cred.user.uid;
+  } catch (err) {
+    console.warn('[MemoPear] anonymous auth failed:', err);
+    return null;
+  }
 }
 
 export const db = getFirestore(app);

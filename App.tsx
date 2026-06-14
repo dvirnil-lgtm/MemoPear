@@ -6,7 +6,7 @@ import { QRScanner } from './components/QRScanner';
 import { CommMethodToggle } from './components/CommMethodToggle';
 import { PrivacyPolicy, TermsAndConditions, ContactUs, Company } from './components/LegalPages';
 import { parseScannedData, parseBusinessCard, generateLeadReport, QuotaError, QUOTA_ERROR_MESSAGE, isQuotaError } from './services/geminiService';
-import { signInWithGoogle, signInWithLinkedIn, firebaseSignOut, auth, logLoginEvent, logCancellationRequest, ensureSubscription, getSubscription, watchSubscription, regenerateInviteToken, removeSeatMember, claimSeat, getSeatClaim, SubscriptionDoc } from './firebase';
+import { signInWithGoogle, signInWithLinkedIn, firebaseSignOut, auth, logLoginEvent, logCancellationRequest, ensureFirebaseSession, ensureSubscription, getSubscription, watchSubscription, regenerateInviteToken, removeSeatMember, claimSeat, getSeatClaim, SubscriptionDoc } from './firebase';
 
 // Constants for retention and session
 const RETENTION_DAYS = 30;
@@ -766,7 +766,7 @@ const App: React.FC = () => {
     cleanupLeads();
   }, []);
 
-  const handleAuth = (e?: React.FormEvent) => {
+  const handleAuth = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (authMode === 'signup') {
       if (password.length < 8) {
@@ -784,7 +784,9 @@ const App: React.FC = () => {
     localStorage.setItem('memo_profile', JSON.stringify(savedProfile));
     setIsLoggedIn(true);
     setUserProfile(savedProfile);
-    const acct = `local:${email.toLowerCase()}`;
+    // Establish a Firebase Auth session (anonymous fallback) so team/seat
+    // Firestore writes are allowed for email/password users too.
+    const acct = (await ensureFirebaseSession()) || `local:${email.toLowerCase()}`;
     setAccountId(acct);
     localStorage.setItem(STORAGE_KEY_ACCOUNT, acct);
     setStatusMsg({ type: 'success', text: authMode === 'signup' ? 'Account created! Welcome to MemoPear.' : 'Welcome back!' });
@@ -891,17 +893,23 @@ const App: React.FC = () => {
   // Claim a team seat from an invite link once the user is authenticated.
   const attemptClaim = async (acct: string, email: string, intent: { ownerUid: string; token: string }) => {
     const result = await claimSeat(intent.ownerUid, intent.token, acct, email);
-    setJoinIntent(null);
-    sessionStorage.removeItem('lcp_join_intent');
+    const clearIntent = () => { setJoinIntent(null); sessionStorage.removeItem('lcp_join_intent'); };
     if (result === 'ok' || result === 'already') {
+      clearIntent();
       setIsSeatMember(true);
       localStorage.setItem(STORAGE_KEY_MEMBERSHIP, intent.ownerUid);
       setStatusMsg({ type: 'success', text: result === 'ok' ? "You've joined the team — full access unlocked!" : "You're already on this team — welcome back!" });
       navigateTo('form');
     } else if (result === 'full') {
+      clearIntent();
       setStatusMsg({ type: 'error', text: 'All seats are taken — ask the team owner to free a seat or add more.' });
-    } else {
+    } else if (result === 'invalid') {
+      clearIntent();
       setStatusMsg({ type: 'error', text: 'This invite link is no longer valid.' });
+    } else {
+      // Transient (often a permissions/network issue) — keep the intent so the
+      // user can retry by reopening the link after signing in.
+      setStatusMsg({ type: 'error', text: "Couldn't join the team. Make sure you're signed in, then reopen the invite link." });
     }
   };
 
