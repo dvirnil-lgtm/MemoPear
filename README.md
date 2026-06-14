@@ -149,12 +149,18 @@ Add these rules alongside the existing `mail` / `cancellationRequests` rules:
 
 ```
 match /subscriptions/{ownerUid} {
-  // Invitees must read the doc (with the token) to claim a seat.
-  allow read: if true;
-  // Owners create/update their own; teammates update only to claim a seat.
-  allow create, update: if request.auth != null;
+  // Invitees read the doc (with the token) to claim a seat; they're
+  // already signed in by then.
+  allow read: if request.auth != null;
+  // Only the owner can create their own subscription doc.
+  allow create: if request.auth != null && request.auth.uid == ownerUid;
+  // Teammates must update `members` to claim a seat, so update can't be
+  // owner-restricted — the seat cap is enforced in the claim transaction.
+  allow update: if request.auth != null;
 }
 match /seatClaims/{uid} {
+  // The owner deletes a teammate's claim doc when freeing a seat, so this
+  // can't be restricted to `uid == request.auth.uid`.
   allow read, write: if request.auth != null;
 }
 ```
