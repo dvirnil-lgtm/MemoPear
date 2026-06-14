@@ -15,7 +15,10 @@ import {
   collection,
   addDoc,
   doc,
+  getDoc,
   setDoc,
+  runTransaction,
+  onSnapshot,
   serverTimestamp,
   arrayUnion,
 } from 'firebase/firestore';
@@ -96,6 +99,160 @@ export async function logLoginEvent(user: User, provider: string): Promise<void>
     }, { merge: true });
   } catch (err) {
     console.warn('[MemoPear] login logging skipped:', err);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Team seats / invitations
+//
+// A paying owner gets one `subscriptions/{ownerUid}` document holding the number
+// of seats purchased, an invite token, and the list of members who have claimed
+// a seat. The owner always occupies one seat, so up to `seats - 1` teammates can
+// join. A teammate claims a seat by opening the owner's invite link and signing
+// in; `claimSeat` enforces the cap inside a transaction so the link stops working
+// ("all seats are taken") the moment every seat is filled. Each claimed teammate
+// also gets a `seatClaims/{uid}` pointer so the app can grant them Pro access.
+// ---------------------------------------------------------------------------
+
+export interface SeatMember {
+  email: string;
+  uid: string;
+  joinedAt: number;
+}
+
+export interface SubscriptionDoc {
+  ownerUid: string;
+  ownerEmail: string;
+  seats: number;
+  cycle: string;
+  inviteToken: string;
+  members: SeatMember[];
+}
+
+export type ClaimResult = 'ok' | 'already' | 'full' | 'invalid' | 'error';
+
+const newInviteToken = (): string =>
+  (crypto.randomUUID() + crypto.randomUUID()).replace(/-/g, '').slice(0, 24);
+
+// Owner: create the subscription doc on first paid checkout, or update the seat
+// count / cycle on an existing one. Preserves the existing members and token.
+export async function ensureSubscription(
+  ownerUid: string,
+  ownerEmail: string,
+  seats: number,
+  cycle: string,
+): Promise<SubscriptionDoc> {
+  const ref = doc(db, 'subscriptions', ownerUid);
+  const snap = await getDoc(ref);
+  if (snap.exists()) {
+    const data = snap.data() as SubscriptionDoc;
+    await setDoc(
+      ref,
+      { ownerEmail, seats, cycle, updatedAt: serverTimestamp() },
+      { merge: true },
+    );
+    return { ...data, ownerEmail, seats, cycle };
+  }
+  const fresh: SubscriptionDoc = {
+    ownerUid,
+    ownerEmail,
+    seats,
+    cycle,
+    inviteToken: newInviteToken(),
+    members: [],
+  };
+  await setDoc(ref, { ...fresh, createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
+  return fresh;
+}
+
+export async function getSubscription(ownerUid: string): Promise<SubscriptionDoc | null> {
+  const snap = await getDoc(doc(db, 'subscriptions', ownerUid));
+  return snap.exists() ? (snap.data() as SubscriptionDoc) : null;
+}
+
+// Live updates for the owner's seat panel.
+export function watchSubscription(
+  ownerUid: string,
+  cb: (sub: SubscriptionDoc | null) => void,
+): () => void {
+  return onSnapshot(
+    doc(db, 'subscriptions', ownerUid),
+    (snap) => cb(snap.exists() ? (snap.data() as SubscriptionDoc) : null),
+    (err) => {
+      console.warn('[MemoPear] subscription watch failed:', err);
+      cb(null);
+    },
+  );
+}
+
+// Owner: rotate the invite token, invalidating any links already shared.
+export async function regenerateInviteToken(ownerUid: string): Promise<string> {
+  const token = newInviteToken();
+  await setDoc(
+    doc(db, 'subscriptions', ownerUid),
+    { inviteToken: token, updatedAt: serverTimestamp() },
+    { merge: true },
+  );
+  return token;
+}
+
+// Owner: remove a teammate, freeing their seat.
+export async function removeSeatMember(ownerUid: string, email: string): Promise<void> {
+  await runTransaction(db, async (tx) => {
+    const ref = doc(db, 'subscriptions', ownerUid);
+    const snap = await tx.get(ref);
+    if (!snap.exists()) return;
+    const data = snap.data() as SubscriptionDoc;
+    const removed = (data.members || []).find((m) => m.email === email);
+    const members = (data.members || []).filter((m) => m.email !== email);
+    tx.set(ref, { members, updatedAt: serverTimestamp() }, { merge: true });
+    if (removed?.uid) tx.delete(doc(db, 'seatClaims', removed.uid));
+  });
+}
+
+// Teammate: claim a seat on the owner's subscription via the invite link.
+// Enforces the seat cap atomically so the link dies once seats are exhausted.
+export async function claimSeat(
+  ownerUid: string,
+  token: string,
+  uid: string,
+  email: string,
+): Promise<ClaimResult> {
+  try {
+    return await runTransaction<ClaimResult>(db, async (tx) => {
+      const ref = doc(db, 'subscriptions', ownerUid);
+      const snap = await tx.get(ref);
+      if (!snap.exists()) return 'invalid';
+      const data = snap.data() as SubscriptionDoc;
+      if (!token || data.inviteToken !== token) return 'invalid';
+      const members = data.members || [];
+      // Already on this team — just (re)issue the access pointer.
+      if (members.some((m) => m.uid === uid || m.email === email)) {
+        tx.set(doc(db, 'seatClaims', uid), { ownerUid, email, joinedAt: Date.now() }, { merge: true });
+        return 'already';
+      }
+      // Owner takes one seat; reject once every remaining seat is filled.
+      if (members.length + 1 >= data.seats) return 'full';
+      const member: SeatMember = { email, uid, joinedAt: Date.now() };
+      tx.set(ref, { members: [...members, member], updatedAt: serverTimestamp() }, { merge: true });
+      tx.set(doc(db, 'seatClaims', uid), { ownerUid, email, joinedAt: Date.now() });
+      return 'ok';
+    });
+  } catch (err) {
+    console.warn('[MemoPear] claimSeat failed:', err);
+    return 'error';
+  }
+}
+
+// Returns the subscription a signed-in user belongs to as a teammate, if any.
+export async function getSeatClaim(
+  uid: string,
+): Promise<{ ownerUid: string; email: string } | null> {
+  try {
+    const snap = await getDoc(doc(db, 'seatClaims', uid));
+    return snap.exists() ? (snap.data() as { ownerUid: string; email: string }) : null;
+  } catch {
+    return null;
   }
 }
 

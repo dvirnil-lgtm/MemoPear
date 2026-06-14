@@ -127,6 +127,45 @@ match /mail/{id} {
 `logCancellationRequest` in `firebase.ts` writes to both
 `cancellationRequests` (audit trail) and `mail` (sends the notification).
 
+## Team Seats & Invitations (Firestore)
+
+Multi-seat plans use Firestore to share seats across devices and accounts:
+
+- `subscriptions/{ownerUid}` — one doc per paying owner, holding `seats`,
+  `cycle`, an `inviteToken`, and the `members` array (emails that have claimed
+  a seat). The owner always occupies one seat.
+- `seatClaims/{uid}` — a pointer written when a teammate claims a seat, used to
+  grant that user Pro access on sign-in.
+
+**How invites work:** the owner shares one link of the form
+`https://<your-domain>/?join=1&sub=<ownerUid>&token=<inviteToken>`. When someone
+opens it and signs in, `claimSeat()` adds them to `members` inside a transaction,
+enforcing the cap (`members.length + 1 < seats`). Once every seat is filled the
+link stops working and shows **"all seats are taken."** Owners can reset the
+token (invalidating old links) or remove a member to free a seat from the **Team**
+panel, which lists every email connected to the subscription.
+
+Add these rules alongside the existing `mail` / `cancellationRequests` rules:
+
+```
+match /subscriptions/{ownerUid} {
+  // Invitees must read the doc (with the token) to claim a seat.
+  allow read: if true;
+  // Owners create/update their own; teammates update only to claim a seat.
+  allow create, update: if request.auth != null;
+}
+match /seatClaims/{uid} {
+  allow read, write: if request.auth != null;
+}
+```
+
+> **Note:** these rules require Firebase Auth (Google/LinkedIn sign-in). The
+> seat cap is enforced client-side in a transaction; for stronger guarantees
+> (e.g. preventing a signed-in user from editing another team's members) move
+> `claimSeat`/`removeSeatMember` into a Cloud Function. Owners who sign up with
+> local email/password are keyed by `local:<email>` and need either Firebase
+> Auth or relaxed rules for the panel to sync.
+
 ## Project Structure
 
 ```
