@@ -4,7 +4,7 @@ import { GoogleGenAI, Modality } from "@google/genai";
 import { Lead, CommMethod, UserProfile, PaymentCycle, TeamMember } from './types';
 import { QRScanner } from './components/QRScanner';
 import { CommMethodToggle } from './components/CommMethodToggle';
-import { PrivacyPolicy, TermsAndConditions, ContactUs } from './components/LegalPages';
+import { PrivacyPolicy, TermsAndConditions, ContactUs, Company } from './components/LegalPages';
 import { parseScannedData, parseBusinessCard, generateLeadReport, QuotaError, QUOTA_ERROR_MESSAGE, isQuotaError } from './services/geminiService';
 import { signInWithGoogle, signInWithLinkedIn, firebaseSignOut, auth, logLoginEvent, logCancellationRequest } from './firebase';
 
@@ -439,12 +439,12 @@ const App: React.FC = () => {
   };
   const [linkedinConnected, setLinkedinConnected] = useState(false);
   const [authMode, setAuthMode] = useState<'login' | 'signup'>('signup');
-  type AppView = 'home' | 'login' | 'pricing' | 'form' | 'history' | 'payment' | 'profile' | 'privacy' | 'terms' | 'contact' | 'team';
+  type AppView = 'home' | 'login' | 'pricing' | 'form' | 'history' | 'payment' | 'profile' | 'privacy' | 'terms' | 'contact' | 'team' | 'company';
   const [view, setView] = useState<AppView>(() => {
     const pathMap: Record<string, AppView> = {
       '/': 'home', '/login': 'login', '/pricing': 'pricing', '/billing': 'pricing', '/gather': 'form',
       '/pipeline': 'history', '/payment': 'payment', '/profile': 'profile',
-      '/privacy': 'privacy', '/terms': 'terms', '/contact': 'contact', '/team': 'team',
+      '/privacy': 'privacy', '/terms': 'terms', '/contact': 'contact', '/team': 'team', '/company': 'company',
     };
     return pathMap[window.location.pathname] || 'home';
   });
@@ -1123,7 +1123,7 @@ const App: React.FC = () => {
   const VIEW_URLS: Record<string, string> = {
     home: '/', login: '/login', pricing: '/pricing', form: '/gather',
     history: '/pipeline', payment: '/payment', profile: '/profile',
-    privacy: '/privacy', terms: '/terms', contact: '/contact', team: '/team',
+    privacy: '/privacy', terms: '/terms', contact: '/contact', team: '/team', company: '/company',
   };
 
   const PAGE_META: Record<string, { title: string; description: string }> = {
@@ -1138,6 +1138,7 @@ const App: React.FC = () => {
     terms: { title: 'Terms & Conditions | MemoPear', description: 'MemoPear terms of service and subscription details.' },
     contact: { title: 'Contact Us | MemoPear', description: 'Get in touch with the MemoPear team.' },
     team: { title: 'Team | MemoPear', description: 'Invite your team members and manage your seats.' },
+    company: { title: 'Our Story | MemoPear', description: 'Born on the conference floor — how years of working trade shows built MemoPear, and our mission to help field marketers, field sales, and attendees gather leads and follow up with ease.' },
   };
 
   const navigateTo = (nextView: AppView) => {
@@ -1160,7 +1161,7 @@ const App: React.FC = () => {
         const pathMap: Record<string, AppView> = {
           '/': 'home', '/login': 'login', '/pricing': 'pricing', '/billing': 'pricing', '/gather': 'form',
           '/pipeline': 'history', '/payment': 'payment', '/profile': 'profile',
-          '/privacy': 'privacy', '/terms': 'terms', '/contact': 'contact', '/team': 'team',
+          '/privacy': 'privacy', '/terms': 'terms', '/contact': 'contact', '/team': 'team', '/company': 'company',
         };
         setView(pathMap[window.location.pathname] || 'home');
       }
@@ -1172,9 +1173,10 @@ const App: React.FC = () => {
   const navLinks: { name: string; view: AppView }[] = [
     { name: 'Home', view: 'home' },
     { name: 'Pricing', view: 'pricing' },
-    { name: 'Pipeline', view: 'history' },
-    ...(seatCount > 1 ? [{ name: 'Team', view: 'team' as AppView }] : []),
-    { name: 'Profile', view: 'profile' },
+    { name: 'Company', view: 'company' },
+    ...(isLoggedIn ? [{ name: 'Pipeline', view: 'history' as AppView }] : []),
+    ...(isLoggedIn && seatCount > 1 ? [{ name: 'Team', view: 'team' as AppView }] : []),
+    ...(isLoggedIn ? [{ name: 'Profile', view: 'profile' as AppView }] : []),
   ];
 
   const completeTour = () => {
@@ -2303,6 +2305,7 @@ const App: React.FC = () => {
         {view === 'privacy' && <PrivacyPolicy onBack={() => navigateTo('home')} />}
         {view === 'terms' && <TermsAndConditions onBack={() => navigateTo('home')} />}
         {view === 'contact' && <ContactUs onBack={() => navigateTo('home')} />}
+        {view === 'company' && <Company onBack={() => navigateTo('home')} />}
       </main>
 
       {!['form', 'history', 'team'].includes(view) && (

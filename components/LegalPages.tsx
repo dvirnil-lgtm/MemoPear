@@ -152,3 +152,37 @@ export const ContactUs: React.FC<{ onBack: () => void }> = ({ onBack }) => {
     </div>
   );
 };
+
+export const Company: React.FC<{ onBack: () => void }> = ({ onBack }) => {
+  return (
+    <div className="p-8 max-w-3xl mx-auto animate-in fade-in duration-500 pb-32">
+      <button onClick={onBack} className="flex items-center gap-2 text-[10px] font-black uppercase text-slate-400 tracking-widest mb-8 hover:text-pear-600 transition-colors">
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M15 19l-7-7 7-7" /></svg>
+        Go Back
+      </button>
+      <p className="text-sm font-bold text-slate-400 mb-4 uppercase tracking-widest">Our Story</p>
+      <h1 className="text-4xl md:text-5xl font-black mb-8 tracking-tighter text-pear-600 dark:text-pear-400">Built on the conference floor.</h1>
+
+      <div className="space-y-8 text-slate-600 dark:text-slate-300 leading-relaxed font-medium">
+        <p>MemoPear didn't start in a boardroom. It started in the aisles of trade shows and conference halls — across years of badge scanning, business-card shuffling, and scribbled notes that never quite made it back to a CRM.</p>
+
+        <p>After spending years working conferences as field marketers and field sales reps, we kept running into the same wall: the moment you meet someone worth remembering is fast, loud, and crowded. You're juggling a coffee, a brochure, and a handshake — and the tools meant to capture that lead were slow, clunky, and built for a desk, not a show floor.</p>
+
+        <p>We watched great conversations evaporate. Stacks of business cards went home in tote bags and were never typed up. Follow-ups that should have closed deals slipped through the cracks simply because there was no fast, simple way to gather a lead in the moment and pick it back up once the event was over.</p>
+
+        <section>
+          <h2 className="text-xl font-black text-slate-900 dark:text-white mb-3 uppercase tracking-tight">Our Mission</h2>
+          <p>MemoPear exists to make capturing and following up on leads effortless. Our mission is to give every field marketer, every field sales rep, and every conference attendee a simple, fast way to gather leads on the floor — and an organized, reliable way to follow up after the conference is over.</p>
+        </section>
+
+        <p>Scan a badge, snap a card, record a quick voice note — and let MemoPear handle the rest. No friction in the moment, no lost contacts after the lights go down.</p>
+
+        <section className="p-8 bg-slate-100 dark:bg-white/5 rounded-[2rem] border border-slate-200 dark:border-white/10">
+          <h2 className="text-lg font-black text-slate-900 dark:text-white mb-2">Want to talk?</h2>
+          <p>We're still the same people who live for the show floor. Reach out anytime.</p>
+          <p className="font-bold text-pear-600 mt-2">Email: info@memopear.com</p>
+        </section>
+      </div>
+    </div>
+  );
+};
