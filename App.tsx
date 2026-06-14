@@ -6,7 +6,7 @@ import { QRScanner } from './components/QRScanner';
 import { CommMethodToggle } from './components/CommMethodToggle';
 import { PrivacyPolicy, TermsAndConditions, ContactUs, Company } from './components/LegalPages';
 import { parseScannedData, parseBusinessCard, generateLeadReport, QuotaError, QUOTA_ERROR_MESSAGE, isQuotaError } from './services/geminiService';
-import { signInWithGoogle, signInWithLinkedIn, signUpWithEmail, signInWithEmail, firebaseSignOut, auth, logLoginEvent, logCancellationRequest, ensureSubscription, getSubscription, watchSubscription, regenerateInviteToken, removeSeatMember, claimSeat, getSeatClaim, SubscriptionDoc } from './firebase';
+import { signInWithGoogle, signInWithLinkedIn, signUpWithEmail, signInWithEmail, firebaseSignOut, auth, logLoginEvent, logCancellationRequest, emailLeadsExport, ensureSubscription, getSubscription, watchSubscription, regenerateInviteToken, removeSeatMember, claimSeat, getSeatClaim, SubscriptionDoc } from './firebase';
 
 // Constants for retention and session
 const RETENTION_DAYS = 30;
@@ -510,6 +510,8 @@ const App: React.FC = () => {
   
   const [activeModal, setActiveModal] = useState<'sheets' | 'email' | null>(null);
   const [sheetName, setSheetName] = useState('');
+  const [emailRecipient, setEmailRecipient] = useState('');
+  const [isExporting, setIsExporting] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<'google' | 'card' | 'paypal' | null>(null);
   
   const [email, setEmail] = useState('');
@@ -738,7 +740,86 @@ const App: React.FC = () => {
 
   const handleSyncAttempt = (modal: 'sheets' | 'email') => {
     if (!hasAccess) { navigateTo('pricing'); return; }
+    if (modal === 'email') setEmailRecipient(userProfile.email || '');
     setActiveModal(modal);
+  };
+
+  // Leads chosen for export — the current selection, or everything if nothing
+  // is ticked so the buttons still do something useful.
+  const leadsForExport = (): Lead[] => {
+    const chosen = leads.filter(l => selectedLeadIds.has(l.id));
+    return chosen.length ? chosen : leads;
+  };
+
+  const CSV_COLUMNS: { key: keyof Lead; label: string }[] = [
+    { key: 'firstName', label: 'First Name' },
+    { key: 'lastName', label: 'Last Name' },
+    { key: 'jobTitle', label: 'Job Title' },
+    { key: 'company', label: 'Company' },
+    { key: 'email', label: 'Email' },
+    { key: 'phone', label: 'Phone' },
+    { key: 'website', label: 'Website' },
+    { key: 'conferenceName', label: 'Conference' },
+    { key: 'notes', label: 'Notes' },
+  ];
+
+  const leadsToCsv = (list: Lead[]): string => {
+    const escape = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+    const header = CSV_COLUMNS.map(c => escape(c.label)).join(',');
+    const rows = list.map(l => CSV_COLUMNS.map(c => escape(l[c.key])).join(','));
+    // BOM so Excel/Sheets detect UTF-8 correctly.
+    return '﻿' + [header, ...rows].join('\r\n');
+  };
+
+  const leadsToHtml = (list: Lead[]): string => {
+    const cell = (v: unknown) => `<td style="padding:6px 10px;border:1px solid #e2e8f0;font-size:13px">${String(v ?? '').replace(/</g, '&lt;')}</td>`;
+    const head = CSV_COLUMNS.map(c => `<th style="padding:6px 10px;border:1px solid #e2e8f0;background:#f1f5f9;font-size:12px;text-align:left">${c.label}</th>`).join('');
+    const body = list.map(l => `<tr>${CSV_COLUMNS.map(c => cell(l[c.key])).join('')}</tr>`).join('');
+    return `<p>Here are your ${list.length} MemoPear contact${list.length === 1 ? '' : 's'}. The full list is also attached as a CSV you can import into Google Sheets.</p><table style="border-collapse:collapse"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`;
+  };
+
+  const handleExportSheets = () => {
+    const list = leadsForExport();
+    if (!list.length) { setStatusMsg({ type: 'error', text: 'No contacts to export yet.' }); return; }
+    const csv = leadsToCsv(list);
+    const safeName = (sheetName.trim() || 'MemoPear Contacts').replace(/[^\w\- ]+/g, '').trim() || 'MemoPear Contacts';
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${safeName}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    setActiveModal(null);
+    setSelectedLeadIds(new Set());
+    setStatusMsg({ type: 'success', text: `Exported ${list.length} contact${list.length === 1 ? '' : 's'} to CSV — open it in Google Sheets or upload to Drive.` });
+  };
+
+  const handleSendEmail = async () => {
+    const list = leadsForExport();
+    if (!list.length) { setStatusMsg({ type: 'error', text: 'No contacts to send yet.' }); return; }
+    const to = emailRecipient.trim();
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(to)) { setStatusMsg({ type: 'error', text: 'Enter a valid email address.' }); return; }
+    setIsExporting(true);
+    try {
+      await emailLeadsExport(
+        to,
+        `Your MemoPear contacts (${list.length})`,
+        leadsToHtml(list),
+        leadsToCsv(list),
+        'MemoPear Contacts.csv',
+      );
+      setActiveModal(null);
+      setSelectedLeadIds(new Set());
+      setStatusMsg({ type: 'success', text: `Sent ${list.length} contact${list.length === 1 ? '' : 's'} to ${to}.` });
+    } catch (err: any) {
+      console.error('[MemoPear] email export failed:', err);
+      setStatusMsg({ type: 'error', text: `Couldn't send the email (${err?.code || 'unknown error'}). Make sure the Trigger Email extension is installed and the mail collection is writable.` });
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   const handleLinkedinLookup = (lead: Lead) => {
@@ -2629,8 +2710,21 @@ const App: React.FC = () => {
         <div className="fixed inset-0 z-[220] flex items-center justify-center p-6 bg-black/70 backdrop-blur-md">
           <div className="max-w-xs w-full glass p-8 md:p-10 rounded-[2.5rem] md:rounded-[3.5rem] text-center shadow-2xl animate-in zoom-in-95">
             <h2 className="text-lg md:text-xl font-black mb-1 tracking-tighter uppercase text-emerald-600">Export to Google Sheets</h2>
-            <input type="text" value={sheetName} onChange={(e) => setSheetName(e.target.value)} placeholder="Sheet name" className="w-full px-5 md:px-6 py-3 md:py-4 rounded-xl md:rounded-2xl bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 text-[10px] md:text-xs font-bold mb-4 md:mb-6 mt-3 md:mt-4 outline-none" />
-            <button onClick={() => { setStatusMsg({type:'success', text:'Contacts exported to Sheets!'}); setActiveModal(null); setSelectedLeadIds(new Set()); }} className="w-full py-4 md:py-5 bg-emerald-600 text-white font-black rounded-xl md:rounded-2xl text-[9px] md:text-[10px] uppercase tracking-widest shadow-xl active:scale-95 transition-all">Export Now</button>
+            <p className="text-[9px] md:text-[10px] text-slate-400 font-bold mt-2">Downloads a CSV of {leadsForExport().length} contact{leadsForExport().length === 1 ? '' : 's'} — open it in Google Sheets or upload it to Drive.</p>
+            <input type="text" value={sheetName} onChange={(e) => setSheetName(e.target.value)} placeholder="File name" className="w-full px-5 md:px-6 py-3 md:py-4 rounded-xl md:rounded-2xl bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 text-[10px] md:text-xs font-bold mb-4 md:mb-6 mt-3 md:mt-4 outline-none" />
+            <button onClick={handleExportSheets} className="w-full py-4 md:py-5 bg-emerald-600 text-white font-black rounded-xl md:rounded-2xl text-[9px] md:text-[10px] uppercase tracking-widest shadow-xl active:scale-95 transition-all">Download CSV</button>
+            <button onClick={() => setActiveModal(null)} className="mt-3 md:mt-4 text-slate-400 font-black text-[8px] md:text-[9px] uppercase hover:text-slate-600 transition-colors">Cancel</button>
+          </div>
+        </div>
+      )}
+
+      {activeModal === 'email' && (
+        <div className="fixed inset-0 z-[220] flex items-center justify-center p-6 bg-black/70 backdrop-blur-md">
+          <div className="max-w-xs w-full glass p-8 md:p-10 rounded-[2.5rem] md:rounded-[3.5rem] text-center shadow-2xl animate-in zoom-in-95">
+            <h2 className="text-lg md:text-xl font-black mb-1 tracking-tighter uppercase text-indigo-600">Email My Contacts</h2>
+            <p className="text-[9px] md:text-[10px] text-slate-400 font-bold mt-2">Sends {leadsForExport().length} contact{leadsForExport().length === 1 ? '' : 's'} to your inbox, with a CSV attached.</p>
+            <input type="email" value={emailRecipient} onChange={(e) => setEmailRecipient(e.target.value)} placeholder="you@example.com" className="w-full px-5 md:px-6 py-3 md:py-4 rounded-xl md:rounded-2xl bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 text-[10px] md:text-xs font-bold mb-4 md:mb-6 mt-3 md:mt-4 outline-none" />
+            <button onClick={handleSendEmail} disabled={isExporting} className="w-full py-4 md:py-5 bg-indigo-600 text-white font-black rounded-xl md:rounded-2xl text-[9px] md:text-[10px] uppercase tracking-widest shadow-xl active:scale-95 transition-all disabled:opacity-60">{isExporting ? 'Sending…' : 'Send Email'}</button>
             <button onClick={() => setActiveModal(null)} className="mt-3 md:mt-4 text-slate-400 font-black text-[8px] md:text-[9px] uppercase hover:text-slate-600 transition-colors">Cancel</button>
           </div>
         </div>
