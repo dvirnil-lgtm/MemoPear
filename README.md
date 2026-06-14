@@ -179,6 +179,47 @@ localStorage-only login anymore.
 > Accounts created under the previous localStorage-only login do not exist in
 > Firebase and must sign up again.
 
+## Exporting Leads (Google Sheets + Email)
+
+From the **Contacts** tab the user can export captured leads two ways. Both
+need one-time setup.
+
+### Export to Google Sheets — push selected leads into a real spreadsheet
+
+The **📊 Export to Sheets** button creates a brand-new Google Spreadsheet in the
+user's own Google Drive and writes the selected leads into it
+(`exportLeadsToGoogleSheet` in `firebase.ts`). It uses Google Identity Services
+(loaded in `index.html`) to get a short-lived OAuth token with the
+`drive.file` scope (access is limited to files this app creates), then the
+Sheets REST API. To enable it:
+
+1. **Google Cloud Console** (same project as Firebase) → **APIs & Services →
+   Library** → enable **Google Sheets API**.
+2. **APIs & Services → OAuth consent screen** → configure it (External), add
+   the `.../auth/drive.file` scope, and add your account as a **Test user**
+   while the app is in "Testing".
+3. **APIs & Services → Credentials → Create credentials → OAuth client ID →
+   Web application**. Under **Authorized JavaScript origins** add every origin
+   the app runs on, e.g. `http://localhost:5173` and
+   `https://your-domain.com` (no path, no trailing slash).
+4. Copy the generated **Client ID** and set it as `VITE_GOOGLE_OAUTH_CLIENT_ID`
+   (in `.env.local` for dev, and as the `_GOOGLE_OAUTH_CLIENT_ID` Cloud Build
+   substitution / `VITE_GOOGLE_OAUTH_CLIENT_ID` build arg for deploys), then
+   rebuild.
+
+On first use the browser shows a Google consent popup; after approval the new
+spreadsheet opens in a tab. If `VITE_GOOGLE_OAUTH_CLIENT_ID` is unset the button
+reports that the feature isn't configured.
+
+### Send Emails — email all contacts to the user
+
+The **✉️ Send Emails** button emails **all** captured contacts (full details in
+the email body, plus a CSV attachment) to the user's address, with the subject
+**`Your MemoPear Leads <date>`** (`emailLeadsExport` in `firebase.ts`). It reuses
+the **Trigger Email from Firestore** extension and the `mail` collection that the
+cancellation flow already relies on — so once that extension is installed and the
+`mail` create rule is published (see above), no extra setup is needed.
+
 ## Project Structure
 
 ```

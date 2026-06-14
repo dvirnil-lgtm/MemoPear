@@ -6,7 +6,7 @@ import { QRScanner } from './components/QRScanner';
 import { CommMethodToggle } from './components/CommMethodToggle';
 import { PrivacyPolicy, TermsAndConditions, ContactUs, Company } from './components/LegalPages';
 import { parseScannedData, parseBusinessCard, generateLeadReport, QuotaError, QUOTA_ERROR_MESSAGE, isQuotaError } from './services/geminiService';
-import { signInWithGoogle, signInWithLinkedIn, signUpWithEmail, signInWithEmail, firebaseSignOut, auth, logLoginEvent, logCancellationRequest, emailLeadsExport, ensureSubscription, getSubscription, watchSubscription, regenerateInviteToken, removeSeatMember, claimSeat, getSeatClaim, SubscriptionDoc } from './firebase';
+import { signInWithGoogle, signInWithLinkedIn, signUpWithEmail, signInWithEmail, firebaseSignOut, auth, logLoginEvent, logCancellationRequest, emailLeadsExport, exportLeadsToGoogleSheet, ensureSubscription, getSubscription, watchSubscription, regenerateInviteToken, removeSeatMember, claimSeat, getSeatClaim, SubscriptionDoc } from './firebase';
 
 // Constants for retention and session
 const RETENTION_DAYS = 30;
@@ -763,12 +763,17 @@ const App: React.FC = () => {
     { key: 'notes', label: 'Notes' },
   ];
 
+  // Header row + one row per lead, as plain strings (used for both CSV and the
+  // Google Sheets values payload).
+  const leadsToRows = (list: Lead[]): string[][] => [
+    CSV_COLUMNS.map(c => c.label),
+    ...list.map(l => CSV_COLUMNS.map(c => String(l[c.key] ?? ''))),
+  ];
+
   const leadsToCsv = (list: Lead[]): string => {
-    const escape = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`;
-    const header = CSV_COLUMNS.map(c => escape(c.label)).join(',');
-    const rows = list.map(l => CSV_COLUMNS.map(c => escape(l[c.key])).join(','));
+    const escape = (v: string) => `"${v.replace(/"/g, '""')}"`;
     // BOM so Excel/Sheets detect UTF-8 correctly.
-    return '﻿' + [header, ...rows].join('\r\n');
+    return '﻿' + leadsToRows(list).map(r => r.map(escape).join(',')).join('\r\n');
   };
 
   const leadsToHtml = (list: Lead[]): string => {
@@ -778,27 +783,34 @@ const App: React.FC = () => {
     return `<p>Here are your ${list.length} MemoPear contact${list.length === 1 ? '' : 's'}. The full list is also attached as a CSV you can import into Google Sheets.</p><table style="border-collapse:collapse"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`;
   };
 
-  const handleExportSheets = () => {
+  const handleExportSheets = async () => {
     const list = leadsForExport();
     if (!list.length) { setStatusMsg({ type: 'error', text: 'No contacts to export yet.' }); return; }
-    const csv = leadsToCsv(list);
-    const safeName = (sheetName.trim() || 'MemoPear Contacts').replace(/[^\w\- ]+/g, '').trim() || 'MemoPear Contacts';
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${safeName}.csv`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
-    setActiveModal(null);
-    setSelectedLeadIds(new Set());
-    setStatusMsg({ type: 'success', text: `Exported ${list.length} contact${list.length === 1 ? '' : 's'} to CSV — open it in Google Sheets or upload to Drive.` });
+    const title = (sheetName.trim() || `MemoPear Leads ${new Date().toLocaleDateString()}`);
+    setIsExporting(true);
+    try {
+      const url = await exportLeadsToGoogleSheet(title, leadsToRows(list));
+      setActiveModal(null);
+      setSelectedLeadIds(new Set());
+      // Open the new Google Spreadsheet in a new tab.
+      window.open(url, '_blank', 'noopener');
+      setStatusMsg({ type: 'success', text: `Pushed ${list.length} lead${list.length === 1 ? '' : 's'} to a new Google Spreadsheet — opening it now.` });
+    } catch (err: any) {
+      console.error('[MemoPear] Google Sheets export failed:', err);
+      const code = err?.message || 'unknown error';
+      let text = `Couldn't create the Google Sheet (${code}).`;
+      if (code === 'missing-client-id') text = 'Google Sheets export is not configured yet (missing VITE_GOOGLE_OAUTH_CLIENT_ID).';
+      else if (code === 'gis-not-loaded') text = 'Google sign-in script not ready yet — try again in a moment.';
+      else if (code === 'popup_closed' || code === 'access_denied') text = 'Google authorization was cancelled.';
+      setStatusMsg({ type: 'error', text });
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   const handleSendEmail = async () => {
-    const list = leadsForExport();
+    // Spec: email ALL captured contacts, regardless of selection.
+    const list = leads;
     if (!list.length) { setStatusMsg({ type: 'error', text: 'No contacts to send yet.' }); return; }
     const to = emailRecipient.trim();
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(to)) { setStatusMsg({ type: 'error', text: 'Enter a valid email address.' }); return; }
@@ -806,14 +818,13 @@ const App: React.FC = () => {
     try {
       await emailLeadsExport(
         to,
-        `Your MemoPear contacts (${list.length})`,
+        `Your MemoPear Leads ${new Date().toLocaleDateString()}`,
         leadsToHtml(list),
         leadsToCsv(list),
-        'MemoPear Contacts.csv',
+        'MemoPear Leads.csv',
       );
       setActiveModal(null);
-      setSelectedLeadIds(new Set());
-      setStatusMsg({ type: 'success', text: `Sent ${list.length} contact${list.length === 1 ? '' : 's'} to ${to}.` });
+      setStatusMsg({ type: 'success', text: `Sent all ${list.length} contact${list.length === 1 ? '' : 's'} to ${to}.` });
     } catch (err: any) {
       console.error('[MemoPear] email export failed:', err);
       setStatusMsg({ type: 'error', text: `Couldn't send the email (${err?.code || 'unknown error'}). Make sure the Trigger Email extension is installed and the mail collection is writable.` });
@@ -2710,9 +2721,9 @@ const App: React.FC = () => {
         <div className="fixed inset-0 z-[220] flex items-center justify-center p-6 bg-black/70 backdrop-blur-md">
           <div className="max-w-xs w-full glass p-8 md:p-10 rounded-[2.5rem] md:rounded-[3.5rem] text-center shadow-2xl animate-in zoom-in-95">
             <h2 className="text-lg md:text-xl font-black mb-1 tracking-tighter uppercase text-emerald-600">Export to Google Sheets</h2>
-            <p className="text-[9px] md:text-[10px] text-slate-400 font-bold mt-2">Downloads a CSV of {leadsForExport().length} contact{leadsForExport().length === 1 ? '' : 's'} — open it in Google Sheets or upload it to Drive.</p>
-            <input type="text" value={sheetName} onChange={(e) => setSheetName(e.target.value)} placeholder="File name" className="w-full px-5 md:px-6 py-3 md:py-4 rounded-xl md:rounded-2xl bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 text-[10px] md:text-xs font-bold mb-4 md:mb-6 mt-3 md:mt-4 outline-none" />
-            <button onClick={handleExportSheets} className="w-full py-4 md:py-5 bg-emerald-600 text-white font-black rounded-xl md:rounded-2xl text-[9px] md:text-[10px] uppercase tracking-widest shadow-xl active:scale-95 transition-all">Download CSV</button>
+            <p className="text-[9px] md:text-[10px] text-slate-400 font-bold mt-2">Creates a new Google Spreadsheet in your Drive with {leadsForExport().length} selected lead{leadsForExport().length === 1 ? '' : 's'}.</p>
+            <input type="text" value={sheetName} onChange={(e) => setSheetName(e.target.value)} placeholder="Spreadsheet name" className="w-full px-5 md:px-6 py-3 md:py-4 rounded-xl md:rounded-2xl bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 text-[10px] md:text-xs font-bold mb-4 md:mb-6 mt-3 md:mt-4 outline-none" />
+            <button onClick={handleExportSheets} disabled={isExporting} className="w-full py-4 md:py-5 bg-emerald-600 text-white font-black rounded-xl md:rounded-2xl text-[9px] md:text-[10px] uppercase tracking-widest shadow-xl active:scale-95 transition-all disabled:opacity-60">{isExporting ? 'Creating…' : 'Create Google Sheet'}</button>
             <button onClick={() => setActiveModal(null)} className="mt-3 md:mt-4 text-slate-400 font-black text-[8px] md:text-[9px] uppercase hover:text-slate-600 transition-colors">Cancel</button>
           </div>
         </div>
@@ -2721,8 +2732,8 @@ const App: React.FC = () => {
       {activeModal === 'email' && (
         <div className="fixed inset-0 z-[220] flex items-center justify-center p-6 bg-black/70 backdrop-blur-md">
           <div className="max-w-xs w-full glass p-8 md:p-10 rounded-[2.5rem] md:rounded-[3.5rem] text-center shadow-2xl animate-in zoom-in-95">
-            <h2 className="text-lg md:text-xl font-black mb-1 tracking-tighter uppercase text-indigo-600">Email My Contacts</h2>
-            <p className="text-[9px] md:text-[10px] text-slate-400 font-bold mt-2">Sends {leadsForExport().length} contact{leadsForExport().length === 1 ? '' : 's'} to your inbox, with a CSV attached.</p>
+            <h2 className="text-lg md:text-xl font-black mb-1 tracking-tighter uppercase text-indigo-600">Email My Leads</h2>
+            <p className="text-[9px] md:text-[10px] text-slate-400 font-bold mt-2">Emails all {leads.length} contact{leads.length === 1 ? '' : 's'} (with details in the body) to your inbox.</p>
             <input type="email" value={emailRecipient} onChange={(e) => setEmailRecipient(e.target.value)} placeholder="you@example.com" className="w-full px-5 md:px-6 py-3 md:py-4 rounded-xl md:rounded-2xl bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 text-[10px] md:text-xs font-bold mb-4 md:mb-6 mt-3 md:mt-4 outline-none" />
             <button onClick={handleSendEmail} disabled={isExporting} className="w-full py-4 md:py-5 bg-indigo-600 text-white font-black rounded-xl md:rounded-2xl text-[9px] md:text-[10px] uppercase tracking-widest shadow-xl active:scale-95 transition-all disabled:opacity-60">{isExporting ? 'Sending…' : 'Send Email'}</button>
             <button onClick={() => setActiveModal(null)} className="mt-3 md:mt-4 text-slate-400 font-black text-[8px] md:text-[9px] uppercase hover:text-slate-600 transition-colors">Cancel</button>
