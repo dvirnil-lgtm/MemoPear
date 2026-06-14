@@ -6,7 +6,7 @@ import { QRScanner } from './components/QRScanner';
 import { CommMethodToggle } from './components/CommMethodToggle';
 import { PrivacyPolicy, TermsAndConditions, ContactUs, Company } from './components/LegalPages';
 import { parseScannedData, parseBusinessCard, generateLeadReport, QuotaError, QUOTA_ERROR_MESSAGE, isQuotaError } from './services/geminiService';
-import { signInWithGoogle, signInWithLinkedIn, firebaseSignOut, auth, logLoginEvent, logCancellationRequest } from './firebase';
+import { signInWithGoogle, signInWithLinkedIn, firebaseSignOut, auth, logLoginEvent, logCancellationRequest, ensureSubscription, getSubscription, watchSubscription, regenerateInviteToken, removeSeatMember, claimSeat, getSeatClaim, SubscriptionDoc } from './firebase';
 
 // Constants for retention and session
 const RETENTION_DAYS = 30;
@@ -21,6 +21,8 @@ const STORAGE_KEY_SEATS = 'lcp_seats_v1';
 const STORAGE_KEY_TEAM = 'lcp_team_v1';
 const STORAGE_KEY_RECEIPTS = 'lcp_receipts_v1';
 const STORAGE_KEY_TRIAL_START = 'lcp_trial_start_v1';
+const STORAGE_KEY_ACCOUNT = 'lcp_account_id_v1';
+const STORAGE_KEY_MEMBERSHIP = 'lcp_member_owner_v1';
 
 // Free trial: full access for the first TRIAL_DAYS after account creation,
 // then the app locks until the user subscribes. The trial is anchored to the
@@ -37,23 +39,23 @@ const STRIPE_CUSTOMER_PORTAL_URL = 'https://billing.stripe.com/p/login/aFa28t67J
 
 // Stripe payment links — add a dedicated link per seat count for best UX.
 // Each link should be created in Stripe Dashboard at the correct unit price
-// (e.g. 3 seats → $6.00/mo). Quantities without a dedicated link fall back
+// (e.g. 3 seats → $8.40/mo). Quantities without a dedicated link fall back
 // to the single-seat link, which still works if you enable "Adjust quantity"
 // on the payment link in Stripe Dashboard.
 const STRIPE_LINKS: Record<'monthly' | 'annual', Partial<Record<number, string>>> = {
   monthly: {
-    1:  'https://buy.stripe.com/9B614panZ1hl60ZgzdfEk0a',
-    2:  'https://buy.stripe.com/aFafZj9jVd031KJfv9fEk0b',
-    3:  'https://buy.stripe.com/eVqdRb2Vx7FJcpn2InfEk0d',
-    5:  'https://buy.stripe.com/eVq28t53Ff8bgFD82HfEk0f',
-    10: 'https://buy.stripe.com/9B68wReEf8JN897ciXfEk0g',
+    1:  'https://buy.stripe.com/aFa5kF0Np7FJexvbeTfEk0l',
+    2:  'https://buy.stripe.com/fZu8wRcw71hl2ON2InfEk0m',
+    3:  'https://buy.stripe.com/aFa9AVanZe47897beTfEk0n',
+    5:  'https://buy.stripe.com/bJedRb2Vx8JNexvciXfEk0o',
+    10: 'https://buy.stripe.com/28EeVf8fRgcf0GF2InfEk0p',
   },
   annual: {
-    1:  'https://buy.stripe.com/fZueVfdAb7FJbljgzdfEk0e',
-    2:  'https://buy.stripe.com/eVq28tfIj3pt897aaPfEk0h',
-    3:  'https://buy.stripe.com/6oUeVf67Je477535UzfEk0c',
-    5:  'https://buy.stripe.com/3cIeVfdAbf8b75382HfEk0i',
-    10: 'https://buy.stripe.com/7sYeVf67J9NR60Z82HfEk0j',
+    1:  'https://buy.stripe.com/5kQ9AV53F9NRgFD3MrfEk0q',
+    2:  'https://buy.stripe.com/eVq5kF7bNaRV3SR5UzfEk0r',
+    3:  'https://buy.stripe.com/bJe14pgMnbVZ897dn1fEk0s',
+    5:  'https://buy.stripe.com/7sY9AV67J6BF60Z4QvfEk0t',
+    10: 'https://buy.stripe.com/5kQeVf3ZB4tx3SRdn1fEk0u',
   },
 };
 
@@ -416,6 +418,7 @@ const App: React.FC = () => {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [password, setPassword] = useState('');
   const [hasPaid, setHasPaid] = useState(false);
+  const [isSeatMember, setIsSeatMember] = useState<boolean>(() => !!localStorage.getItem(STORAGE_KEY_MEMBERSHIP));
   const [trialStart, setTrialStart] = useState<number | null>(() => {
     const saved = localStorage.getItem(STORAGE_KEY_TRIAL_START);
     return saved ? Number(saved) : null;
@@ -429,7 +432,7 @@ const App: React.FC = () => {
   const trialMsLeft = trialStart ? Math.max(0, trialStart + TRIAL_DAYS * 24 * 60 * 60 * 1000 - Date.now()) : 0;
   const trialActive = trialMsLeft > 0;
   const trialExpired = trialStart !== null && !trialActive;
-  const hasAccess = hasPaid || trialActive;
+  const hasAccess = hasPaid || trialActive || isSeatMember;
   // Show the replayable tour entry point for the first week after sign-up.
   const withinFirstWeek = trialStart !== null && (Date.now() - trialStart) < 7 * 24 * 60 * 60 * 1000;
   const formatTrialLeft = () => {
@@ -458,6 +461,11 @@ const App: React.FC = () => {
   });
   const [seatQuantity, setSeatQuantity] = useState(1);
   const [inviteEmail, setInviteEmail] = useState('');
+  // Team-seat / invitation state (Firestore-backed).
+  const [accountId, setAccountId] = useState<string>(() => localStorage.getItem(STORAGE_KEY_ACCOUNT) || '');
+  const [subscription, setSubscription] = useState<SubscriptionDoc | null>(null);
+  const [joinIntent, setJoinIntent] = useState<{ ownerUid: string; token: string } | null>(null);
+  const [inviteCopied, setInviteCopied] = useState(false);
   const [receipts, setReceipts] = useState<{id: string; date: number; plan: string; cycle: string; seats: number; amount: string}[]>(() => {
     const saved = localStorage.getItem(STORAGE_KEY_RECEIPTS);
     return saved ? JSON.parse(saved) : [];
@@ -587,6 +595,60 @@ const App: React.FC = () => {
     if (!localStorage.getItem(STORAGE_KEY_NOTICE)) setShowNotice(true);
     if (!localStorage.getItem(STORAGE_KEY_TOUR_COMPLETE) && isLoggedIn) { setTourStep(0); setShowTour(true); }
   }, [isLoggedIn]);
+
+  // Parse an invite link (root query params) once on mount, and adopt the
+  // Firebase uid as the stable account id when auth state resolves.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const sub = params.get('sub');
+    const token = params.get('token');
+    if (params.get('join') && sub && token) {
+      const intent = { ownerUid: sub, token };
+      setJoinIntent(intent);
+      sessionStorage.setItem('lcp_join_intent', JSON.stringify(intent));
+      if (!localStorage.getItem(STORAGE_KEY_AUTH)) setView('login');
+    } else {
+      const stored = sessionStorage.getItem('lcp_join_intent');
+      if (stored) { try { setJoinIntent(JSON.parse(stored)); } catch { /* ignore */ } }
+    }
+    const off = auth.onAuthStateChanged((u) => {
+      if (u?.uid) {
+        setAccountId(u.uid);
+        localStorage.setItem(STORAGE_KEY_ACCOUNT, u.uid);
+      }
+    });
+    return () => off();
+  }, []);
+
+  // Wire up seat membership + live owner subscription whenever the account id
+  // is known. Owners always get a subscription doc (with an invite token).
+  useEffect(() => {
+    if (!accountId || !isLoggedIn) return;
+    let active = true;
+    getSeatClaim(accountId).then((claim) => {
+      if (active && claim) {
+        setIsSeatMember(true);
+        localStorage.setItem(STORAGE_KEY_MEMBERSHIP, claim.ownerUid);
+      }
+    });
+    if (hasPaid && seatCount > 1) {
+      ensureSubscription(accountId, userProfile.email || '', seatCount, paymentCycle)
+        .then((s) => { if (active) setSubscription(s); })
+        .catch(() => {});
+    }
+    const unsub = watchSubscription(accountId, (s) => { if (active) setSubscription(s); });
+    return () => { active = false; unsub(); };
+  }, [accountId, isLoggedIn, hasPaid, seatCount, paymentCycle]);
+
+  // Once authenticated, redeem any pending invite-link seat claim.
+  const claimingRef = useRef(false);
+  useEffect(() => {
+    if (joinIntent && isLoggedIn && accountId && !claimingRef.current) {
+      claimingRef.current = true;
+      attemptClaim(accountId, userProfile.email || '', joinIntent)
+        .finally(() => { claimingRef.current = false; });
+    }
+  }, [joinIntent, isLoggedIn, accountId, userProfile.email]);
 
   // Scroll Progress Logic
   const handleScroll = useCallback(() => {
@@ -722,6 +784,9 @@ const App: React.FC = () => {
     localStorage.setItem('memo_profile', JSON.stringify(savedProfile));
     setIsLoggedIn(true);
     setUserProfile(savedProfile);
+    const acct = `local:${email.toLowerCase()}`;
+    setAccountId(acct);
+    localStorage.setItem(STORAGE_KEY_ACCOUNT, acct);
     setStatusMsg({ type: 'success', text: authMode === 'signup' ? 'Account created! Welcome to MemoPear.' : 'Welcome back!' });
     if (TEST_USER_EMAILS.includes(email.toLowerCase())) {
       localStorage.setItem(STORAGE_KEY_PAID, 'true');
@@ -756,6 +821,8 @@ const App: React.FC = () => {
       localStorage.setItem('memo_profile', JSON.stringify(savedProfile));
       setIsLoggedIn(true);
       setUserProfile(savedProfile);
+      setAccountId(user.uid);
+      localStorage.setItem(STORAGE_KEY_ACCOUNT, user.uid);
       setStatusMsg({ type: 'success', text: `Welcome${userName ? `, ${userName.split(' ')[0]}` : ''}!` });
       // Test accounts: auto-grant paid access for internal QA, bypassing Stripe.
       if (TEST_USER_EMAILS.includes(userEmail.toLowerCase())) {
@@ -804,10 +871,32 @@ const App: React.FC = () => {
 
   const handleLogout = async () => {
     localStorage.removeItem(STORAGE_KEY_AUTH);
+    localStorage.removeItem(STORAGE_KEY_ACCOUNT);
+    localStorage.removeItem(STORAGE_KEY_MEMBERSHIP);
     await firebaseSignOut().catch(() => {});
     setIsLoggedIn(false);
+    setAccountId('');
+    setSubscription(null);
+    setIsSeatMember(false);
     navigateTo('home');
     setStatusMsg({ type: 'success', text: 'Logged out successfully.' });
+  };
+
+  // Claim a team seat from an invite link once the user is authenticated.
+  const attemptClaim = async (acct: string, email: string, intent: { ownerUid: string; token: string }) => {
+    const result = await claimSeat(intent.ownerUid, intent.token, acct, email);
+    setJoinIntent(null);
+    sessionStorage.removeItem('lcp_join_intent');
+    if (result === 'ok' || result === 'already') {
+      setIsSeatMember(true);
+      localStorage.setItem(STORAGE_KEY_MEMBERSHIP, intent.ownerUid);
+      setStatusMsg({ type: 'success', text: result === 'ok' ? "You've joined the team — full access unlocked!" : "You're already on this team — welcome back!" });
+      navigateTo('form');
+    } else if (result === 'full') {
+      setStatusMsg({ type: 'error', text: 'All seats are taken — ask the team owner to free a seat or add more.' });
+    } else {
+      setStatusMsg({ type: 'error', text: 'This invite link is no longer valid.' });
+    }
   };
 
   const deleteAllLeads = () => {
@@ -820,12 +909,23 @@ const App: React.FC = () => {
 
   const activatePlan = () => {
     sessionStorage.removeItem('lcp_pending_activation');
-    const receipt = { id: `INV-${Date.now()}`, date: Date.now(), plan: 'MemoPear Pro', cycle: paymentCycle, seats: seatCount, amount: paymentCycle === 'monthly' ? '$2.00' : '$21.60' };
+    const receipt = { id: `INV-${Date.now()}`, date: Date.now(), plan: 'MemoPear Pro', cycle: paymentCycle, seats: seatCount, amount: paymentCycle === 'monthly' ? '$2.80' : '$30.24' };
     const updated = [...receipts, receipt];
     setReceipts(updated);
     localStorage.setItem(STORAGE_KEY_RECEIPTS, JSON.stringify(updated));
     setHasPaid(true);
     localStorage.setItem(STORAGE_KEY_PAID, 'true');
+    // Owners of multi-seat plans get a Firestore subscription doc + invite token.
+    if (seatCount > 1) {
+      const acct = auth.currentUser?.uid || accountId || (userProfile.email ? `local:${userProfile.email.toLowerCase()}` : '');
+      if (acct) {
+        setAccountId(acct);
+        localStorage.setItem(STORAGE_KEY_ACCOUNT, acct);
+        ensureSubscription(acct, userProfile.email || '', seatCount, paymentCycle)
+          .then(setSubscription)
+          .catch(() => {});
+      }
+    }
     setStatusMsg({ type: 'success', text: "You're all set! Start capturing contacts." });
     navigateTo('form');
   };
@@ -1129,7 +1229,7 @@ const App: React.FC = () => {
   const PAGE_META: Record<string, { title: string; description: string }> = {
     home: { title: 'MemoPear: Simply Better Lead Collection', description: 'Stop losing contacts at conferences. MemoPear lets you scan badges, snap business cards, and record notes — all in one place.' },
     login: { title: 'Sign In | MemoPear', description: 'Log in or create your MemoPear account to start capturing conference contacts.' },
-    pricing: { title: 'Pricing | MemoPear', description: 'One simple plan. Scan badges, use voice notes, sync to Google Sheets, and more for just $2/month.' },
+    pricing: { title: 'Pricing | MemoPear', description: 'One simple plan. Scan badges, use voice notes, sync to Google Sheets, and more for just $2.80/month.' },
     form: { title: 'Add a Contact | MemoPear', description: 'Quickly add a new contact from a conference — scan a badge, snap a card, or just type their info.' },
     history: { title: 'Your Contacts | MemoPear', description: 'Browse and manage all the contacts you\'ve gathered at events and conferences.' },
     payment: { title: 'Upgrade | MemoPear', description: 'Unlock AI scanning, voice notes, LinkedIn lookup, and Google Sheets sync.' },
@@ -1507,8 +1607,8 @@ const App: React.FC = () => {
               <div className="flex items-end gap-2 mb-2">
                 <div className="text-5xl md:text-6xl font-black tracking-tighter text-pear-700 dark:text-pear-300">
                   {paymentCycle === 'monthly'
-                    ? `$${(2.00 * seatQuantity).toFixed(2)}`
-                    : `$${(21.60 * seatQuantity).toFixed(2)}`}
+                    ? `$${(2.80 * seatQuantity).toFixed(2)}`
+                    : `$${(30.24 * seatQuantity).toFixed(2)}`}
                 </div>
                 <div className="text-sm text-slate-400 font-bold mb-2 uppercase tracking-widest">
                   / {paymentCycle === 'monthly' ? 'month' : 'year'}
@@ -1516,7 +1616,7 @@ const App: React.FC = () => {
               </div>
               {seatQuantity > 1 && (
                 <p className="text-[10px] text-slate-400 font-medium mb-4">
-                  ${ paymentCycle === 'monthly' ? '2.00' : '21.60'} per seat × {seatQuantity} seats
+                  ${ paymentCycle === 'monthly' ? '2.80' : '30.24'} per seat × {seatQuantity} seats
                 </p>
               )}
               
@@ -1957,7 +2057,7 @@ const App: React.FC = () => {
                           <div className="w-20 h-20 bg-pear-600/10 rounded-full flex items-center justify-center mb-6 text-4xl">🍐</div>
                           <h2 className="text-2xl font-black mb-2 text-pear-700 dark:text-pear-300">{trialExpired ? 'Your Free Trial Has Ended' : 'Unlock Contact Capture'}</h2>
                           <p className="text-sm text-slate-500 mb-6">{trialExpired ? 'Subscribe to keep saving contacts, scanning badges, and using voice notes.' : 'Upgrade to Pro to save contacts, scan badges, and use voice notes.'}</p>
-                          <button onClick={() => navigateTo('pricing')} className="w-full py-4 bg-pear-600 text-white font-black rounded-2xl shadow-xl hover:scale-105 transition-all max-w-xs uppercase text-xs tracking-widest">{trialExpired ? 'Subscribe — $2/mo' : 'Upgrade to Pro — $2/mo'}</button>
+                          <button onClick={() => navigateTo('pricing')} className="w-full py-4 bg-pear-600 text-white font-black rounded-2xl shadow-xl hover:scale-105 transition-all max-w-xs uppercase text-xs tracking-widest">{trialExpired ? 'Subscribe — $2.80/mo' : 'Upgrade to Pro — $2.80/mo'}</button>
                        </div>
                     )}
                     {!hasPaid && trialActive && (
@@ -2158,13 +2258,23 @@ const App: React.FC = () => {
               )}
            </div>
         )}
-        {view === 'team' && isLoggedIn && (
+        {view === 'team' && isLoggedIn && (() => {
+          const seats = subscription?.seats ?? seatCount;
+          const members = subscription?.members ?? [];
+          const usedSeats = 1 + members.length;            // owner always takes one seat
+          const seatsLeft = Math.max(0, seats - usedSeats);
+          const full = seatsLeft <= 0;
+          const isOwner = seatCount > 1;
+          const inviteLink = subscription
+            ? `${window.location.origin}/?join=1&sub=${encodeURIComponent(accountId)}&token=${subscription.inviteToken}`
+            : '';
+          return (
           <div className="p-6 md:p-10 max-w-2xl mx-auto animate-in fade-in duration-500 pb-32">
             <div className="flex items-center justify-between mb-8">
               <div>
                 <h2 className="text-4xl font-black tracking-tighter text-pear-600 dark:text-pear-400">Your Team</h2>
                 <p className="text-sm text-slate-400 font-medium mt-1">
-                  {seatCount} seat{seatCount !== 1 ? 's' : ''} · {teamMembers.filter(m => m.status === 'active').length + 1} active · {teamMembers.filter(m => m.status === 'pending').length} pending
+                  {seats} seat{seats !== 1 ? 's' : ''} · {usedSeats} used · {seatsLeft} available
                 </p>
               </div>
               <button
@@ -2175,76 +2285,82 @@ const App: React.FC = () => {
               </button>
             </div>
 
+            {!isOwner ? (
+              <div className="py-10 text-center glass rounded-3xl border border-dashed border-slate-200 dark:border-white/10">
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">You're on a single-seat plan</p>
+                <button onClick={() => navigateTo('pricing')} className="mt-4 text-pear-600 font-black text-xs uppercase tracking-widest hover:underline">Buy team seats to invite people</button>
+              </div>
+            ) : (
+            <>
             {/* Seat usage bar */}
             <div className="glass p-5 rounded-2xl border border-slate-200 dark:border-white/10 mb-8">
               <div className="flex justify-between items-center mb-2">
                 <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Seats Used</p>
-                <p className="text-[10px] font-black text-pear-600">{Math.min(teamMembers.length + 1, seatCount)} / {seatCount}</p>
+                <p className="text-[10px] font-black text-pear-600">{Math.min(usedSeats, seats)} / {seats}</p>
               </div>
               <div className="h-2 bg-slate-200 dark:bg-white/10 rounded-full overflow-hidden">
                 <div
                   className="h-full bg-pear-600 rounded-full transition-all duration-500"
-                  style={{ width: `${Math.min(((teamMembers.length + 1) / seatCount) * 100, 100)}%` }}
+                  style={{ width: `${Math.min((usedSeats / seats) * 100, 100)}%` }}
                 />
               </div>
-              {teamMembers.length + 1 >= seatCount && seatCount > 0 && (
-                <p className="text-[9px] text-amber-500 font-bold mt-2">All seats are filled. <button onClick={() => navigateTo('pricing')} className="underline">Buy more seats</button> to invite more people.</p>
+              {full && (
+                <p className="text-[9px] text-amber-500 font-bold mt-2">All seats are taken. <button onClick={() => navigateTo('pricing')} className="underline">Buy more seats</button> to invite more people.</p>
               )}
             </div>
 
-            {/* Invite form */}
-            {teamMembers.length + 1 < seatCount && (
-              <div className="mb-8">
-                <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest pl-1 mb-2 block">Invite a teammate</label>
-                <div className="flex gap-2">
-                  <input
-                    type="email"
-                    value={inviteEmail}
-                    onChange={(e) => setInviteEmail(e.target.value)}
-                    placeholder="colleague@company.com"
-                    className="flex-1 px-4 py-3 rounded-xl bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 text-sm font-bold outline-none focus:border-pear-500/50 transition-all"
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        const em = inviteEmail.trim();
-                        if (!em || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em)) {
-                          setStatusMsg({ type: 'error', text: 'Enter a valid email address.' }); return;
-                        }
-                        const newMember: TeamMember = { id: crypto.randomUUID(), email: em, status: 'pending', invitedAt: Date.now() };
-                        const updated = [...teamMembers, newMember];
-                        setTeamMembers(updated);
-                        localStorage.setItem(STORAGE_KEY_TEAM, JSON.stringify(updated));
-                        setInviteEmail('');
-                        setStatusMsg({ type: 'success', text: `Invite sent to ${em}` });
-                      }
-                    }}
-                  />
-                  <button
-                    onClick={() => {
-                      const em = inviteEmail.trim();
-                      if (!em || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em)) {
-                        setStatusMsg({ type: 'error', text: 'Enter a valid email address.' }); return;
-                      }
-                      const newMember: TeamMember = { id: crypto.randomUUID(), email: em, status: 'pending', invitedAt: Date.now() };
-                      const updated = [...teamMembers, newMember];
-                      setTeamMembers(updated);
-                      localStorage.setItem(STORAGE_KEY_TEAM, JSON.stringify(updated));
-                      setInviteEmail('');
-                      setStatusMsg({ type: 'success', text: `Invite sent to ${em}` });
-                    }}
-                    className="px-5 py-3 bg-pear-600 text-white font-black rounded-xl text-sm shadow-lg hover:scale-[1.02] active:scale-95 transition-all"
-                  >
-                    Send Invite
-                  </button>
+            {/* Invite link — one shared link, valid until every seat is claimed */}
+            <div className="mb-8">
+              <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest pl-1 mb-2 block">Invite link</label>
+              {!subscription ? (
+                <p className="text-[11px] text-slate-400 font-medium pl-1">Preparing your invite link…</p>
+              ) : full ? (
+                <div className="p-4 glass rounded-2xl border border-amber-500/30 bg-amber-500/5 text-center">
+                  <p className="text-[11px] font-black text-amber-500 uppercase tracking-widest">All seats are taken</p>
+                  <p className="text-[10px] text-slate-400 font-medium mt-1">Free a seat below or add more seats to share new invites.</p>
                 </div>
-                <p className="text-[9px] text-slate-400 font-medium mt-2 pl-1">
-                  {seatCount - teamMembers.length - 1} seat{seatCount - teamMembers.length - 1 !== 1 ? 's' : ''} still available
-                </p>
-              </div>
-            )}
+              ) : (
+                <>
+                  <div className="flex gap-2">
+                    <input
+                      readOnly
+                      value={inviteLink}
+                      onFocus={(e) => e.currentTarget.select()}
+                      className="flex-1 px-4 py-3 rounded-xl bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 text-[11px] font-mono outline-none focus:border-pear-500/50 transition-all truncate"
+                    />
+                    <button
+                      onClick={async () => {
+                        try { await navigator.clipboard.writeText(inviteLink); } catch { /* clipboard blocked */ }
+                        setInviteCopied(true);
+                        setStatusMsg({ type: 'success', text: 'Invite link copied.' });
+                        setTimeout(() => setInviteCopied(false), 2000);
+                      }}
+                      className="px-5 py-3 bg-pear-600 text-white font-black rounded-xl text-sm shadow-lg hover:scale-[1.02] active:scale-95 transition-all whitespace-nowrap"
+                    >
+                      {inviteCopied ? 'Copied!' : 'Copy'}
+                    </button>
+                  </div>
+                  <p className="text-[9px] text-slate-400 font-medium mt-2 pl-1">
+                    Anyone who opens this link and signs in claims one of your {seatsLeft} remaining seat{seatsLeft !== 1 ? 's' : ''}. The link stops working once every seat is taken.
+                  </p>
+                  <button
+                    onClick={async () => {
+                      if (!accountId) return;
+                      const t = await regenerateInviteToken(accountId);
+                      setSubscription(s => s ? { ...s, inviteToken: t } : s);
+                      setStatusMsg({ type: 'success', text: 'Invite link reset — old links no longer work.' });
+                    }}
+                    className="mt-3 text-[9px] font-black uppercase tracking-widest text-slate-400 hover:text-pear-600 transition-colors"
+                  >
+                    ↻ Reset link
+                  </button>
+                </>
+              )}
+            </div>
 
-            {/* Members list */}
+            {/* Emails connected to this subscription */}
             <div className="space-y-3">
-              <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest pl-1">Members</label>
+              <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest pl-1">Emails on this subscription</label>
 
               {/* Owner row */}
               <div className="flex items-center justify-between p-4 glass rounded-2xl border border-pear-200 dark:border-pear-600/20 bg-pear-600/5">
@@ -2260,27 +2376,25 @@ const App: React.FC = () => {
                 <span className="text-[9px] font-black uppercase px-2.5 py-1 bg-pear-600 text-white rounded-full">Owner</span>
               </div>
 
-              {/* Invited members */}
-              {teamMembers.map(member => (
-                <div key={member.id} className="flex items-center justify-between p-4 glass rounded-2xl border border-slate-200 dark:border-white/10">
+              {/* Claimed teammates */}
+              {members.map(member => (
+                <div key={member.uid || member.email} className="flex items-center justify-between p-4 glass rounded-2xl border border-slate-200 dark:border-white/10">
                   <div className="flex items-center gap-3">
                     <div className="w-9 h-9 rounded-xl bg-slate-200 dark:bg-white/10 text-slate-500 flex items-center justify-center text-sm font-black">
                       {member.email[0].toUpperCase()}
                     </div>
                     <div>
-                      <p className="text-sm font-black">{member.name || member.email}</p>
-                      {member.name && <p className="text-[10px] text-slate-400 font-medium">{member.email}</p>}
+                      <p className="text-sm font-black">{member.email}</p>
+                      <p className="text-[10px] text-slate-400 font-medium">Joined {new Date(member.joinedAt).toLocaleDateString()}</p>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className={`text-[9px] font-black uppercase px-2.5 py-1 rounded-full ${member.status === 'active' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-amber-500/10 text-amber-500'}`}>
-                      {member.status === 'active' ? 'Active' : 'Invite sent'}
-                    </span>
+                    <span className="text-[9px] font-black uppercase px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-500">Active</span>
                     <button
-                      onClick={() => {
-                        const updated = teamMembers.filter(m => m.id !== member.id);
-                        setTeamMembers(updated);
-                        localStorage.setItem(STORAGE_KEY_TEAM, JSON.stringify(updated));
+                      onClick={async () => {
+                        if (!accountId) return;
+                        if (!window.confirm(`Remove ${member.email} from your subscription?`)) return;
+                        await removeSeatMember(accountId, member.email);
                         setStatusMsg({ type: 'success', text: 'Seat freed up.' });
                       }}
                       className="w-7 h-7 rounded-lg bg-rose-500/10 text-rose-500 flex items-center justify-center hover:bg-rose-500 hover:text-white transition-all text-xs"
@@ -2290,17 +2404,18 @@ const App: React.FC = () => {
                 </div>
               ))}
 
-              {teamMembers.length === 0 && (
+              {members.length === 0 && (
                 <div className="py-10 text-center glass rounded-3xl border border-dashed border-slate-200 dark:border-white/10">
-                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">No teammates invited yet</p>
-                  {seatCount <= 1 && (
-                    <button onClick={() => navigateTo('pricing')} className="mt-4 text-pear-600 font-black text-xs uppercase tracking-widest hover:underline">Buy team seats to get started</button>
-                  )}
+                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">No teammates have joined yet</p>
+                  <p className="text-[10px] text-slate-400 font-medium mt-2">Share your invite link above to fill your seats.</p>
                 </div>
               )}
             </div>
+            </>
+            )}
           </div>
-        )}
+          );
+        })()}
 
         {view === 'privacy' && <PrivacyPolicy onBack={() => navigateTo('home')} />}
         {view === 'terms' && <TermsAndConditions onBack={() => navigateTo('home')} />}
