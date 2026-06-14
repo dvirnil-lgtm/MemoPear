@@ -7,6 +7,9 @@ import {
   OAuthProvider,
   signInWithPopup,
   signInAnonymously,
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  updateProfile,
   UserCredential,
   User,
   signOut,
@@ -57,6 +60,24 @@ export function signInWithGoogle(): Promise<UserCredential> {
 
 export function signInWithLinkedIn(): Promise<UserCredential> {
   return signInWithPopup(auth, linkedinProvider, browserPopupRedirectResolver);
+}
+
+// Real Firebase email/password accounts (requires the Email/Password provider
+// enabled in Firebase → Authentication → Sign-in method).
+export async function signUpWithEmail(
+  email: string,
+  password: string,
+  name?: string,
+): Promise<UserCredential> {
+  const cred = await createUserWithEmailAndPassword(auth, email, password);
+  if (name) {
+    try { await updateProfile(cred.user, { displayName: name }); } catch { /* non-fatal */ }
+  }
+  return cred;
+}
+
+export function signInWithEmail(email: string, password: string): Promise<UserCredential> {
+  return signInWithEmailAndPassword(auth, email, password);
 }
 
 export async function firebaseSignOut(): Promise<void> {

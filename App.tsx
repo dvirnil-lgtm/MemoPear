@@ -6,7 +6,7 @@ import { QRScanner } from './components/QRScanner';
 import { CommMethodToggle } from './components/CommMethodToggle';
 import { PrivacyPolicy, TermsAndConditions, ContactUs, Company } from './components/LegalPages';
 import { parseScannedData, parseBusinessCard, generateLeadReport, QuotaError, QUOTA_ERROR_MESSAGE, isQuotaError } from './services/geminiService';
-import { signInWithGoogle, signInWithLinkedIn, firebaseSignOut, auth, logLoginEvent, logCancellationRequest, ensureFirebaseSession, ensureSubscription, getSubscription, watchSubscription, regenerateInviteToken, removeSeatMember, claimSeat, getSeatClaim, SubscriptionDoc } from './firebase';
+import { signInWithGoogle, signInWithLinkedIn, signUpWithEmail, signInWithEmail, firebaseSignOut, auth, logLoginEvent, logCancellationRequest, ensureSubscription, getSubscription, watchSubscription, regenerateInviteToken, removeSeatMember, claimSeat, getSeatClaim, SubscriptionDoc } from './firebase';
 
 // Constants for retention and session
 const RETENTION_DAYS = 30;
@@ -778,34 +778,50 @@ const App: React.FC = () => {
         return;
       }
     }
-    const authData = { email, timestamp: Date.now() };
+    let user;
+    try {
+      const cred = authMode === 'signup'
+        ? await signUpWithEmail(email, password, userProfile.name || undefined)
+        : await signInWithEmail(email, password);
+      user = cred.user;
+    } catch (err: any) {
+      const code = err?.code || '';
+      let text = `Sign-in failed: ${code || 'unknown error'}.`;
+      if (code === 'auth/email-already-in-use') text = 'That email already has an account — switch to Log In.';
+      else if (code === 'auth/invalid-email') text = 'Enter a valid email address.';
+      else if (code === 'auth/weak-password') text = 'Password is too weak — use at least 6 characters.';
+      else if (code === 'auth/wrong-password' || code === 'auth/invalid-credential') text = 'Incorrect email or password.';
+      else if (code === 'auth/user-not-found') text = 'No account with that email — switch to Sign Up.';
+      else if (code === 'auth/too-many-requests') text = 'Too many attempts. Please try again later.';
+      else if (code === 'auth/operation-not-allowed') text = 'Email/password sign-in is not enabled in Firebase. Enable it in Authentication → Sign-in method.';
+      setStatusMsg({ type: 'error', text });
+      return;
+    }
+
+    const userEmail = user.email || email;
+    const authData = { email: userEmail, timestamp: Date.now() };
     localStorage.setItem(STORAGE_KEY_AUTH, JSON.stringify(authData));
-    const savedProfile = { ...userProfile, email };
+    const savedProfile = { ...userProfile, email: userEmail };
     localStorage.setItem('memo_profile', JSON.stringify(savedProfile));
     setIsLoggedIn(true);
     setUserProfile(savedProfile);
-    // Establish a Firebase Auth session (anonymous fallback) so team/seat
-    // Firestore writes are allowed for email/password users too.
-    const acct = (await ensureFirebaseSession()) || `local:${email.toLowerCase()}`;
-    setAccountId(acct);
-    localStorage.setItem(STORAGE_KEY_ACCOUNT, acct);
+    setAccountId(user.uid);
+    localStorage.setItem(STORAGE_KEY_ACCOUNT, user.uid);
     setStatusMsg({ type: 'success', text: authMode === 'signup' ? 'Account created! Welcome to MemoPear.' : 'Welcome back!' });
-    if (TEST_USER_EMAILS.includes(email.toLowerCase())) {
+    if (TEST_USER_EMAILS.includes(userEmail.toLowerCase())) {
       localStorage.setItem(STORAGE_KEY_PAID, 'true');
       setHasPaid(true);
       // QA accounts get a 3-seat team so the invite flow can be tested.
       setSeatCount(3);
       localStorage.setItem(STORAGE_KEY_SEATS, '3');
     }
-    // Local-auth fallback: anchor the trial at first signup, never reset it.
-    let start = Number(localStorage.getItem(STORAGE_KEY_TRIAL_START)) || 0;
-    if (!start) {
-      start = Date.now();
-      localStorage.setItem(STORAGE_KEY_TRIAL_START, String(start));
-      setTrialStart(start);
-    }
+    // Anchor the trial to the Firebase account creation time (survives re-login).
+    const createdAt = Date.parse(user.metadata.creationTime || '') || Date.now();
+    localStorage.setItem(STORAGE_KEY_TRIAL_START, String(createdAt));
+    setTrialStart(createdAt);
+    logLoginEvent(user, 'password').catch(() => {});
     const paid = localStorage.getItem(STORAGE_KEY_PAID) === 'true';
-    if (paid || start + TRIAL_DAYS * 24 * 60 * 60 * 1000 > Date.now()) navigateTo('form');
+    if (paid || createdAt + TRIAL_DAYS * 24 * 60 * 60 * 1000 > Date.now()) navigateTo('form');
     else {
       navigateTo('pricing');
       setStatusMsg({ type: 'error', text: 'Your free trial has ended — subscribe to keep capturing contacts.' });
