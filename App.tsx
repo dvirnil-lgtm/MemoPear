@@ -791,6 +791,9 @@ const App: React.FC = () => {
     if (TEST_USER_EMAILS.includes(email.toLowerCase())) {
       localStorage.setItem(STORAGE_KEY_PAID, 'true');
       setHasPaid(true);
+      // QA accounts get a 3-seat team so the invite flow can be tested.
+      setSeatCount(3);
+      localStorage.setItem(STORAGE_KEY_SEATS, '3');
     }
     // Local-auth fallback: anchor the trial at first signup, never reset it.
     let start = Number(localStorage.getItem(STORAGE_KEY_TRIAL_START)) || 0;
@@ -828,6 +831,9 @@ const App: React.FC = () => {
       if (TEST_USER_EMAILS.includes(userEmail.toLowerCase())) {
         localStorage.setItem(STORAGE_KEY_PAID, 'true');
         setHasPaid(true);
+        // QA accounts get a 3-seat team so the invite flow can be tested.
+        setSeatCount(3);
+        localStorage.setItem(STORAGE_KEY_SEATS, '3');
       }
       // Anchor the free trial to the Firebase account creation time so it
       // survives localStorage clears and re-logins.
