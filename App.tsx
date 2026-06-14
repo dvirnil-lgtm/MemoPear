@@ -821,7 +821,19 @@ const App: React.FC = () => {
     setTrialStart(createdAt);
     logLoginEvent(user, 'password').catch(() => {});
     const paid = localStorage.getItem(STORAGE_KEY_PAID) === 'true';
-    if (paid || createdAt + TRIAL_DAYS * 24 * 60 * 60 * 1000 > Date.now()) navigateTo('form');
+    const onTrial = createdAt + TRIAL_DAYS * 24 * 60 * 60 * 1000 > Date.now();
+    // A teammate covered by an owner's plan keeps access even after their own
+    // trial lapses, so don't bounce them to pricing — check seat membership.
+    let memberOfTeam = false;
+    if (!paid && !onTrial) {
+      const claim = await getSeatClaim(user.uid).catch(() => null);
+      if (claim) {
+        memberOfTeam = true;
+        setIsSeatMember(true);
+        localStorage.setItem(STORAGE_KEY_MEMBERSHIP, claim.ownerUid);
+      }
+    }
+    if (paid || onTrial || memberOfTeam) navigateTo('form');
     else {
       navigateTo('pricing');
       setStatusMsg({ type: 'error', text: 'Your free trial has ended — subscribe to keep capturing contacts.' });
@@ -1935,6 +1947,15 @@ const App: React.FC = () => {
                         </div>
                       )}
                     </div>
+                  ) : isSeatMember ? (
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-[8px] font-black uppercase text-slate-400 tracking-widest">Plan</p>
+                        <p className="text-sm font-black">MemoPear Pro · Team member</p>
+                        <p className="text-[9px] text-slate-400 font-medium mt-0.5">Covered by your team's subscription — billing is managed by the team owner.</p>
+                      </div>
+                      <span className="text-[8px] font-black uppercase px-2.5 py-1 bg-emerald-500/10 text-emerald-500 rounded-full flex-shrink-0">Active</span>
+                    </div>
                   ) : (
                     <div className="flex items-center justify-between">
                       <div>
@@ -2096,10 +2117,15 @@ const App: React.FC = () => {
                           <button onClick={() => navigateTo('pricing')} className="w-full py-4 bg-pear-600 text-white font-black rounded-2xl shadow-xl hover:scale-105 transition-all max-w-xs uppercase text-xs tracking-widest">{trialExpired ? 'Subscribe — $2.80/mo' : 'Upgrade to Pro — $2.80/mo'}</button>
                        </div>
                     )}
-                    {!hasPaid && trialActive && (
+                    {!hasPaid && !isSeatMember && trialActive && (
                        <div className="flex items-center justify-between gap-3 px-4 py-2 rounded-xl bg-pear-600/10 border border-pear-600/20 flex-shrink-0">
                           <p className="text-[9px] font-black uppercase tracking-widest text-pear-700 dark:text-pear-300">Free trial — {formatTrialLeft()} left</p>
                           <button type="button" onClick={() => navigateTo('pricing')} className="text-[9px] font-black uppercase tracking-widest text-pear-600 hover:underline flex-shrink-0">Subscribe</button>
+                       </div>
+                    )}
+                    {isSeatMember && !hasPaid && (
+                       <div className="flex items-center justify-between gap-3 px-4 py-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex-shrink-0">
+                          <p className="text-[9px] font-black uppercase tracking-widest text-emerald-600 dark:text-emerald-400">Team plan — full access</p>
                        </div>
                     )}
 
