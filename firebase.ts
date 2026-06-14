@@ -292,6 +292,28 @@ export async function getSeatClaim(
 // Records a cancellation request and emails the team via the "Trigger Email
 // from Firestore" extension (configured with SendGrid SMTP), which sends a
 // message for every document written to the `mail` collection.
+// Emails the signed-in user an export of their captured leads via the same
+// "Trigger Email from Firestore" extension used for cancellation notices. The
+// CSV is attached so it can be opened in Google Sheets / Excel / imported to Drive.
+export async function emailLeadsExport(
+  toEmail: string,
+  subject: string,
+  html: string,
+  csv: string,
+  csvName: string,
+): Promise<void> {
+  // UTF-8 safe base64 for the attachment body.
+  const content = btoa(unescape(encodeURIComponent(csv)));
+  await addDoc(collection(db, 'mail'), {
+    to: [toEmail],
+    message: {
+      subject,
+      html,
+      attachments: [{ filename: csvName, content, encoding: 'base64' }],
+    },
+  });
+}
+
 export async function logCancellationRequest(details: {
   email: string;
   seats: number;
