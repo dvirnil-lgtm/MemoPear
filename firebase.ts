@@ -320,7 +320,12 @@ export async function emailLeadsExport(
 // OAuth access token with the drive.file scope (only files this app creates),
 // then the Sheets REST API to create the sheet and write the rows.
 
-const GOOGLE_OAUTH_CLIENT_ID = import.meta.env.VITE_GOOGLE_OAUTH_CLIENT_ID as string | undefined;
+// The OAuth Web client ID for the "Export to Google Sheets" feature. It's safe
+// to ship in the client (it is not a secret; access is restricted by the
+// "Authorized JavaScript origins" list in Google Cloud). An env var can still
+// override it for other environments.
+const DEFAULT_GOOGLE_OAUTH_CLIENT_ID = '602934331700-jv94amekg883gp44h9s1fgk3ql4mtfp8.apps.googleusercontent.com';
+const GOOGLE_OAUTH_CLIENT_ID = (import.meta.env.VITE_GOOGLE_OAUTH_CLIENT_ID as string | undefined) || DEFAULT_GOOGLE_OAUTH_CLIENT_ID;
 const SHEETS_SCOPE = 'https://www.googleapis.com/auth/drive.file';
 
 function getGoogleAccessToken(): Promise<string> {
