@@ -211,14 +211,18 @@ On first use the browser shows a Google consent popup; after approval the new
 spreadsheet opens in a tab. If `VITE_GOOGLE_OAUTH_CLIENT_ID` is unset the button
 reports that the feature isn't configured.
 
-### Send Emails — email all contacts to the user
+### Send Emails — open the user's email app pre-filled
 
-The **✉️ Send Emails** button emails **all** captured contacts (full details in
-the email body, plus a CSV attachment) to the user's address, with the subject
-**`Your MemoPear Leads <date>`** (`emailLeadsExport` in `firebase.ts`). It reuses
-the **Trigger Email from Firestore** extension and the `mail` collection that the
-cancellation flow already relies on — so once that extension is installed and the
-`mail` create rule is published (see above), no extra setup is needed.
+The **✉️ Send Emails** button opens the user's own email client via a `mailto:`
+link, pre-filled with the recipient, the subject **`Your MemoPear Leads <date>`**,
+and **all** captured contacts (details in the body). The user just presses send.
+This needs **no backend** — it works for everyone with no SendGrid/extension setup.
+
+> For very large contact lists a `mailto:` URL can be truncated by the OS/browser;
+> the app warns when the link gets long. A server-side alternative
+> (`emailLeadsExport` in `firebase.ts`, which writes to the `mail` collection for
+> the **Trigger Email from Firestore** extension) remains available if automatic
+> sending with attachments is ever needed.
 
 ## Project Structure
 
