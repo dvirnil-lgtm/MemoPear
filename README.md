@@ -165,12 +165,17 @@ match /seatClaims/{uid} {
 }
 ```
 
-> **Note:** these rules require Firebase Auth (Google/LinkedIn sign-in). The
-> seat cap is enforced client-side in a transaction; for stronger guarantees
-> (e.g. preventing a signed-in user from editing another team's members) move
-> `claimSeat`/`removeSeatMember` into a Cloud Function. Owners who sign up with
-> local email/password are keyed by `local:<email>` and need either Firebase
-> Auth or relaxed rules for the panel to sync.
+**Enable Anonymous sign-in.** The rules require `request.auth`. Google/LinkedIn
+sign-in provides it; email/password users fall back to a Firebase **anonymous**
+session (`ensureFirebaseSession` in `firebase.ts`) so their seat claims are
+accepted. Enable it in **Firebase Console → Authentication → Sign-in method →
+Anonymous → Enable**. Without it, email/password users can't join or own teams.
+
+> **Note:** the seat cap is enforced client-side in a transaction; for stronger
+> guarantees (e.g. preventing a signed-in user from editing another team's
+> members) move `claimSeat`/`removeSeatMember` into a Cloud Function. Anonymous
+> sessions are per-device, so an email/password owner's subscription is tied to
+> the browser they created it in.
 
 ## Project Structure
 
