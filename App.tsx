@@ -37,7 +37,7 @@ const STRIPE_CUSTOMER_PORTAL_URL = 'https://billing.stripe.com/p/login/aFa28t67J
 
 // Stripe payment links — add a dedicated link per seat count for best UX.
 // Each link should be created in Stripe Dashboard at the correct unit price
-// (e.g. 3 seats → $4.47/mo). Quantities without a dedicated link fall back
+// (e.g. 3 seats → $6.00/mo). Quantities without a dedicated link fall back
 // to the single-seat link, which still works if you enable "Adjust quantity"
 // on the payment link in Stripe Dashboard.
 const STRIPE_LINKS: Record<'monthly' | 'annual', Partial<Record<number, string>>> = {
@@ -820,7 +820,7 @@ const App: React.FC = () => {
 
   const activatePlan = () => {
     sessionStorage.removeItem('lcp_pending_activation');
-    const receipt = { id: `INV-${Date.now()}`, date: Date.now(), plan: 'MemoPear Pro', cycle: paymentCycle, seats: seatCount, amount: paymentCycle === 'monthly' ? '$1.49' : '$16.09' };
+    const receipt = { id: `INV-${Date.now()}`, date: Date.now(), plan: 'MemoPear Pro', cycle: paymentCycle, seats: seatCount, amount: paymentCycle === 'monthly' ? '$2.00' : '$21.60' };
     const updated = [...receipts, receipt];
     setReceipts(updated);
     localStorage.setItem(STORAGE_KEY_RECEIPTS, JSON.stringify(updated));
@@ -1129,7 +1129,7 @@ const App: React.FC = () => {
   const PAGE_META: Record<string, { title: string; description: string }> = {
     home: { title: 'MemoPear: Simply Better Lead Collection', description: 'Stop losing contacts at conferences. MemoPear lets you scan badges, snap business cards, and record notes — all in one place.' },
     login: { title: 'Sign In | MemoPear', description: 'Log in or create your MemoPear account to start capturing conference contacts.' },
-    pricing: { title: 'Pricing | MemoPear', description: 'One simple plan. Scan badges, use voice notes, sync to Google Sheets, and more for just $1.49/month.' },
+    pricing: { title: 'Pricing | MemoPear', description: 'One simple plan. Scan badges, use voice notes, sync to Google Sheets, and more for just $2/month.' },
     form: { title: 'Add a Contact | MemoPear', description: 'Quickly add a new contact from a conference — scan a badge, snap a card, or just type their info.' },
     history: { title: 'Your Contacts | MemoPear', description: 'Browse and manage all the contacts you\'ve gathered at events and conferences.' },
     payment: { title: 'Upgrade | MemoPear', description: 'Unlock AI scanning, voice notes, LinkedIn lookup, and Google Sheets sync.' },
@@ -1507,8 +1507,8 @@ const App: React.FC = () => {
               <div className="flex items-end gap-2 mb-2">
                 <div className="text-5xl md:text-6xl font-black tracking-tighter text-pear-700 dark:text-pear-300">
                   {paymentCycle === 'monthly'
-                    ? `$${(1.49 * seatQuantity).toFixed(2)}`
-                    : `$${(16.09 * seatQuantity).toFixed(2)}`}
+                    ? `$${(2.00 * seatQuantity).toFixed(2)}`
+                    : `$${(21.60 * seatQuantity).toFixed(2)}`}
                 </div>
                 <div className="text-sm text-slate-400 font-bold mb-2 uppercase tracking-widest">
                   / {paymentCycle === 'monthly' ? 'month' : 'year'}
@@ -1516,7 +1516,7 @@ const App: React.FC = () => {
               </div>
               {seatQuantity > 1 && (
                 <p className="text-[10px] text-slate-400 font-medium mb-4">
-                  ${ paymentCycle === 'monthly' ? '1.49' : '16.09'} per seat × {seatQuantity} seats
+                  ${ paymentCycle === 'monthly' ? '2.00' : '21.60'} per seat × {seatQuantity} seats
                 </p>
               )}
               
@@ -1957,7 +1957,7 @@ const App: React.FC = () => {
                           <div className="w-20 h-20 bg-pear-600/10 rounded-full flex items-center justify-center mb-6 text-4xl">🍐</div>
                           <h2 className="text-2xl font-black mb-2 text-pear-700 dark:text-pear-300">{trialExpired ? 'Your Free Trial Has Ended' : 'Unlock Contact Capture'}</h2>
                           <p className="text-sm text-slate-500 mb-6">{trialExpired ? 'Subscribe to keep saving contacts, scanning badges, and using voice notes.' : 'Upgrade to Pro to save contacts, scan badges, and use voice notes.'}</p>
-                          <button onClick={() => navigateTo('pricing')} className="w-full py-4 bg-pear-600 text-white font-black rounded-2xl shadow-xl hover:scale-105 transition-all max-w-xs uppercase text-xs tracking-widest">{trialExpired ? 'Subscribe — $1.49/mo' : 'Upgrade to Pro — $1.49/mo'}</button>
+                          <button onClick={() => navigateTo('pricing')} className="w-full py-4 bg-pear-600 text-white font-black rounded-2xl shadow-xl hover:scale-105 transition-all max-w-xs uppercase text-xs tracking-widest">{trialExpired ? 'Subscribe — $2/mo' : 'Upgrade to Pro — $2/mo'}</button>
                        </div>
                     )}
                     {!hasPaid && trialActive && (
