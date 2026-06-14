@@ -1229,9 +1229,13 @@ const App: React.FC = () => {
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" /></svg>
             </button>
           </div>
-          {isLoggedIn && (
+          {isLoggedIn ? (
             <button onClick={handleLogout} className="ml-4 p-2 text-slate-400 hover:text-rose-600 transition-colors" title="Logout">
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
+            </button>
+          ) : (
+            <button onClick={() => navigateTo('login')} className="ml-4 px-5 py-2.5 bg-blue-600 text-white font-black rounded-full text-[10px] uppercase tracking-widest shadow-sm hover:scale-[1.03] active:scale-95 transition-all">
+              Login
             </button>
           )}
         </div>
@@ -1556,8 +1560,14 @@ const App: React.FC = () => {
                   Start Free — First {TRIAL_DAYS} Days On Us
                 </button>
               )}
+              {!isLoggedIn && (
+                <p className="text-center text-[10px] font-bold uppercase tracking-widest text-slate-400 mt-4">
+                  Already have an account?{' '}
+                  <button onClick={() => navigateTo('login')} className="text-pear-600 hover:underline">Log In</button>
+                </p>
+              )}
             </div>
-            
+
             <button onClick={() => navigateTo('home')} className="text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-pear-600 transition-colors">Back to Home</button>
           </div>
         )}
