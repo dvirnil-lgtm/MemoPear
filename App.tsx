@@ -102,7 +102,7 @@ const TOUR_STEPS = [
   },
   {
     title: "Save the contact",
-    description: "Hit Save Contact to store them. Your contacts are securely synced to your account so they're there on every device you sign in from.",
+    description: "Hit Save Contact to store them. Your contacts never leave your account — they're kept for 30 days so they're on every device you sign in from, then automatically deleted for your security.",
     icon: "💾"
   },
   {
@@ -455,6 +455,9 @@ const App: React.FC = () => {
   const leadsRef = useRef<Lead[]>([]);
   const lastSyncedLeadsRef = useRef<string>('');
   const leadsSyncReadyRef = useRef(false);
+  // Mirror of accountId so stable (empty-dep) effects like the retention purge
+  // always reach the cloud for the currently signed-in account.
+  const accountIdRef = useRef<string>('');
   const toggleTheme = () => {
     const newTheme = theme === 'light' ? 'dark' : 'light';
     setTheme(newTheme);
@@ -666,6 +669,8 @@ const App: React.FC = () => {
 
   // Keep a ref copy of leads so async sync callbacks always read the latest set.
   useEffect(() => { leadsRef.current = leads; }, [leads]);
+  // Keep accountId reachable from stable (empty-dep) effects.
+  useEffect(() => { accountIdRef.current = accountId; }, [accountId]);
 
   // Merge two lead lists by id, preferring the more recently captured entry on a
   // clash. Used once on login to reconcile this device's offline captures with
@@ -686,9 +691,9 @@ const App: React.FC = () => {
     setLeads(next);
     leadsRef.current = next;
     localStorage.setItem(STORAGE_KEY_LEADS, JSON.stringify(next));
-    if (leadsSyncReadyRef.current && accountId) {
+    if (leadsSyncReadyRef.current && accountIdRef.current) {
       lastSyncedLeadsRef.current = JSON.stringify(next);
-      saveUserLeads(accountId, next);
+      saveUserLeads(accountIdRef.current, next);
     }
   };
 
@@ -867,19 +872,21 @@ const App: React.FC = () => {
     window.open(`https://www.linkedin.com/search/results/all/?keywords=${query}`, '_blank');
   };
 
+  // 30-day retention: delete each contact 30 days after its creation date, for
+  // security. Runs on load and hourly while the app is open, and routes through
+  // persistLeads so expired contacts are removed from state, the local cache,
+  // and the account's cloud copy (once sync is live).
   useEffect(() => {
-    const cleanupLeads = () => {
+    const purgeExpiredLeads = () => {
       const now = Date.now();
-      const thirtyDaysMs = RETENTION_DAYS * 24 * 60 * 60 * 1000;
-      setLeads(prev => {
-        const filtered = prev.filter(lead => (now - lead.timestamp) < thirtyDaysMs);
-        if (filtered.length !== prev.length) {
-          localStorage.setItem(STORAGE_KEY_LEADS, JSON.stringify(filtered));
-        }
-        return filtered;
-      });
+      const retentionMs = RETENTION_DAYS * 24 * 60 * 60 * 1000;
+      const current = leadsRef.current;
+      const kept = current.filter(lead => (now - (lead.timestamp || 0)) < retentionMs);
+      if (kept.length !== current.length) persistLeads(kept);
     };
-    cleanupLeads();
+    purgeExpiredLeads();
+    const interval = setInterval(purgeExpiredLeads, 60 * 60 * 1000); // hourly
+    return () => clearInterval(interval);
   }, []);
 
   const handleAuth = async (e?: React.FormEvent) => {
@@ -1689,7 +1696,7 @@ const App: React.FC = () => {
                   { title: "Quick Notes", desc: "Jot down context and next steps right alongside every contact." },
                   { title: "LinkedIn Lookup", desc: "Find anyone on LinkedIn with one tap — right from their contact card." },
                   { title: "Google Sheets Export", desc: "Push all your contacts to a spreadsheet with a single click." },
-                  { title: "Private & Secure", desc: "Your contacts are encrypted and synced to your account — only you can see them." },
+                  { title: "Private & Secure", desc: "Your contacts never leave your account. We keep them for 30 days, then delete them for your security." },
                   { title: "AI Follow-up Emails", desc: "Get a personalized follow-up email drafted for every contact." },
                   { title: "Unlimited Contacts", desc: "Capture as many contacts as you want — no limits, ever." }
                 ].map(item => (
@@ -2657,7 +2664,7 @@ const App: React.FC = () => {
            <div className="max-w-xs w-full glass p-8 md:p-12 rounded-[3rem] md:rounded-[4rem] text-center shadow-2xl">
               <div className="w-16 h-16 md:w-24 md:h-24 bg-blue-600/10 rounded-2xl md:rounded-[2.5rem] flex items-center justify-center mx-auto mb-6 md:mb-8 text-3xl md:text-5xl">🛡️</div>
               <h2 className="text-2xl md:text-3xl font-black mb-4 md:mb-6">Your data stays private</h2>
-              <p className="text-[10px] md:text-xs text-slate-500 mb-8 md:mb-10 leading-relaxed">Your contacts are encrypted and synced privately to your account, so they're available on every device you sign in from. Only you can access them.</p>
+              <p className="text-[10px] md:text-xs text-slate-500 mb-8 md:mb-10 leading-relaxed">Your contacts never leave your account — they're encrypted and only you can access them. We keep them for 30 days so they're available on every device you sign in from, then automatically delete them for your security.</p>
               <button onClick={() => { localStorage.setItem(STORAGE_KEY_NOTICE, 'true'); setShowNotice(false); }} className="w-full py-4 md:py-6 bg-blue-600 text-white font-black rounded-2xl md:rounded-3xl text-[10px] md:text-xs uppercase tracking-widest active:scale-95">Got it!</button>
            </div>
         </div>
@@ -2668,7 +2675,7 @@ const App: React.FC = () => {
            <div className="max-w-xs w-full glass p-8 md:p-12 rounded-[3rem] md:rounded-[4rem] text-center shadow-2xl border border-blue-600/20">
               <div className="w-16 h-16 md:w-20 md:h-20 bg-blue-600/10 rounded-2xl md:rounded-[2.5rem] flex items-center justify-center mx-auto mb-6 md:mb-8 text-3xl md:text-4xl">⏱️</div>
               <h2 className="text-xl md:text-2xl font-black mb-3 md:mb-4">Data Retention</h2>
-              <p className="text-[10px] md:text-xs text-slate-500 mb-8 md:mb-10 leading-relaxed">To keep things tidy and private, contacts are automatically deleted from your account after 30 days. Make sure to export anything you want to keep.</p>
+              <p className="text-[10px] md:text-xs text-slate-500 mb-8 md:mb-10 leading-relaxed">Your contacts never leave your account. We keep them for 30 days (counted from when each contact was created), then automatically delete them for your security. Make sure to export anything you want to keep.</p>
               <button onClick={() => setShowRetentionNotice(false)} className="w-full py-4 md:py-5 bg-blue-600 text-white font-black rounded-2xl md:rounded-3xl text-[10px] md:text-xs uppercase tracking-widest active:scale-95">Got it!</button>
            </div>
         </div>
