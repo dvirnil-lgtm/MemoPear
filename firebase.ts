@@ -289,6 +289,55 @@ export async function getSeatClaim(
   }
 }
 
+// ---------------------------------------------------------------------------
+// Cross-device lead sync
+//
+// Captured contacts are mirrored to `userLeads/{accountId}` (keyed by the
+// stable Firebase uid) so the same account sees the same contacts on every
+// device it signs in from. The whole array is stored on a single document and
+// written wholesale on each change; `watchUserLeads` streams updates made from
+// other devices. The local copy in localStorage remains the offline cache.
+// ---------------------------------------------------------------------------
+
+export async function getUserLeads(accountId: string): Promise<any[] | null> {
+  try {
+    const snap = await getDoc(doc(db, 'userLeads', accountId));
+    return snap.exists() ? ((snap.data() as any).leads || []) : null;
+  } catch (err) {
+    console.warn('[MemoPear] getUserLeads failed:', err);
+    return null;
+  }
+}
+
+export async function saveUserLeads(accountId: string, leads: any[]): Promise<void> {
+  try {
+    await setDoc(
+      doc(db, 'userLeads', accountId),
+      { leads, updatedAt: serverTimestamp() },
+      { merge: true },
+    );
+  } catch (err) {
+    console.warn('[MemoPear] saveUserLeads failed:', err);
+  }
+}
+
+// Streams the account's leads as they change on other devices. Passes `null`
+// when the document does not yet exist (or on error) so the caller can decide
+// what to seed it with.
+export function watchUserLeads(
+  accountId: string,
+  cb: (leads: any[] | null) => void,
+): () => void {
+  return onSnapshot(
+    doc(db, 'userLeads', accountId),
+    (snap) => cb(snap.exists() ? ((snap.data() as any).leads || []) : null),
+    (err) => {
+      console.warn('[MemoPear] userLeads watch failed:', err);
+      cb(null);
+    },
+  );
+}
+
 // Records a cancellation request and emails the team via the "Trigger Email
 // from Firestore" extension (configured with SendGrid SMTP), which sends a
 // message for every document written to the `mail` collection.

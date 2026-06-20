@@ -6,7 +6,7 @@ import { QRScanner } from './components/QRScanner';
 import { CommMethodToggle } from './components/CommMethodToggle';
 import { PrivacyPolicy, TermsAndConditions, ContactUs, Company } from './components/LegalPages';
 import { parseScannedData, parseBusinessCard, generateLeadReport, QuotaError, QUOTA_ERROR_MESSAGE, isQuotaError } from './services/geminiService';
-import { signInWithGoogle, signInWithLinkedIn, signUpWithEmail, signInWithEmail, firebaseSignOut, auth, logLoginEvent, logCancellationRequest, exportLeadsToGoogleSheet, ensureSubscription, getSubscription, watchSubscription, regenerateInviteToken, removeSeatMember, claimSeat, getSeatClaim, SubscriptionDoc } from './firebase';
+import { signInWithGoogle, signInWithLinkedIn, signUpWithEmail, signInWithEmail, firebaseSignOut, auth, logLoginEvent, logCancellationRequest, exportLeadsToGoogleSheet, ensureSubscription, getSubscription, watchSubscription, regenerateInviteToken, removeSeatMember, claimSeat, getSeatClaim, getUserLeads, saveUserLeads, watchUserLeads, SubscriptionDoc } from './firebase';
 
 // Constants for retention and session
 const RETENTION_DAYS = 30;
@@ -102,7 +102,7 @@ const TOUR_STEPS = [
   },
   {
     title: "Save the contact",
-    description: "Hit Save Contact to store them. Everything is kept privately on your device — nothing is uploaded to our servers.",
+    description: "Hit Save Contact to store them. Your contacts are securely synced to your account so they're there on every device you sign in from.",
     icon: "💾"
   },
   {
@@ -447,6 +447,14 @@ const App: React.FC = () => {
   // account owns or belongs to a subscription, we lift the lock and send them
   // back into the app — so capabilities match across all of the user's devices.
   const accessRecoveryRef = useRef(false);
+  // Cross-device lead sync bookkeeping. `leadsRef` mirrors the latest leads so
+  // async sync callbacks read a fresh value; `lastSyncedLeadsRef` holds the last
+  // serialized array we wrote-to/received-from Firestore so we can skip echo
+  // writes and self-triggered snapshots; `leadsSyncReadyRef` gates writes until
+  // the initial cloud/local merge has completed.
+  const leadsRef = useRef<Lead[]>([]);
+  const lastSyncedLeadsRef = useRef<string>('');
+  const leadsSyncReadyRef = useRef(false);
   const toggleTheme = () => {
     const newTheme = theme === 'light' ? 'dark' : 'light';
     setTheme(newTheme);
@@ -656,6 +664,75 @@ const App: React.FC = () => {
     else if (tourStep === 7) { if (view !== 'history') setView('history'); }
   }, [showTour, tourStep]);
 
+  // Keep a ref copy of leads so async sync callbacks always read the latest set.
+  useEffect(() => { leadsRef.current = leads; }, [leads]);
+
+  // Merge two lead lists by id, preferring the more recently captured entry on a
+  // clash. Used once on login to reconcile this device's offline captures with
+  // whatever is already in the cloud, so nothing is lost from either side.
+  const mergeLeadsById = (a: Lead[], b: Lead[]): Lead[] => {
+    const byId = new Map<string, Lead>();
+    for (const lead of [...a, ...b]) {
+      const existing = byId.get(lead.id);
+      if (!existing || (lead.timestamp || 0) >= (existing.timestamp || 0)) byId.set(lead.id, lead);
+    }
+    return Array.from(byId.values()).sort((x, y) => (y.timestamp || 0) - (x.timestamp || 0));
+  };
+
+  // Apply a lead set locally (state + offline cache) and, when sync is live, push
+  // it to the cloud. Routing every contact mutation through here keeps Firestore,
+  // localStorage and React state in lockstep across all of the user's devices.
+  const persistLeads = (next: Lead[]) => {
+    setLeads(next);
+    leadsRef.current = next;
+    localStorage.setItem(STORAGE_KEY_LEADS, JSON.stringify(next));
+    if (leadsSyncReadyRef.current && accountId) {
+      lastSyncedLeadsRef.current = JSON.stringify(next);
+      saveUserLeads(accountId, next);
+    }
+  };
+
+  // Cross-device lead sync: seed from the cloud on login (merging any local
+  // offline captures), then stream live updates from the user's other devices.
+  // Keyed by the stable account id, so a single-seat or multi-seat paid account
+  // sees the same contacts everywhere it signs in.
+  useEffect(() => {
+    leadsSyncReadyRef.current = false;
+    if (!accountId || !isLoggedIn || !hasAccess) return;
+    let active = true;
+    let unsub: (() => void) | null = null;
+    const retentionMs = RETENTION_DAYS * 24 * 60 * 60 * 1000;
+    const withinRetention = (list: Lead[]) => list.filter(l => (Date.now() - (l.timestamp || 0)) < retentionMs);
+
+    (async () => {
+      const cloud = await getUserLeads(accountId);
+      if (!active) return;
+      const merged = withinRetention(cloud ? mergeLeadsById(leadsRef.current, cloud) : leadsRef.current);
+      setLeads(merged);
+      leadsRef.current = merged;
+      localStorage.setItem(STORAGE_KEY_LEADS, JSON.stringify(merged));
+      lastSyncedLeadsRef.current = JSON.stringify(merged);
+      // Seed/refresh the cloud copy, and wait for it so the live watcher's first
+      // snapshot is our own write (which we then skip as an echo).
+      await saveUserLeads(accountId, merged);
+      if (!active) return;
+      leadsSyncReadyRef.current = true;
+      unsub = watchUserLeads(accountId, (cloudUpdate) => {
+        if (!active || cloudUpdate == null) return;
+        if (JSON.stringify(cloudUpdate) === lastSyncedLeadsRef.current) return; // our echo
+        const next = withinRetention(cloudUpdate);
+        const serialized = JSON.stringify(next);
+        if (serialized === lastSyncedLeadsRef.current) return;
+        lastSyncedLeadsRef.current = serialized;
+        setLeads(next);
+        leadsRef.current = next;
+        localStorage.setItem(STORAGE_KEY_LEADS, JSON.stringify(next));
+      });
+    })();
+
+    return () => { active = false; leadsSyncReadyRef.current = false; if (unsub) unsub(); };
+  }, [accountId, isLoggedIn, hasAccess]);
+
   useEffect(() => {
     auth.authStateReady().then(() => setAuthReady(true));
   }, []);
@@ -683,10 +760,9 @@ const App: React.FC = () => {
 
   const deleteSelectedLeads = () => {
     const remainingLeads = leads.filter(l => !selectedLeadIds.has(l.id));
-    setLeads(remainingLeads);
-    localStorage.setItem(STORAGE_KEY_LEADS, JSON.stringify(remainingLeads));
+    persistLeads(remainingLeads);
     setSelectedLeadIds(new Set());
-    setStatusMsg({ type: 'success', text: 'Pipeline purged locally.' });
+    setStatusMsg({ type: 'success', text: 'Selected contacts deleted.' });
   };
 
   const handleSyncAttempt = (modal: 'sheets' | 'email') => {
@@ -949,6 +1025,13 @@ const App: React.FC = () => {
     localStorage.removeItem(STORAGE_KEY_AUTH);
     localStorage.removeItem(STORAGE_KEY_ACCOUNT);
     localStorage.removeItem(STORAGE_KEY_MEMBERSHIP);
+    // Clear this device's lead cache so a different account signing in next
+    // doesn't merge the previous user's contacts into their synced set.
+    localStorage.removeItem(STORAGE_KEY_LEADS);
+    leadsSyncReadyRef.current = false;
+    lastSyncedLeadsRef.current = '';
+    leadsRef.current = [];
+    setLeads([]);
     await firebaseSignOut().catch(() => {});
     setIsLoggedIn(false);
     setAccountId('');
@@ -989,8 +1072,7 @@ const App: React.FC = () => {
 
   const deleteAllLeads = () => {
     if (window.confirm('Purge all intelligence records? This cannot be undone.')) {
-      setLeads([]);
-      localStorage.setItem(STORAGE_KEY_LEADS, JSON.stringify([]));
+      persistLeads([]);
       setStatusMsg({ type: 'success', text: 'Pipeline Cleared.' });
     }
   };
@@ -1141,8 +1223,7 @@ const App: React.FC = () => {
 
   const handleUpdateLead = (updatedLead: Lead) => {
     const updatedLeads = leads.map(l => l.id === updatedLead.id ? updatedLead : l);
-    setLeads(updatedLeads);
-    localStorage.setItem(STORAGE_KEY_LEADS, JSON.stringify(updatedLeads));
+    persistLeads(updatedLeads);
     setEditingLead(null);
     setStatusMsg({ type: 'success', text: 'Lead Intelligence Updated.' });
   };
@@ -1191,8 +1272,7 @@ const App: React.FC = () => {
     };
     newLead.aiSummary = await generateLeadReport(newLead);
     const updated = [newLead, ...leads];
-    setLeads(updated);
-    localStorage.setItem(STORAGE_KEY_LEADS, JSON.stringify(updated));
+    persistLeads(updated);
     setFirstName(''); setLastName(''); setEmail(''); setPhone(''); setCompany(''); setJobTitle(''); setWebsite(''); setNotes(''); setCommMethods([]); setContactValues({});
     setShowContactFields(false);
     setIsSubmitting(false);
@@ -1609,7 +1689,7 @@ const App: React.FC = () => {
                   { title: "Quick Notes", desc: "Jot down context and next steps right alongside every contact." },
                   { title: "LinkedIn Lookup", desc: "Find anyone on LinkedIn with one tap — right from their contact card." },
                   { title: "Google Sheets Export", desc: "Push all your contacts to a spreadsheet with a single click." },
-                  { title: "Private & Secure", desc: "Everything stays on your device. No cloud storage of your contacts." },
+                  { title: "Private & Secure", desc: "Your contacts are encrypted and synced to your account — only you can see them." },
                   { title: "AI Follow-up Emails", desc: "Get a personalized follow-up email drafted for every contact." },
                   { title: "Unlimited Contacts", desc: "Capture as many contacts as you want — no limits, ever." }
                 ].map(item => (
@@ -2577,7 +2657,7 @@ const App: React.FC = () => {
            <div className="max-w-xs w-full glass p-8 md:p-12 rounded-[3rem] md:rounded-[4rem] text-center shadow-2xl">
               <div className="w-16 h-16 md:w-24 md:h-24 bg-blue-600/10 rounded-2xl md:rounded-[2.5rem] flex items-center justify-center mx-auto mb-6 md:mb-8 text-3xl md:text-5xl">🛡️</div>
               <h2 className="text-2xl md:text-3xl font-black mb-4 md:mb-6">Your data stays private</h2>
-              <p className="text-[10px] md:text-xs text-slate-500 mb-8 md:mb-10 leading-relaxed">All your contacts are stored only on your device and encrypted. We never upload your data to our servers.</p>
+              <p className="text-[10px] md:text-xs text-slate-500 mb-8 md:mb-10 leading-relaxed">Your contacts are encrypted and synced privately to your account, so they're available on every device you sign in from. Only you can access them.</p>
               <button onClick={() => { localStorage.setItem(STORAGE_KEY_NOTICE, 'true'); setShowNotice(false); }} className="w-full py-4 md:py-6 bg-blue-600 text-white font-black rounded-2xl md:rounded-3xl text-[10px] md:text-xs uppercase tracking-widest active:scale-95">Got it!</button>
            </div>
         </div>
@@ -2588,7 +2668,7 @@ const App: React.FC = () => {
            <div className="max-w-xs w-full glass p-8 md:p-12 rounded-[3rem] md:rounded-[4rem] text-center shadow-2xl border border-blue-600/20">
               <div className="w-16 h-16 md:w-20 md:h-20 bg-blue-600/10 rounded-2xl md:rounded-[2.5rem] flex items-center justify-center mx-auto mb-6 md:mb-8 text-3xl md:text-4xl">⏱️</div>
               <h2 className="text-xl md:text-2xl font-black mb-3 md:mb-4">Data Retention</h2>
-              <p className="text-[10px] md:text-xs text-slate-500 mb-8 md:mb-10 leading-relaxed">To keep things tidy and private, contacts are automatically deleted from your device after 30 days. Make sure to export anything you want to keep.</p>
+              <p className="text-[10px] md:text-xs text-slate-500 mb-8 md:mb-10 leading-relaxed">To keep things tidy and private, contacts are automatically deleted from your account after 30 days. Make sure to export anything you want to keep.</p>
               <button onClick={() => setShowRetentionNotice(false)} className="w-full py-4 md:py-5 bg-blue-600 text-white font-black rounded-2xl md:rounded-3xl text-[10px] md:text-xs uppercase tracking-widest active:scale-95">Got it!</button>
            </div>
         </div>
