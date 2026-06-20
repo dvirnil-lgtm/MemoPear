@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { GoogleGenAI, Modality } from "@google/genai";
+import { GoogleGenAI } from "@google/genai";
 import { Lead, CommMethod, UserProfile, PaymentCycle, TeamMember } from './types';
 import { QRScanner } from './components/QRScanner';
 import { CommMethodToggle } from './components/CommMethodToggle';
@@ -61,7 +61,7 @@ const STRIPE_LINKS: Record<'monthly' | 'annual', Partial<Record<number, string>>
 
 const TESTIMONIALS = [
   { quote: "MemoPear turned our trade show chaos into a streamlined pipeline. We captured 300% more context than ever before.", author: "Sarah Chen", role: "VP Field Marketing, HyperScale" },
-  { quote: "The voice transcription is a game-changer. I don't have to type a single word between meetings.", author: "Mike Ross", role: "Field Event Lead, TechPulse" },
+  { quote: "Snapping a business card and having every field filled in instantly is a game-changer. I capture leads in seconds between meetings.", author: "Mike Ross", role: "Field Event Lead, TechPulse" },
   { quote: "LinkedIn enrichment helps me personalize follow-ups immediately. It's the SDR's dream tool.", author: "Elena Vance", role: "Senior SDR, Zenith Cloud" },
   { quote: "Our data quality shot up instantly. No more messy spreadsheets or lost cards.", author: "David Wu", role: "Marketing Director, Nexus" },
   { quote: "Finally, a lead capture app that actually understands enterprise field marketing workflows.", author: "Jessica Lee", role: "Operations Lead, Cloud9" },
@@ -96,9 +96,9 @@ const TOUR_STEPS = [
     icon: "🔗"
   },
   {
-    title: "Record a voice note",
-    description: "Press and HOLD the record button under the notes box and just talk. We transcribe it live into your notes. Release to stop.",
-    icon: "🎙️"
+    title: "Jot down your notes",
+    description: "Type what you talked about and any next steps in the notes box, so you remember the context when it's time to follow up.",
+    icon: "📝"
   },
   {
     title: "Save the contact",
@@ -309,106 +309,6 @@ const MockExportSheets = () => (
   </div>
 );
 
-function encode(base64: Uint8Array) {
-  let binary = '';
-  const len = base64.byteLength;
-  for (let i = 0; i < len; i++) {
-    binary += String.fromCharCode(base64[i]);
-  }
-  return btoa(binary);
-}
-
-function createBlob(data: Float32Array): any {
-  const l = data.length;
-  const int16 = new Int16Array(l);
-  for (let i = 0; i < l; i++) {
-    // Clamp to the valid range to avoid wrap-around distortion on loud peaks.
-    const s = Math.max(-1, Math.min(1, data[i]));
-    int16[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
-  }
-  return {
-    data: encode(new Uint8Array(int16.buffer)),
-    mimeType: 'audio/pcm;rate=16000',
-  };
-}
-
-// Gemini Live expects 16kHz PCM. Mobile Safari refuses to create an
-// AudioContext at a forced sample rate, so we capture at the device's native
-// rate and linearly downsample each chunk to 16kHz here.
-function downsampleTo16k(input: Float32Array, inputRate: number): Float32Array {
-  if (inputRate === 16000) return input;
-  if (inputRate < 16000) return input; // upsampling not needed for speech
-  const ratio = inputRate / 16000;
-  const newLen = Math.round(input.length / ratio);
-  const result = new Float32Array(newLen);
-  for (let i = 0; i < newLen; i++) {
-    const idx = i * ratio;
-    const i0 = Math.floor(idx);
-    const i1 = Math.min(i0 + 1, input.length - 1);
-    const frac = idx - i0;
-    result[i] = input[i0] * (1 - frac) + input[i1] * frac;
-  }
-  return result;
-}
-
-/**
- * Live recording visualizer — draws animated red sound-wave bars driven by the
- * mic's AnalyserNode while a voice note is being recorded.
- */
-const RecordingWaveform: React.FC<{ analyserRef: React.MutableRefObject<AnalyserNode | null> }> = ({ analyserRef }) => {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    const ctx = canvas?.getContext('2d');
-    if (!canvas || !ctx) return;
-    let raf = 0;
-    const BARS = 56;
-
-    const draw = () => {
-      raf = requestAnimationFrame(draw);
-      const w = canvas.width;
-      const h = canvas.height;
-      ctx.clearRect(0, 0, w, h);
-
-      const analyser = analyserRef.current;
-      let data: Uint8Array | null = null;
-      if (analyser) {
-        data = new Uint8Array(analyser.frequencyBinCount);
-        analyser.getByteFrequencyData(data);
-      }
-
-      const gap = 2;
-      const barW = (w - gap * (BARS - 1)) / BARS;
-      for (let i = 0; i < BARS; i++) {
-        // Sample the lower ~70% of the spectrum where speech energy lives.
-        let level = 0.04;
-        if (data) {
-          const idx = Math.floor((i / BARS) * data.length * 0.7);
-          level = data[idx] / 255;
-        }
-        const barH = Math.max(barW, level * h);
-        const x = i * (barW + gap);
-        const y = (h - barH) / 2;
-        ctx.fillStyle = '#ef4444';
-        // rounded bars, falling back to a plain rect on older browsers
-        if (typeof ctx.roundRect === 'function') {
-          const r = Math.min(barW / 2, barH / 2);
-          ctx.beginPath();
-          ctx.roundRect(x, y, barW, barH, r);
-          ctx.fill();
-        } else {
-          ctx.fillRect(x, y, barW, barH);
-        }
-      }
-    };
-    draw();
-    return () => cancelAnimationFrame(raf);
-  }, [analyserRef]);
-
-  return <canvas ref={canvasRef} width={600} height={120} className="w-full h-full block" />;
-};
-
 const App: React.FC = () => {
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
     const saved = localStorage.getItem('lcp_theme');
@@ -529,6 +429,8 @@ const App: React.FC = () => {
   
   const [isScanning, setIsScanning] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  // Brief confirmation popup shown for 2 seconds after a contact is saved.
+  const [showSavedPopup, setShowSavedPopup] = useState(false);
   const [editingLead, setEditingLead] = useState<Lead | null>(null);
   const [isGeneratingEmail, setIsGeneratingEmail] = useState(false);
   const [statusMsg, setStatusMsg] = useState<{ type: 'success' | 'error', text: string } | null>(null);
@@ -540,15 +442,11 @@ const App: React.FC = () => {
   const cardInputRef = useRef<HTMLInputElement>(null);
   const testimonialRef = useRef<HTMLDivElement>(null);
   const mainRef = useRef<HTMLElement>(null);
-  const [isTranscribing, setIsTranscribing] = useState(false);
-  const sessionRef = useRef<any>(null);
-  const audioContextRef = useRef<AudioContext | null>(null);
-  const streamRef = useRef<MediaStream | null>(null);
-  // Drives the live recording waveform visualization.
-  const analyserRef = useRef<AnalyserNode | null>(null);
-  // Tracks whether the push-to-talk button is currently held down.
-  const pttActiveRef = useRef(false);
-
+  // Set when a device locks the user on the pricing page because its local
+  // storage shows no paid/trial status. If Firestore later confirms this
+  // account owns or belongs to a subscription, we lift the lock and send them
+  // back into the app — so capabilities match across all of the user's devices.
+  const accessRecoveryRef = useRef(false);
   const toggleTheme = () => {
     const newTheme = theme === 'light' ? 'dark' : 'light';
     setTheme(newTheme);
@@ -581,9 +479,13 @@ const App: React.FC = () => {
         const onTrial = savedTrialStart > 0 && savedTrialStart + TRIAL_DAYS * 24 * 60 * 60 * 1000 > Date.now();
         if (savedPaid === 'true' || onTrial) { setView('form'); window.history.replaceState({ view: 'form' }, '', '/gather'); }
         else if (currentPath !== '/payment') {
-          // Trial over and not subscribed — lock the app on the pricing page.
+          // Trial over and not subscribed *according to this device's storage* —
+          // lock on pricing, but allow recovery if Firestore proves this account
+          // is actually a paid owner or a covered team member (see the
+          // subscription/seat effect below).
           setView('pricing');
           window.history.replaceState({ view: 'pricing' }, '', '/pricing');
+          accessRecoveryRef.current = true;
           if (savedTrialStart > 0) setStatusMsg({ type: 'error', text: 'Your free trial has ended — subscribe to keep capturing contacts.' });
         }
       }
@@ -622,8 +524,21 @@ const App: React.FC = () => {
     return () => off();
   }, []);
 
+  // Lift the pricing-page lock once Firestore confirms this account has access
+  // (paid owner or covered team member), so a fresh device with empty local
+  // storage doesn't strand the user on pricing.
+  const recoverAccess = () => {
+    if (accessRecoveryRef.current) {
+      accessRecoveryRef.current = false;
+      navigateTo('form');
+    }
+  };
+
   // Wire up seat membership + live owner subscription whenever the account id
   // is known. Owners always get a subscription doc (with an invite token).
+  // The account id is the stable Firebase uid, so these Firestore records are
+  // the same on every device the user signs in from — we re-hydrate the local
+  // capability flags from them so all devices share the same capabilities.
   useEffect(() => {
     if (!accountId || !isLoggedIn) return;
     let active = true;
@@ -631,6 +546,7 @@ const App: React.FC = () => {
       if (active && claim) {
         setIsSeatMember(true);
         localStorage.setItem(STORAGE_KEY_MEMBERSHIP, claim.ownerUid);
+        recoverAccess();
       }
     });
     if (hasPaid && seatCount > 1) {
@@ -638,7 +554,26 @@ const App: React.FC = () => {
         .then((s) => { if (active) setSubscription(s); })
         .catch(() => {});
     }
-    const unsub = watchSubscription(accountId, (s) => { if (active) setSubscription(s); });
+    const unsub = watchSubscription(accountId, (s) => {
+      if (!active) return;
+      setSubscription(s);
+      // This account owns the subscription — mirror the owner's paid plan, seat
+      // count and billing cycle from Firestore onto this device so the team they
+      // manage (and full Pro access) shows up here too, even on a brand-new
+      // login where localStorage knows nothing about the plan.
+      if (s && s.ownerUid === accountId) {
+        if (!hasPaid) setHasPaid(true);
+        localStorage.setItem(STORAGE_KEY_PAID, 'true');
+        if (s.seats && s.seats !== seatCount) {
+          setSeatCount(s.seats);
+          localStorage.setItem(STORAGE_KEY_SEATS, String(s.seats));
+        }
+        if ((s.cycle === 'monthly' || s.cycle === 'annual') && s.cycle !== paymentCycle) {
+          setPaymentCycle(s.cycle);
+        }
+        recoverAccess();
+      }
+    });
     return () => { active = false; unsub(); };
   }, [accountId, isLoggedIn, hasPaid, seatCount, paymentCycle]);
 
@@ -704,6 +639,22 @@ const App: React.FC = () => {
       return () => clearTimeout(timer);
     }
   }, [statusMsg]);
+
+  // Auto-dismiss the "Contact saved" confirmation popup after 2 seconds.
+  useEffect(() => {
+    if (showSavedPopup) {
+      const timer = setTimeout(() => setShowSavedPopup(false), 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [showSavedPopup]);
+
+  // During the guided tour, keep the screen that holds the button being
+  // explained in view, so the highlighted control is actually on-screen.
+  useEffect(() => {
+    if (!showTour) return;
+    if (tourStep >= 1 && tourStep <= 6) { if (view !== 'form') setView('form'); }
+    else if (tourStep === 7) { if (view !== 'history') setView('history'); }
+  }, [showTour, tourStep]);
 
   useEffect(() => {
     auth.authStateReady().then(() => setAuthReady(true));
@@ -1104,116 +1055,6 @@ const App: React.FC = () => {
     setContactValues(prev => ({ ...prev, [method]: value }));
   };
 
-  const stopTranscription = () => {
-    if (sessionRef.current) { sessionRef.current.close(); sessionRef.current = null; }
-    if (streamRef.current) { streamRef.current.getTracks().forEach(track => track.stop()); streamRef.current = null; }
-    if (audioContextRef.current) { audioContextRef.current.close(); audioContextRef.current = null; }
-    analyserRef.current = null;
-    setIsTranscribing(false);
-  };
-
-  const startTranscription = async () => {
-    if (!process.env.API_KEY) {
-      setStatusMsg({ type: 'error', text: 'Transcription unavailable: AI key not configured.' });
-      return;
-    }
-
-    // Request the mic first so permission errors are reported distinctly from
-    // connection/API errors below.
-    let stream: MediaStream;
-    try {
-      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    } catch (err) {
-      setStatusMsg({ type: 'error', text: 'Microphone access denied. Enable mic permissions to record.' });
-      return;
-    }
-
-    try {
-      setIsTranscribing(true);
-      streamRef.current = stream;
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-      // Do NOT force a 16kHz sample rate here: iOS Safari throws when the
-      // requested rate differs from the hardware rate. We downsample per-chunk.
-      const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
-      audioContextRef.current = audioCtx;
-      // Some browsers (notably mobile Safari) start the AudioContext suspended
-      // until it is explicitly resumed after a user gesture.
-      if (audioCtx.state === 'suspended') await audioCtx.resume();
-      const sessionPromise = ai.live.connect({
-        model: 'gemini-2.5-flash-native-audio-preview-12-2025',
-        callbacks: {
-          onopen: () => {
-            const source = audioCtx.createMediaStreamSource(stream);
-            // Tap the live mic into an analyser so we can draw the waveform.
-            const analyser = audioCtx.createAnalyser();
-            analyser.fftSize = 256;
-            analyser.smoothingTimeConstant = 0.6;
-            source.connect(analyser);
-            analyserRef.current = analyser;
-            const processor = audioCtx.createScriptProcessor(4096, 1, 1);
-            processor.onaudioprocess = (e) => {
-              const inputData = e.inputBuffer.getChannelData(0);
-              const pcm16k = downsampleTo16k(inputData, audioCtx.sampleRate);
-              sessionPromise.then(session => session.sendRealtimeInput({ media: createBlob(pcm16k) }));
-            };
-            source.connect(processor);
-            processor.connect(audioCtx.destination);
-          },
-          onmessage: (message) => {
-            if (message.serverContent?.inputTranscription) {
-              const text = message.serverContent.inputTranscription.text;
-              if (text) setNotes(prev => prev + (prev === '' || prev.endsWith(' ') ? '' : ' ') + text);
-            }
-          },
-          onerror: (e: any) => {
-            console.error('Transcription error:', e);
-            setStatusMsg({
-              type: 'error',
-              text: isQuotaError(e?.message ?? e) ? QUOTA_ERROR_MESSAGE : 'Transcription connection failed. Please try again.',
-            });
-            stopTranscription();
-          },
-          onclose: (e: any) => {
-            // The server closes the socket (often with no prior error) when the
-            // Gemini project's quota/billing is exhausted — surface that clearly.
-            if (isQuotaError(e?.reason ?? e)) {
-              setStatusMsg({ type: 'error', text: QUOTA_ERROR_MESSAGE });
-            }
-            stopTranscription();
-          }
-        },
-        config: {
-          responseModalities: [Modality.AUDIO],
-          inputAudioTranscription: {},
-          systemInstruction: `You are a note-taking assistant for MemoPear. Transcribe everything the user says accurately.`
-        }
-      });
-      sessionRef.current = await sessionPromise;
-      // If the user released the button before the session finished connecting,
-      // stop immediately so a quick tap doesn't leave the mic recording.
-      if (!pttActiveRef.current) stopTranscription();
-    } catch (err) {
-      console.error('Failed to start transcription:', err);
-      setStatusMsg({ type: 'error', text: isQuotaError(err) ? QUOTA_ERROR_MESSAGE : 'Could not start transcription. Please try again.' });
-      stopTranscription();
-    }
-  };
-
-  // Push-to-talk: hold the record button to capture, release to stop.
-  const handleRecordPress = (e: React.PointerEvent) => {
-    e.preventDefault();
-    try { (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId); } catch {}
-    pttActiveRef.current = true;
-    if (!isTranscribing) startTranscription();
-  };
-
-  const handleRecordRelease = (e: React.PointerEvent) => {
-    e.preventDefault();
-    if (!pttActiveRef.current) return;
-    pttActiveRef.current = false;
-    stopTranscription();
-  };
-
   const handleQRScan = async (decodedText: string) => {
     if (!hasAccess) return;
     setIsScanning(false);
@@ -1355,6 +1196,8 @@ const App: React.FC = () => {
     setFirstName(''); setLastName(''); setEmail(''); setPhone(''); setCompany(''); setJobTitle(''); setWebsite(''); setNotes(''); setCommMethods([]); setContactValues({});
     setShowContactFields(false);
     setIsSubmitting(false);
+    // Show a brief confirmation that the contact was saved.
+    setShowSavedPopup(true);
   };
 
   const VIEW_URLS: Record<string, string> = {
@@ -1366,10 +1209,10 @@ const App: React.FC = () => {
   const PAGE_META: Record<string, { title: string; description: string }> = {
     home: { title: 'MemoPear: Simply Better Lead Collection', description: 'Stop losing contacts at conferences. MemoPear lets you scan badges, snap business cards, and record notes — all in one place.' },
     login: { title: 'Sign In | MemoPear', description: 'Log in or create your MemoPear account to start capturing conference contacts.' },
-    pricing: { title: 'Pricing | MemoPear', description: 'One simple plan. Scan badges, use voice notes, sync to Google Sheets, and more for just $2.80/month.' },
+    pricing: { title: 'Pricing | MemoPear', description: 'One simple plan. Scan badges, snap business cards, sync to Google Sheets, and more for just $2.80/month.' },
     form: { title: 'Add a Contact | MemoPear', description: 'Quickly add a new contact from a conference — scan a badge, snap a card, or just type their info.' },
     history: { title: 'Your Contacts | MemoPear', description: 'Browse and manage all the contacts you\'ve gathered at events and conferences.' },
-    payment: { title: 'Upgrade | MemoPear', description: 'Unlock AI scanning, voice notes, LinkedIn lookup, and Google Sheets sync.' },
+    payment: { title: 'Upgrade | MemoPear', description: 'Unlock AI scanning, business card OCR, LinkedIn lookup, and Google Sheets sync.' },
     profile: { title: 'Profile | MemoPear', description: 'Manage your MemoPear profile, conferences, and billing settings.' },
     privacy: { title: 'Privacy Policy | MemoPear', description: 'How MemoPear handles your data and protects your privacy.' },
     terms: { title: 'Terms & Conditions | MemoPear', description: 'MemoPear terms of service and subscription details.' },
@@ -1583,9 +1426,9 @@ const App: React.FC = () => {
                     <div className="space-y-6 text-left lg:text-right">
                       <div className="w-12 h-12 rounded-full bg-blue-600 text-white flex items-center justify-center font-black text-xl shadow-lg lg:ml-auto">2</div>
                       <h3 className="text-4xl font-black tracking-tight leading-none">Let AI Do the Heavy Lifting</h3>
-                      <p className="text-lg text-slate-500 font-medium leading-relaxed">Our AI reads business cards, transcribes your voice notes, and pulls LinkedIn profiles automatically. You just have the conversation.</p>
+                      <p className="text-lg text-slate-500 font-medium leading-relaxed">Our AI reads business cards, extracts every field, and pulls LinkedIn profiles automatically. You just have the conversation.</p>
                       <ul className="space-y-4 lg:flex lg:flex-col lg:items-end">
-                         {['Business Card OCR', 'Voice Note Transcription', 'LinkedIn Lookup'].map(item => (
+                         {['Business Card OCR', 'Badge QR Scanning', 'LinkedIn Lookup'].map(item => (
                            <li key={item} className="flex items-center gap-3 text-xs font-bold text-slate-400 uppercase tracking-widest">
                              {item} <span className="w-4 h-0.5 bg-blue-600"></span>
                            </li>
@@ -1763,7 +1606,7 @@ const App: React.FC = () => {
                 {[
                   { title: "AI Badge & Card Scanner", desc: "Snap a photo or scan a QR code — we fill in the details automatically." },
                   { title: "Business Card OCR", desc: "Our AI reads any business card with incredible accuracy." },
-                  { title: "Voice Note Transcription", desc: "Talk through your notes hands-free and we'll transcribe everything." },
+                  { title: "Quick Notes", desc: "Jot down context and next steps right alongside every contact." },
                   { title: "LinkedIn Lookup", desc: "Find anyone on LinkedIn with one tap — right from their contact card." },
                   { title: "Google Sheets Export", desc: "Push all your contacts to a spreadsheet with a single click." },
                   { title: "Private & Secure", desc: "Everything stays on your device. No cloud storage of your contacts." },
@@ -2202,7 +2045,7 @@ const App: React.FC = () => {
                        <div className="absolute inset-0 z-[60] glass p-10 flex flex-col items-center justify-center text-center rounded-[2rem]">
                           <div className="w-20 h-20 bg-pear-600/10 rounded-full flex items-center justify-center mb-6 text-4xl">🍐</div>
                           <h2 className="text-2xl font-black mb-2 text-pear-700 dark:text-pear-300">{trialExpired ? 'Your Free Trial Has Ended' : 'Unlock Contact Capture'}</h2>
-                          <p className="text-sm text-slate-500 mb-6">{trialExpired ? 'Subscribe to keep saving contacts, scanning badges, and using voice notes.' : 'Upgrade to Pro to save contacts, scan badges, and use voice notes.'}</p>
+                          <p className="text-sm text-slate-500 mb-6">{trialExpired ? 'Subscribe to keep saving contacts, scanning badges, and snapping business cards.' : 'Upgrade to Pro to save contacts, scan badges, and snap business cards.'}</p>
                           <button onClick={() => navigateTo('pricing')} className="w-full py-4 bg-pear-600 text-white font-black rounded-2xl shadow-xl hover:scale-105 transition-all max-w-xs uppercase text-xs tracking-widest">{trialExpired ? 'Subscribe — $2.80/mo' : 'Upgrade to Pro — $2.80/mo'}</button>
                        </div>
                     )}
@@ -2280,7 +2123,7 @@ const App: React.FC = () => {
                        )}
                     </div>
 
-                    {/* Row 6: Notes + Voice — textarea fills space; waves (left) + record button (right) beneath */}
+                    {/* Row 6: Notes — textarea fills the remaining space */}
                     <div className={`flex flex-col gap-2 flex-1 min-h-0 transition-all duration-500 ${showTour && tourStep === 5 ? 'ring-2 ring-pear-500 rounded-xl animate-pulse' : ''}`}>
                        <textarea
                          value={notes}
@@ -2288,25 +2131,6 @@ const App: React.FC = () => {
                          placeholder="What did you talk about? Any next steps?"
                          className={`flex-1 min-h-0 p-3 rounded-xl bg-white dark:bg-white/5 border outline-none text-xs leading-relaxed resize-none transition-all ${showTour && tourStep === 5 ? 'border-pear-500' : 'border-slate-200 dark:border-white/10 focus:border-pear-500/50'}`}
                        />
-                       <div className="flex-shrink-0 flex gap-2 h-20">
-                          {/* Left half: live sound-wave visualizer */}
-                          <div className="flex-1 rounded-xl bg-slate-900 border-2 border-red-500/40 px-3 flex items-center overflow-hidden">
-                             <RecordingWaveform analyserRef={analyserRef} />
-                          </div>
-                          {/* Right half: red record button with a big mic */}
-                          <button
-                            type="button"
-                            onPointerDown={handleRecordPress}
-                            onPointerUp={handleRecordRelease}
-                            onPointerCancel={handleRecordRelease}
-                            onContextMenu={(e) => e.preventDefault()}
-                            className={`flex-1 rounded-xl border-2 select-none touch-none active:scale-95 transition-all flex flex-col items-center justify-center gap-1 shadow-lg text-white ${isTranscribing ? 'bg-red-600 border-red-600 recording-pulse' : 'bg-red-500 border-red-500 hover:bg-red-600'}`}
-                            title="Hold to record a voice note, release to stop"
-                          >
-                            <span className="text-4xl leading-none">🎙️</span>
-                            <span className="text-[10px] font-black uppercase tracking-wider">{isTranscribing ? 'Recording…' : 'Hold to record'}</span>
-                          </button>
-                       </div>
                     </div>
 
                     {/* Row 7: Submit */}
@@ -2683,35 +2507,45 @@ const App: React.FC = () => {
         </button>
       )}
 
-      {/* Platform Tour Modal */}
-      {showTour && (
-         <div className="fixed inset-0 z-[300] flex items-center justify-center p-6 bg-slate-900/95 backdrop-blur-3xl animate-in fade-in duration-500">
-            <div className="max-w-md w-full glass p-8 md:p-12 rounded-[3rem] md:rounded-[4rem] text-center shadow-[0_0_100px_rgba(37,99,235,0.2)] border-blue-600/20">
-               <div className="w-16 h-16 md:w-24 md:h-24 bg-blue-600 rounded-2xl md:rounded-[2.5rem] flex items-center justify-center mx-auto mb-6 md:mb-10 text-3xl md:text-5xl shadow-2xl">
-                  {TOUR_STEPS[tourStep].icon}
+      {/* Platform Tour — a compact, non-blocking card so the real buttons it
+          describes stay visible (and pulse-highlighted) on the actual screen.
+          Anchors to the top for steps that point at lower controls (notes /
+          save) and to the bottom otherwise, so the card never hides the button
+          being explained. */}
+      {showTour && (() => {
+         const anchorTop = tourStep === 5 || tourStep === 6;
+         return (
+         <div className={`fixed inset-0 z-[300] flex flex-col p-4 md:p-6 pointer-events-none ${anchorTop ? 'justify-start' : 'justify-end'}`}>
+            <div className={`max-w-md w-full md:mx-auto glass p-6 md:p-7 rounded-[2rem] md:rounded-[2.5rem] shadow-[0_0_60px_rgba(37,99,235,0.25)] border border-blue-600/30 pointer-events-auto duration-300 ${anchorTop ? 'animate-in slide-in-from-top-6' : 'animate-in slide-in-from-bottom-6'}`}>
+               <div className="flex items-start gap-4 mb-4">
+                  <div className="w-12 h-12 md:w-14 md:h-14 flex-shrink-0 bg-blue-600 rounded-2xl flex items-center justify-center text-2xl md:text-3xl shadow-xl">
+                     {TOUR_STEPS[tourStep].icon}
+                  </div>
+                  <div className="text-left flex-1 min-w-0">
+                     <h2 className="text-lg md:text-xl font-black tracking-tight mb-1">{TOUR_STEPS[tourStep].title}</h2>
+                     <p className="text-[11px] md:text-xs text-slate-500 dark:text-slate-400 font-medium leading-relaxed">{TOUR_STEPS[tourStep].description}</p>
+                  </div>
                </div>
-               <div className="mb-6 md:mb-10">
-                  <h2 className="text-2xl md:text-3xl font-black mb-2 md:mb-4 tracking-tight">{TOUR_STEPS[tourStep].title}</h2>
-                  <p className="text-xs md:text-sm text-slate-400 font-medium leading-relaxed">{TOUR_STEPS[tourStep].description}</p>
-               </div>
-               
-               <div className="flex gap-1.5 md:gap-2 justify-center mb-6 md:mb-10">
+
+               <div className="flex gap-1.5 md:gap-2 justify-center mb-5">
                   {TOUR_STEPS.map((_, i) => (
-                    <div key={i} className={`h-1 md:h-1.5 rounded-full transition-all duration-300 ${i === tourStep ? 'w-6 md:w-8 bg-blue-600' : 'w-1.5 md:w-2 bg-slate-700'}`} />
+                    <div key={i} className={`h-1 md:h-1.5 rounded-full transition-all duration-300 ${i === tourStep ? 'w-6 md:w-8 bg-blue-600' : 'w-1.5 md:w-2 bg-slate-300 dark:bg-slate-700'}`} />
                   ))}
                </div>
 
-               <button 
-                  onClick={nextTourStep}
-                  className="w-full py-4 md:py-6 bg-blue-600 text-white font-black rounded-2xl md:rounded-3xl text-[10px] md:text-xs uppercase tracking-widest shadow-2xl hover:scale-[1.02] active:scale-95 transition-all"
-               >
-                  {tourStep === TOUR_STEPS.length - 1 ? "Let's Go!" : 'Next'}
-               </button>
-               
-               <button onClick={completeTour} className="mt-6 text-slate-500 font-black text-[10px] uppercase tracking-widest hover:text-white transition-colors">Stop tour</button>
+               <div className="flex items-center gap-3">
+                  <button onClick={completeTour} className="px-2 text-slate-400 dark:text-slate-500 font-black text-[10px] uppercase tracking-widest hover:text-slate-600 dark:hover:text-white transition-colors">Stop</button>
+                  <button
+                     onClick={nextTourStep}
+                     className="flex-1 py-3.5 md:py-4 bg-blue-600 text-white font-black rounded-2xl text-[10px] md:text-xs uppercase tracking-widest shadow-xl hover:scale-[1.02] active:scale-95 transition-all"
+                  >
+                     {tourStep === TOUR_STEPS.length - 1 ? "Let's Go!" : 'Next'}
+                  </button>
+               </div>
             </div>
          </div>
-      )}
+         );
+      })()}
 
       {/* Existing Modals and Scanners */}
       {activeModal === 'sheets' && (
@@ -2759,7 +2593,18 @@ const App: React.FC = () => {
            </div>
         </div>
       )}
-      
+
+      {/* Brief "Contact saved" confirmation — auto-dismisses after 2 seconds. */}
+      {showSavedPopup && (
+        <div className="fixed inset-0 z-[320] flex items-center justify-center p-6 pointer-events-none">
+           <div className="glass px-8 py-6 rounded-[2rem] text-center shadow-2xl border border-pear-600/30 animate-in fade-in zoom-in-95 duration-200 pointer-events-auto">
+              <div className="w-16 h-16 bg-pear-600/10 rounded-full flex items-center justify-center mx-auto mb-4 text-3xl">✅</div>
+              <h2 className="text-lg md:text-xl font-black tracking-tight">Contact Saved</h2>
+              <p className="text-[10px] md:text-xs text-slate-500 font-bold mt-1">Added to your contacts.</p>
+           </div>
+        </div>
+      )}
+
     </div>
   );
 };

@@ -175,7 +175,7 @@ export const Company: React.FC<{ onBack: () => void }> = ({ onBack }) => {
           <p>MemoPear exists to make capturing and following up on leads effortless. Our mission is to give every field marketer, every field sales rep, and every conference attendee a simple, fast way to gather leads on the floor — and an organized, reliable way to follow up after the conference is over.</p>
         </section>
 
-        <p>Scan a badge, snap a card, record a quick voice note — and let MemoPear handle the rest. No friction in the moment, no lost contacts after the lights go down.</p>
+        <p>Scan a badge, snap a card, jot down a quick note — and let MemoPear handle the rest. No friction in the moment, no lost contacts after the lights go down.</p>
 
         <section className="p-8 bg-slate-100 dark:bg-white/5 rounded-[2rem] border border-slate-200 dark:border-white/10">
           <h2 className="text-lg font-black text-slate-900 dark:text-white mb-2">Want to talk?</h2>
