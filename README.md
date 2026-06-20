@@ -190,6 +190,11 @@ both single-seat and multi-seat paid accounts):
   remains the offline cache; on login the local and cloud copies are merged so
   nothing captured offline is lost.
 
+**30-day retention.** Each contact is automatically deleted 30 days after its
+creation date (`timestamp`), for security. The purge runs client-side on load
+and hourly while the app is open, and is written through to state, the local
+cache, and the cloud copy — so expired contacts disappear from every device.
+
 Add this rule so each user can only read/write their own contacts:
 
 ```

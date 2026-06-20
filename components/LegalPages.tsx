@@ -41,6 +41,7 @@ export const PrivacyPolicy: React.FC<{ onBack: () => void }> = ({ onBack }) => {
         <section>
           <h2 className="text-xl font-black text-slate-900 dark:text-white mb-2 uppercase tracking-tight">4. Your Rights and Data Deletion</h2>
           <p>You have the right to access, update, or delete your personal information at any time. If you wish to delete your account and all associated data, please contact us at the email address below.</p>
+          <p>Your contacts never leave your account. For your security, each contact is automatically deleted 30 days after it was created. Export anything you want to keep before then.</p>
         </section>
 
         <section>
