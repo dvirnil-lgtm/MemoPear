@@ -179,6 +179,28 @@ localStorage-only login anymore.
 > Accounts created under the previous localStorage-only login do not exist in
 > Firebase and must sign up again.
 
+## Cross-device Contacts (Firestore)
+
+Captured contacts sync across every device an account signs in from (works for
+both single-seat and multi-seat paid accounts):
+
+- `userLeads/{accountId}` — one doc per account (keyed by the stable Firebase
+  uid) holding the user's `leads` array. The whole array is written on each
+  change and streamed back to other devices via `onSnapshot`. `localStorage`
+  remains the offline cache; on login the local and cloud copies are merged so
+  nothing captured offline is lost.
+
+Add this rule so each user can only read/write their own contacts:
+
+```
+match /userLeads/{accountId} {
+  allow read, write: if request.auth != null && request.auth.uid == accountId;
+}
+```
+
+> Without this rule the writes fail silently (the app keeps working from the
+> local cache, but contacts won't follow the user to another device).
+
 ## Exporting Leads (Google Sheets + Email)
 
 From the **Contacts** tab the user can export captured leads two ways. Both
