@@ -1,0 +1,164 @@
+==============================================================================
+MEMOPEAR — MARKETING VIDEO SCRIPT
+==============================================================================
+Tagline:   Simply Better Lead Collection.
+Tone:      Energetic, confident, modern. Fast cuts on the conference floor;
+           calm and clean inside the app.
+Music:     Upbeat electronic / driving beat that lifts at the CTA.
+Runtime:   :60 hero spot (+ :30 and :15 cutdowns + :06 bumper below)
+Color:     Brand teal/green ("pear") + deep navy. Gold accents on the logo.
+==============================================================================
+
+
+------------------------------------------------------------------------------
+:60 HERO SPOT
+------------------------------------------------------------------------------
+
+[0:00–0:05]  THE HOOK
+  VISUAL:   Fast montage — a busy conference hall, badges, business cards
+            piling up, a phone buried under a stack of cards. A card slips
+            off a table and lands on the floor.
+  VO:       "You met a hundred people today. By Friday, you'll remember five."
+  TEXT:     LOST CONTACTS = LOST DEALS
+
+[0:05–0:12]  THE TURN
+  VISUAL:   Hand pulls out a phone. MemoPear logo animates in. Screen snaps
+            to the clean Add-Contact screen.
+  VO:       "There's a better way. Meet MemoPear."
+  TEXT:     MemoPear — Simply Better Lead Collection
+
+[0:12–0:24]  CAPTURE IN SECONDS
+  VISUAL:   1) Tap "QR" → phone scans a badge → fields fill instantly.
+            2) Tap the card button → snap a business card → AI fills every
+               field (name, company, email, phone) in real time.
+  VO:       "Scan a badge. Snap a card. Our AI fills in every detail — so you
+            capture a contact in seconds, not minutes."
+  TEXT:     SCAN. SNAP. DONE.
+
+[0:24–0:36]  FOLLOW UP LIKE A PRO
+  VISUAL:   Pick follow-up channels (LinkedIn, email, WhatsApp). Type a quick
+            note. Tap "Save Contact" → the "Contact Saved ✅" popup. Cut to the
+            Contacts list; tap "Generate follow-up email" → an AI draft appears.
+  VO:       "Choose how you'll follow up, add a note, and save. MemoPear even
+            drafts your follow-up emails — so the conversation never goes cold."
+  TEXT:     AI FOLLOW-UP EMAILS, READY TO SEND
+
+[0:36–0:46]  EVERYWHERE, AND SECURE
+  VISUAL:   Same contact list appearing on a phone, a laptop, and a tablet
+            simultaneously. Then a one-tap export to a Google Sheet. A subtle
+            lock icon.
+  VO:       "Your contacts sync to every device automatically — and stay private
+            to your account. Export to Google Sheets in one tap whenever you're
+            ready."
+  TEXT:     ON EVERY DEVICE · PRIVATE BY DESIGN
+
+[0:46–0:54]  FOR TEAMS
+  VISUAL:   Share one invite link; teammates' avatars pop in. A shared team
+            dashboard fills with leads.
+  VO:       "Working a booth as a team? Invite everyone with a single link and
+            capture together."
+  TEXT:     ONE LINK. WHOLE TEAM.
+
+[0:54–1:00]  THE CTA
+  VISUAL:   Logo locks up center screen with website + app badges. Price chip.
+  VO:       "Stop losing contacts. Start closing deals. Try MemoPear free today."
+  TEXT:     Start your free trial → memopear.com
+            Just $2.80/month
+
+
+------------------------------------------------------------------------------
+:30 CUTDOWN
+------------------------------------------------------------------------------
+
+[0:00–0:04]
+  VISUAL:   Stack of business cards; one falls.
+  VO:       "You met a hundred people today. How many will you remember?"
+  TEXT:     LOST CONTACTS = LOST DEALS
+
+[0:04–0:10]
+  VISUAL:   Logo in. Tap QR → badge fills. Snap card → AI fills fields.
+  VO:       "MemoPear turns badges and business cards into organized contacts —
+            in seconds."
+  TEXT:     SCAN. SNAP. DONE.
+
+[0:10–0:20]
+  VISUAL:   Save Contact popup → Contacts list → AI follow-up email draft →
+            same list on phone + laptop.
+  VO:       "Save them, get an AI-drafted follow-up, and find them on every
+            device — automatically."
+  TEXT:     AI FOLLOW-UPS · SYNCED EVERYWHERE
+
+[0:20–0:30]
+  VISUAL:   Google Sheets export; team invite link; logo lockup.
+  VO:       "Export to Google Sheets, invite your team, and never lose a lead
+            again. Try MemoPear free."
+  TEXT:     Start your free trial → memopear.com · $2.80/mo
+
+
+------------------------------------------------------------------------------
+:15 SOCIAL CUT (vertical / 9:16)
+------------------------------------------------------------------------------
+
+[0:00–0:03]
+  VISUAL:   Phone scans a conference badge; fields fill instantly.
+  VO/TEXT:  "Scan a badge —"
+
+[0:03–0:07]
+  VISUAL:   Snap a business card; AI fills name/company/email.
+  VO/TEXT:  "— snap a card —"
+
+[0:07–0:11]
+  VISUAL:   Save Contact popup; same contact appears on a second device.
+  VO/TEXT:  "— and it's on all your devices."
+
+[0:11–0:15]
+  VISUAL:   Logo lockup + CTA.
+  VO/TEXT:  "MemoPear. Try it free. memopear.com"
+
+
+------------------------------------------------------------------------------
+:06 BUMPER (pre-roll)
+------------------------------------------------------------------------------
+  VISUAL:   Quick badge-scan → "Contact Saved ✅" → logo.
+  VO/TEXT:  "Capture every contact. MemoPear — try it free."
+
+
+==============================================================================
+TAGLINE BANK (for thumbnails, end cards, captions)
+==============================================================================
+- Simply Better Lead Collection.
+- Stop losing contacts at conferences.
+- Scan. Snap. Done.
+- Every contact, every device, zero lost cards.
+- The conference floor's smartest follow-up tool.
+- You worked the room — now work the leads.
+
+
+==============================================================================
+KEY MESSAGES (keep every cut on-brand)
+==============================================================================
+1. Speed:        Capture a contact in seconds (QR badge + AI card scan).
+2. Follow-up:    Pick channels, add notes, AI-drafted follow-up emails.
+3. Everywhere:   Auto-sync across all your devices.
+4. Trust:        Private to your account; auto-deletes after 30 days.
+5. Teams:        Invite the whole team with one link.
+6. Price/offer:  Free trial, then $2.80/month.
+
+
+==============================================================================
+PRODUCTION NOTES
+==============================================================================
+- Record app footage on a demo/QA account on a free trial so nothing is paywalled.
+- Pre-load 3–5 realistic sample contacts before filming the Contacts list.
+- Have a sample badge QR code and a business-card image ready for the scan shots.
+- Shoot app screens in a narrow / portrait frame (mobile-first layout).
+- B-roll to capture or license: busy expo hall, booth conversations, handshake,
+  badge close-ups, a messy stack of business cards (the "problem" shot).
+- Keep app interactions slow and deliberate; leave ~1s after each tap for cuts.
+- Superimpose on-screen TEXT as bold, short kinetic captions (brand teal on navy).
+- Always end on the logo lockup + CTA + price chip.
+
+DISCLAIMER TO VERIFY BEFORE PUBLISHING:
+- Confirm the current price ($2.80/month) and any trial length on screen/in VO.
+- "Auto-deletes after 30 days" is a real product behavior — keep it accurate.
+==============================================================================
