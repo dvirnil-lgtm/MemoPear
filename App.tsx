@@ -793,6 +793,7 @@ const App: React.FC = () => {
     { key: 'website', label: 'Website' },
     { key: 'conferenceName', label: 'Conference' },
     { key: 'notes', label: 'Notes' },
+    { key: 'aiSummary', label: 'Suggested Email' },
   ];
 
   // Header row + one row per lead, as plain strings (used for both CSV and the
@@ -838,6 +839,7 @@ const App: React.FC = () => {
         l.website && `Website: ${l.website}`,
         l.conferenceName && `Conference: ${l.conferenceName}`,
         l.notes && `Notes: ${l.notes}`,
+        l.aiSummary && `Suggested Email: ${l.aiSummary}`,
       ].filter(Boolean);
       return lines.join('\n');
     });
