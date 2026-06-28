@@ -1,9 +1,10 @@
 User-agent: *
 Allow: /
+Disallow: /login
 Disallow: /gather
 Disallow: /pipeline
 Disallow: /profile
 Disallow: /team
 Disallow: /payment
 
-Sitemap: https://memopear.com/sitemap.xml
+Sitemap: https://go.memopear.com/sitemap.xml

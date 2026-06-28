@@ -10,13 +10,22 @@
 - Exports leads to Google Sheets in one tap
 - Supports team seat plans with shared pipeline access
 
-## Key pages
+## Public pages
 
-- Home: https://memopear.com/
-- Pricing: https://memopear.com/pricing
-- Privacy Policy: https://memopear.com/privacy
-- Terms of Service: https://memopear.com/terms
-- Contact: https://memopear.com/contact
+- Home: https://go.memopear.com/
+- Pricing: https://go.memopear.com/pricing
+- Company: https://go.memopear.com/company
+- Contact: https://go.memopear.com/contact
+- Privacy Policy: https://go.memopear.com/privacy
+- Terms of Service: https://go.memopear.com/terms
+
+## App pages (require sign-in, not indexed)
+
+- Login / Sign up: https://go.memopear.com/login
+- Gather (lead capture): https://go.memopear.com/gather
+- Pipeline (saved leads): https://go.memopear.com/pipeline
+- Profile: https://go.memopear.com/profile
+- Team management: https://go.memopear.com/team
 
 ## Technology
 
@@ -28,4 +37,4 @@
 
 ## Contact
 
-For questions about data use or API access, visit https://memopear.com/contact
+For questions about data use or API access, visit https://go.memopear.com/contact
