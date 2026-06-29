@@ -2150,24 +2150,33 @@ const App: React.FC = () => {
                        </div>
                     )}
 
-                    {/* Row 1: Conference + Scan buttons */}
-                    <div className="flex gap-2 flex-shrink-0 relative group">
+                    {/* Row 1: Conference name */}
+                    <div className="flex-shrink-0 relative group">
                        <input
                          type="text"
                          value={conferenceName}
                          onChange={(e) => setConferenceName(e.target.value)}
                          placeholder="Conference name"
-                         className="flex-1 min-w-0 px-3 py-2 rounded-xl bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 text-xs font-bold outline-none focus:border-pear-500/50 transition-all"
+                         className="w-full min-w-0 px-3 py-2 rounded-xl bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 text-xs font-bold outline-none focus:border-pear-500/50 transition-all"
                        />
-                       <button type="button" onClick={() => setIsScanning(true)} className={`px-3 py-2 rounded-xl bg-pear-600/10 text-pear-600 text-[8px] font-black uppercase border border-pear-600/20 active:scale-95 transition-all flex-shrink-0 ${showTour && tourStep === 1 ? 'ring-2 ring-pear-500 animate-pulse' : ''}`}>QR</button>
-                       <button type="button" onClick={() => cardInputRef.current?.click()} className={`px-3 py-2 rounded-xl bg-stem-600/10 text-stem-600 text-[8px] font-black uppercase border border-stem-600/20 active:scale-95 transition-all flex-shrink-0 ${showTour && tourStep === 2 ? 'ring-2 ring-pear-500 animate-pulse' : ''}`}>
-                         <input type="file" ref={cardInputRef} className="hidden" accept="image/*" capture="environment" onChange={handleCardCapture} />Scan Card
-                       </button>
                        <div className="absolute top-full left-0 right-0 z-50 mt-1 glass rounded-xl border border-pear-100 dark:border-white/10 shadow-2xl max-h-40 overflow-y-auto hidden group-focus-within:block">
                          {[...userProfile.conferences, 'MWC Barcelona', 'Web Summit', 'Dreamforce', 'CES 2025'].map((c, i) => (
                            <button key={i} type="button" onMouseDown={() => setConferenceName(c)} className="w-full text-left px-4 py-2 text-xs font-bold hover:bg-pear-50 dark:hover:bg-white/5 transition-colors border-b border-slate-100 dark:border-white/5 last:border-0">{c}</button>
                          ))}
                        </div>
+                    </div>
+
+                    {/* Row 1b: Big, easy-to-tap scan buttons */}
+                    <div className="flex gap-3 flex-shrink-0">
+                       <button type="button" onClick={() => setIsScanning(true)} className={`flex-1 flex items-center justify-center gap-2 px-4 py-4 rounded-2xl bg-pear-600/10 text-pear-600 text-sm font-black uppercase tracking-wide border border-pear-600/20 shadow-sm active:scale-95 transition-all ${showTour && tourStep === 1 ? 'ring-2 ring-pear-500 animate-pulse' : ''}`}>
+                         <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3.75 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0 0 1 3.75 9.375v-4.5ZM3.75 14.625c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5a1.125 1.125 0 0 1-1.125-1.125v-4.5ZM13.5 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0 0 1 13.5 9.375v-4.5Z" /><path strokeLinecap="round" strokeLinejoin="round" d="M6.75 6.75h.008v.008H6.75V6.75ZM6.75 16.5h.008v.008H6.75V16.5ZM16.5 6.75h.008v.008H16.5V6.75ZM13.5 13.5h.008v.008h-.008V13.5ZM13.5 19.5h.008v.008h-.008V19.5ZM19.5 13.5h.008v.008h-.008V13.5ZM19.5 19.5h.008v.008h-.008V19.5ZM16.5 16.5h.008v.008h-.008V16.5Z" /></svg>
+                         Scan QR
+                       </button>
+                       <button type="button" onClick={() => cardInputRef.current?.click()} className={`flex-1 flex items-center justify-center gap-2 px-4 py-4 rounded-2xl bg-stem-600/10 text-stem-600 text-sm font-black uppercase tracking-wide border border-stem-600/20 shadow-sm active:scale-95 transition-all ${showTour && tourStep === 2 ? 'ring-2 ring-pear-500 animate-pulse' : ''}`}>
+                         <input type="file" ref={cardInputRef} className="hidden" accept="image/*" capture="environment" onChange={handleCardCapture} />
+                         <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6.827 6.175A2.31 2.31 0 0 1 5.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 0 0-1.134-.175 2.31 2.31 0 0 1-1.64-1.055l-.822-1.316a2.192 2.192 0 0 0-1.736-1.039 48.774 48.774 0 0 0-5.232 0 2.192 2.192 0 0 0-1.736 1.039l-.821 1.316Z" /><path strokeLinecap="round" strokeLinejoin="round" d="M16.5 12.75a4.5 4.5 0 1 1-9 0 4.5 4.5 0 0 1 9 0ZM18.75 10.5h.008v.008h-.008V10.5Z" /></svg>
+                         Scan Card
+                       </button>
                     </div>
 
                     {/* Row 2: Name fields */}
