@@ -421,8 +421,7 @@ const App: React.FC = () => {
   const [jobTitle, setJobTitle] = useState('');
   const [website, setWebsite] = useState('');
   const [conferenceName, setConferenceName] = useState('');
-  const [firstName, setFirstName] = useState('');
-  const [lastName, setLastName] = useState('');
+  const [fullName, setFullName] = useState('');
   const [notes, setNotes] = useState('');
   const [commMethods, setCommMethods] = useState<CommMethod[]>([]);
   const [contactValues, setContactValues] = useState<Partial<Record<CommMethod, string>>>({});
@@ -1152,8 +1151,8 @@ const App: React.FC = () => {
     setIsSubmitting(true);
     try {
       const data = await parseScannedData(decodedText);
-      if (data.firstName) setFirstName(data.firstName);
-      if (data.lastName) setLastName(data.lastName);
+      const name = [data.firstName, data.lastName].filter(Boolean).join(' ').trim();
+      if (name) setFullName(name);
       if (data.company) setCompany(data.company);
       if (data.jobTitle) setJobTitle(data.jobTitle);
       if (data.website) setWebsite(data.website);
@@ -1180,8 +1179,8 @@ const App: React.FC = () => {
         try {
           const base64 = reader.result as string;
           const data = await parseBusinessCard(base64);
-          if (data.firstName) setFirstName(data.firstName);
-          if (data.lastName) setLastName(data.lastName);
+          const name = [data.firstName, data.lastName].filter(Boolean).join(' ').trim();
+          if (name) setFullName(name);
           if (data.company) setCompany(data.company);
           if (data.jobTitle) setJobTitle(data.jobTitle);
           if (data.website) setWebsite(data.website);
@@ -1210,8 +1209,8 @@ const App: React.FC = () => {
     setIsSubmitting(true);
     try {
       const parsed = await parseScannedData(data);
-      if (parsed.firstName) setFirstName(parsed.firstName);
-      if (parsed.lastName) setLastName(parsed.lastName);
+      const name = [parsed.firstName, parsed.lastName].filter(Boolean).join(' ').trim();
+      if (name) setFullName(name);
       if (parsed.company) setCompany(parsed.company);
       if (parsed.jobTitle) setJobTitle(parsed.jobTitle);
       if (parsed.email) setEmail(parsed.email);
@@ -1267,6 +1266,22 @@ const App: React.FC = () => {
     }
   };
 
+  // Let people advance through the form with Enter (handy on mobile/tablet
+  // keyboards where Tab isn't available). Enter on a text input jumps to the
+  // next field instead of submitting; the notes textarea and the submit
+  // button keep their normal behaviour.
+  const handleFormKeyDown = (e: React.KeyboardEvent<HTMLFormElement>) => {
+    if (e.key !== 'Enter') return;
+    const target = e.target as HTMLElement;
+    if (target.tagName !== 'INPUT') return;
+    e.preventDefault();
+    const fields = Array.from(
+      e.currentTarget.querySelectorAll<HTMLElement>('input:not([type="hidden"]), textarea')
+    ).filter((el) => !(el as HTMLInputElement).disabled && el.offsetParent !== null);
+    const idx = fields.indexOf(target);
+    if (idx > -1 && idx < fields.length - 1) fields[idx + 1].focus();
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!hasAccess) {
@@ -1274,7 +1289,13 @@ const App: React.FC = () => {
       setStatusMsg({ type: 'error', text: trialExpired ? 'Your free trial has ended — subscribe to keep capturing contacts.' : 'Upgrade to Pro to save contacts.' });
       return;
     }
-    if (!firstName || !lastName) { setStatusMsg({ type: 'error', text: 'Identity required.' }); return; }
+    const trimmedName = fullName.trim();
+    if (!trimmedName) { setStatusMsg({ type: 'error', text: 'Identity required.' }); return; }
+    // Split the single full-name field into first/last for the stored Lead.
+    // The first word is the first name; everything after is the last name.
+    const nameParts = trimmedName.split(/\s+/);
+    const firstName = nameParts[0];
+    const lastName = nameParts.slice(1).join(' ');
     setIsSubmitting(true);
     const newLead: Lead = {
       id: crypto.randomUUID(), firstName, lastName, email, phone, company, jobTitle, website, conferenceName, commMethods, contactValues, notes, timestamp: Date.now(),
@@ -1282,7 +1303,7 @@ const App: React.FC = () => {
     newLead.aiSummary = await generateLeadReport(newLead);
     const updated = [newLead, ...leads];
     persistLeads(updated);
-    setFirstName(''); setLastName(''); setEmail(''); setPhone(''); setCompany(''); setJobTitle(''); setWebsite(''); setNotes(''); setCommMethods([]); setContactValues({});
+    setFullName(''); setEmail(''); setPhone(''); setCompany(''); setJobTitle(''); setWebsite(''); setNotes(''); setCommMethods([]); setContactValues({});
     setShowContactFields(false);
     setIsSubmitting(false);
     // Show a brief confirmation that the contact was saved.
@@ -2129,7 +2150,7 @@ const App: React.FC = () => {
         {isLoggedIn && (view === 'form' || view === 'history') && (
            <div className={view === 'form' ? 'h-full flex flex-col' : 'p-3 md:p-6'}>
               {view === 'form' && (
-                 <form onSubmit={handleSubmit} className="relative h-full flex flex-col max-w-2xl mx-auto w-full px-3 py-2 gap-2">
+                 <form onSubmit={handleSubmit} onKeyDown={handleFormKeyDown} className="gather-form relative h-full flex flex-col max-w-2xl mx-auto w-full px-3 py-2 gap-2">
                     {!hasAccess && (
                        <div className="absolute inset-0 z-[60] glass p-10 flex flex-col items-center justify-center text-center rounded-[2rem]">
                           <div className="w-20 h-20 bg-pear-600/10 rounded-full flex items-center justify-center mb-6 text-4xl">🍐</div>
@@ -2179,10 +2200,9 @@ const App: React.FC = () => {
                        </button>
                     </div>
 
-                    {/* Row 2: Name fields */}
-                    <div className="grid grid-cols-2 gap-2 flex-shrink-0">
-                       <input type="text" value={firstName} onChange={(e) => setFirstName(e.target.value)} placeholder="First name *" className="px-3 py-2 rounded-xl bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 text-xs font-bold outline-none focus:border-pear-500/50 transition-all" required />
-                       <input type="text" value={lastName} onChange={(e) => setLastName(e.target.value)} placeholder="Last name *" className="px-3 py-2 rounded-xl bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 text-xs font-bold outline-none focus:border-pear-500/50 transition-all" required />
+                    {/* Row 2: Full name */}
+                    <div className="flex-shrink-0">
+                       <input type="text" value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="Full name *" className="w-full px-3 py-2 rounded-xl bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 text-xs font-bold outline-none focus:border-pear-500/50 transition-all" required />
                     </div>
 
                     {/* Row 3: Company + Job Title */}
