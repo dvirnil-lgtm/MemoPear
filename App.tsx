@@ -24,6 +24,9 @@ const STORAGE_KEY_RECEIPTS = 'lcp_receipts_v1';
 const STORAGE_KEY_TRIAL_START = 'lcp_trial_start_v1';
 const STORAGE_KEY_ACCOUNT = 'lcp_account_id_v1';
 const STORAGE_KEY_MEMBERSHIP = 'lcp_member_owner_v1';
+// Records that the user accepted the Terms and opted in to marketing emails at
+// sign-up. Stored with a timestamp so consent is auditable.
+const STORAGE_KEY_CONSENT = 'lcp_email_consent_v1';
 
 // Free trial: full access for the first TRIAL_DAYS after account creation,
 // then the app locks until the user subscribes. The trial is anchored to the
@@ -343,6 +346,9 @@ const App: React.FC = () => {
   };
   const [linkedinConnected, setLinkedinConnected] = useState(false);
   const [authMode, setAuthMode] = useState<'login' | 'signup'>('signup');
+  // Sign-up consent: the user must agree to the Terms and opt in to emails
+  // before an account can be created (email/password or social).
+  const [agreedToTerms, setAgreedToTerms] = useState(false);
   type AppView = 'home' | 'login' | 'pricing' | 'form' | 'history' | 'payment' | 'profile' | 'privacy' | 'terms' | 'contact' | 'team' | 'company' | 'blog' | 'blogPost';
   // Resolve a pathname to a view (and, for blog posts, the post slug). Blog
   // posts live at /blog/<slug>, so they need prefix matching rather than the
@@ -903,6 +909,10 @@ const App: React.FC = () => {
   const handleAuth = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (authMode === 'signup') {
+      if (!agreedToTerms) {
+        setStatusMsg({ type: 'error', text: 'Please agree to the Terms & Conditions and email consent to continue.' });
+        return;
+      }
       if (password.length < 8) {
         setStatusMsg({ type: 'error', text: 'Password must be at least 8 characters.' });
         return;
@@ -935,7 +945,10 @@ const App: React.FC = () => {
     const userEmail = user.email || email;
     const authData = { email: userEmail, timestamp: Date.now() };
     localStorage.setItem(STORAGE_KEY_AUTH, JSON.stringify(authData));
-    const savedProfile = { ...userProfile, email: userEmail };
+    if (authMode === 'signup') {
+      localStorage.setItem(STORAGE_KEY_CONSENT, JSON.stringify({ email: userEmail, agreedToTerms: true, emailOptIn: true, timestamp: Date.now() }));
+    }
+    const savedProfile = { ...userProfile, email: userEmail, emailConsent: authMode === 'signup' ? true : userProfile.emailConsent };
     localStorage.setItem('memo_profile', JSON.stringify(savedProfile));
     setIsLoggedIn(true);
     setUserProfile(savedProfile);
@@ -976,6 +989,10 @@ const App: React.FC = () => {
 
   const handleSocialAuth = async (provider: 'google' | 'linkedin') => {
     setSocialAuthError(null);
+    if (authMode === 'signup' && !agreedToTerms) {
+      setStatusMsg({ type: 'error', text: 'Please agree to the Terms & Conditions and email consent to continue.' });
+      return;
+    }
     const popupOpenedAt = Date.now();
     try {
       const result = await (provider === 'google' ? signInWithGoogle() : signInWithLinkedIn());
@@ -984,7 +1001,10 @@ const App: React.FC = () => {
       const userName = user.displayName || '';
       const authData = { email: userEmail, timestamp: Date.now() };
       localStorage.setItem(STORAGE_KEY_AUTH, JSON.stringify(authData));
-      const savedProfile = { ...userProfile, email: userEmail, name: userName };
+      if (authMode === 'signup') {
+        localStorage.setItem(STORAGE_KEY_CONSENT, JSON.stringify({ email: userEmail, agreedToTerms: true, emailOptIn: true, timestamp: Date.now() }));
+      }
+      const savedProfile = { ...userProfile, email: userEmail, name: userName, emailConsent: authMode === 'signup' ? true : userProfile.emailConsent };
       localStorage.setItem('memo_profile', JSON.stringify(savedProfile));
       setIsLoggedIn(true);
       setUserProfile(savedProfile);
@@ -2241,14 +2261,21 @@ const App: React.FC = () => {
                         onChange={(e) => setConfirmPassword(e.target.value)}
                         className="w-full px-5 py-4 rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 outline-none text-sm font-medium focus:border-blue-500 transition-colors"
                       />
-                      <button type="submit" className="w-full py-4 bg-[#545fc4] text-white font-bold rounded-xl shadow-lg hover:shadow-xl hover:scale-[1.02] active:scale-95 transition-all text-sm">
+                      <label className="flex items-start gap-3 text-left px-1 cursor-pointer select-none">
+                        <input
+                          type="checkbox"
+                          checked={agreedToTerms}
+                          onChange={(e) => setAgreedToTerms(e.target.checked)}
+                          className="mt-0.5 w-4 h-4 flex-shrink-0 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer accent-blue-600"
+                        />
+                        <span className="text-[11px] leading-relaxed text-slate-500 dark:text-slate-400 font-medium">
+                          I agree to MemoPear's <button type="button" onClick={() => navigateTo('terms')} className="underline hover:text-slate-700 dark:hover:text-slate-200 transition-colors">Terms &amp; Conditions</button> and <button type="button" onClick={() => navigateTo('privacy')} className="underline hover:text-slate-700 dark:hover:text-slate-200 transition-colors">Privacy Policy</button>, and I consent to receive product updates and marketing emails from MemoPear. You can unsubscribe at any time.
+                        </span>
+                      </label>
+                      <button type="submit" disabled={!agreedToTerms} className="w-full py-4 bg-[#545fc4] text-white font-bold rounded-xl shadow-lg hover:shadow-xl hover:scale-[1.02] active:scale-95 transition-all text-sm disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100">
                         Create Account
                       </button>
                     </form>
-
-                    <p className="text-[10px] text-slate-400 font-medium text-center">
-                      By signing up, you agree to the <button onClick={() => navigateTo('terms')} className="underline hover:text-slate-600 transition-colors">Terms of use</button> and <button onClick={() => navigateTo('privacy')} className="underline hover:text-slate-600 transition-colors">Privacy Policy</button>.
-                    </p>
                   </div>
                 </div>
               ) : (
@@ -2648,11 +2675,11 @@ const App: React.FC = () => {
         {view === 'terms' && <TermsAndConditions onBack={() => navigateTo('home')} />}
         {view === 'contact' && <ContactUs onBack={() => navigateTo('home')} />}
         {view === 'company' && <Company onBack={() => navigateTo('home')} />}
-        {view === 'blog' && <BlogIndex onBack={() => navigateTo('home')} onOpenPost={navigateToBlogPost} />}
+        {view === 'blog' && <BlogIndex onBack={() => navigateTo('home')} onOpenPost={navigateToBlogPost} onGetStarted={() => navigateTo('pricing')} />}
         {view === 'blogPost' && (() => {
           const post = getPostBySlug(blogSlug);
-          if (!post) return <BlogIndex onBack={() => navigateTo('home')} onOpenPost={navigateToBlogPost} />;
-          return <BlogPostView post={post} onBack={() => navigateTo('blog')} onOpenPost={navigateToBlogPost} />;
+          if (!post) return <BlogIndex onBack={() => navigateTo('home')} onOpenPost={navigateToBlogPost} onGetStarted={() => navigateTo('pricing')} />;
+          return <BlogPostView post={post} onBack={() => navigateTo('blog')} onOpenPost={navigateToBlogPost} onGetStarted={() => navigateTo('pricing')} />;
         })()}
       </main>
 

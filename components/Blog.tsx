@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 
 // ---------------------------------------------------------------------------
 // MemoPear Blog
@@ -499,77 +499,49 @@ const formatDate = (iso: string): string =>
   });
 
 // ---------------------------------------------------------------------------
-// Subscribe banner — the CTA woven through every post. Captures an email,
-// stores it locally as a lightweight newsletter opt-in, and confirms.
+// Subscribe banner — the CTA woven through every post. Drives readers to the
+// pricing page to start with MemoPear. The pricing-navigation callback is
+// provided via context so banners nested deep inside post content (rendered by
+// <Block>) can reach it without prop drilling.
 // ---------------------------------------------------------------------------
 
-const SUBSCRIBERS_KEY = 'memopear_blog_subscribers';
+export const BlogCtaContext = React.createContext<() => void>(() => {});
 
-export const SubscribeBanner: React.FC<{ compact?: boolean }> = ({ compact }) => {
-  const [email, setEmail] = useState('');
-  const [done, setDone] = useState(false);
-
-  const handleSubscribe = (e: React.FormEvent) => {
-    e.preventDefault();
-    const value = email.trim();
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) return;
-    try {
-      const existing = JSON.parse(localStorage.getItem(SUBSCRIBERS_KEY) || '[]');
-      if (!existing.includes(value)) {
-        existing.push(value);
-        localStorage.setItem(SUBSCRIBERS_KEY, JSON.stringify(existing));
-      }
-    } catch {
-      localStorage.setItem(SUBSCRIBERS_KEY, JSON.stringify([value]));
-    }
-    setDone(true);
-  };
+export const SubscribeBanner: React.FC = () => {
+  const onGetStarted = React.useContext(BlogCtaContext);
 
   return (
     <aside
-      className={`not-prose my-10 ${compact ? '' : 'md:p-10'} p-7 rounded-[2rem] bg-pear-600 text-white shadow-2xl border border-pear-500/40 overflow-hidden relative`}
-      aria-label="Subscribe to MemoPear"
+      className="not-prose my-10 md:p-10 p-7 rounded-[2rem] bg-pear-600 text-white shadow-2xl border border-pear-500/40 overflow-hidden relative"
+      aria-label="Get started with MemoPear"
     >
       <div className="absolute -right-12 -top-12 w-44 h-44 rounded-full bg-white/10 blur-2xl pointer-events-none" />
       <div className="relative">
         <p className="text-[10px] font-black uppercase tracking-[0.25em] text-pear-100 mb-3">
-          MemoPear Field Notes
+          MemoPear
         </p>
-        {done ? (
-          <div>
-            <h3 className="text-2xl md:text-3xl font-black tracking-tight mb-2">You're on the list. 🎉</h3>
-            <p className="text-sm font-medium text-pear-50/90 max-w-xl">
-              We'll send you conference lead-capture playbooks and product updates. No spam, ever — unsubscribe anytime.
-            </p>
-          </div>
-        ) : (
-          <>
-            <h3 className="text-2xl md:text-3xl font-black tracking-tight mb-2">
-              Never lose a conference lead again.
-            </h3>
-            <p className="text-sm font-medium text-pear-50/90 max-w-xl mb-5">
-              Subscribe for tactical guides to capturing, organizing, and following up on leads at the
-              biggest events in tech — straight from the MemoPear team.
-            </p>
-            <form onSubmit={handleSubscribe} className="flex flex-col sm:flex-row gap-3 max-w-lg">
-              <input
-                type="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="you@company.com"
-                aria-label="Email address"
-                className="flex-1 px-5 py-3.5 rounded-2xl bg-white/95 text-ink-900 text-sm font-bold outline-none placeholder:text-slate-400 focus:ring-2 focus:ring-white"
-              />
-              <button
-                type="submit"
-                className="px-6 py-3.5 bg-white text-pear-700 font-black rounded-2xl text-[11px] uppercase tracking-widest shadow-lg hover:scale-[1.03] active:scale-95 transition-transform whitespace-nowrap"
-              >
-                Subscribe Free
-              </button>
-            </form>
-          </>
-        )}
+        <h3 className="text-2xl md:text-3xl font-black tracking-tight mb-2">
+          Never lose a conference lead again.
+        </h3>
+        <p className="text-sm font-medium text-pear-50/90 max-w-xl mb-6">
+          Scan badges, snap business cards, and capture notes in the moment — then follow up with AI.
+          See how affordable it is to turn your next event into pipeline.
+        </p>
+        <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+          <button
+            type="button"
+            onClick={onGetStarted}
+            className="inline-flex items-center justify-center gap-2 px-7 py-3.5 bg-white text-pear-700 font-black rounded-2xl text-[11px] uppercase tracking-widest shadow-lg hover:scale-[1.03] active:scale-95 transition-transform whitespace-nowrap"
+          >
+            Get Started
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M9 5l7 7-7 7" />
+            </svg>
+          </button>
+          <span className="text-[11px] font-bold uppercase tracking-widest text-pear-100/80">
+            See plans &amp; pricing
+          </span>
+        </div>
       </div>
     </aside>
   );
@@ -638,9 +610,11 @@ const Block: React.FC<{ block: BlogBlock }> = ({ block }) => {
 export const BlogIndex: React.FC<{
   onBack: () => void;
   onOpenPost: (slug: string) => void;
-}> = ({ onBack, onOpenPost }) => {
+  onGetStarted: () => void;
+}> = ({ onBack, onOpenPost, onGetStarted }) => {
   const posts = sortedPosts();
   return (
+    <BlogCtaContext.Provider value={onGetStarted}>
     <div className="p-8 max-w-4xl mx-auto animate-in fade-in duration-500 pb-32">
       <button
         onClick={onBack}
@@ -701,6 +675,7 @@ export const BlogIndex: React.FC<{
         <SubscribeBanner />
       </div>
     </div>
+    </BlogCtaContext.Provider>
   );
 };
 
@@ -712,12 +687,14 @@ export const BlogPostView: React.FC<{
   post: BlogPost;
   onBack: () => void;
   onOpenPost: (slug: string) => void;
-}> = ({ post, onBack, onOpenPost }) => {
+  onGetStarted: () => void;
+}> = ({ post, onBack, onOpenPost, onGetStarted }) => {
   const related = sortedPosts()
     .filter((p) => p.slug !== post.slug)
     .slice(0, 2);
 
   return (
+    <BlogCtaContext.Provider value={onGetStarted}>
     <article className="p-8 max-w-3xl mx-auto animate-in fade-in duration-500 pb-32">
       <button
         onClick={onBack}
@@ -782,5 +759,6 @@ export const BlogPostView: React.FC<{
         </section>
       )}
     </article>
+    </BlogCtaContext.Provider>
   );
 };

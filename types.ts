@@ -43,6 +43,8 @@ export interface UserProfile {
   picture?: string;
   phone?: string;
   password?: string;
+  /** True if the user accepted the Terms and opted in to emails at sign-up. */
+  emailConsent?: boolean;
 }
 
 export type PaymentCycle = 'monthly' | 'annual';
