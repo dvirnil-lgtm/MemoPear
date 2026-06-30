@@ -8,7 +8,7 @@ import { PrivacyPolicy, TermsAndConditions, ContactUs, Company } from './compone
 import { BlogIndex, BlogPostView, BLOG_POSTS, getPostBySlug, SITE_URL } from './components/Blog';
 import { useConferenceSearch, ConferenceResult } from './services/conferenceService';
 import { parseScannedData, parseBusinessCard, generateLeadReport, QuotaError, QUOTA_ERROR_MESSAGE, isQuotaError } from './services/geminiService';
-import { signInWithGoogle, signInWithLinkedIn, signUpWithEmail, signInWithEmail, firebaseSignOut, auth, logLoginEvent, logCancellationRequest, exportLeadsToGoogleSheet, ensureSubscription, getSubscription, watchSubscription, regenerateInviteToken, removeSeatMember, claimSeat, getSeatClaim, getUserLeads, saveUserLeads, watchUserLeads, SubscriptionDoc } from './firebase';
+import { signInWithGoogle, signInWithLinkedIn, signUpWithEmail, signInWithEmail, firebaseSignOut, auth, logLoginEvent, logCancellationRequest, exportLeadsToGoogleSheet, ensureSubscription, getSubscription, watchSubscription, regenerateInviteToken, removeSeatMember, claimSeat, getSeatClaim, getUserLeads, saveUserLeads, watchUserLeads, logConferenceName, SubscriptionDoc } from './firebase';
 
 // Constants for retention and session
 const RETENTION_DAYS = 30;
@@ -1339,6 +1339,9 @@ const App: React.FC = () => {
     newLead.aiSummary = await generateLeadReport(newLead);
     const updated = [newLead, ...leads];
     persistLeads(updated);
+    // Feed the conference name into the shared suggestions pool (names only) so
+    // the monthly blog automation can prioritize conferences our users attend.
+    if (conferenceName.trim()) logConferenceName(conferenceName).catch(() => {});
     setFullName(''); setEmail(''); setPhone(''); setCompany(''); setJobTitle(''); setWebsite(''); setNotes(''); setCommMethods([]); setContactValues({});
     setShowContactFields(false);
     setIsSubmitting(false);
@@ -2064,6 +2067,7 @@ const App: React.FC = () => {
                                   const val = confSearchInput.trim();
                                   if (val && !userProfile.conferences.includes(val)) {
                                     setUserProfile(prev => ({ ...prev, conferences: [...prev.conferences, val] }));
+                                    logConferenceName(val).catch(() => {});
                                     setConfSearchInput('');
                                   }
                                 }
@@ -2079,6 +2083,7 @@ const App: React.FC = () => {
                                       if (!userProfile.conferences.includes(c.name)) {
                                         setUserProfile(prev => ({ ...prev, conferences: [...prev.conferences, c.name] }));
                                       }
+                                      logConferenceName(c.name).catch(() => {});
                                       setConfSearchInput('');
                                     }}
                                     className="w-full text-left px-3 py-2 rounded-lg hover:bg-pear-50 dark:hover:bg-white/5 transition-colors flex items-center justify-between gap-2"

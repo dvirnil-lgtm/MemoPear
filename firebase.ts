@@ -25,6 +25,7 @@ import {
   onSnapshot,
   serverTimestamp,
   arrayUnion,
+  increment,
 } from 'firebase/firestore';
 
 const firebaseConfig = {
@@ -136,6 +137,27 @@ export async function logLoginEvent(user: User, provider: string): Promise<void>
     }, { merge: true });
   } catch (err) {
     console.warn('[MemoPear] login logging skipped:', err);
+  }
+}
+
+// Records a conference NAME (no personal data) into a shared, aggregated
+// collection so the monthly blog automation can see which conferences our users
+// actually attend and prioritize writing about them. Each name maps to one doc
+// keyed by a slug, with a running count and last-seen timestamp. Best-effort:
+// never blocks the caller and silently no-ops if it can't write.
+export async function logConferenceName(name: string): Promise<void> {
+  const clean = (name || '').trim();
+  if (clean.length < 2 || clean.length > 120) return;
+  const id = clean.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 100);
+  if (!id) return;
+  try {
+    await setDoc(
+      doc(db, 'conferenceSuggestions', id),
+      { name: clean, count: increment(1), lastSeen: serverTimestamp() },
+      { merge: true },
+    );
+  } catch (err) {
+    console.warn('[MemoPear] conference logging skipped:', err);
   }
 }
 

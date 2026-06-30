@@ -28,12 +28,24 @@ Read `components/Blog.tsx` → the `BLOG_POSTS` array. Note every existing `slug
 and `conference`. The new post **must** be a conference that does not already
 appear there. Cross-check against the backlog below.
 
-## Step 2 — Pick the conference
+## Step 2 — Pick the conference (priority order)
 
-Choose one conference from the **Backlog** at the bottom of this file. Prefer one
-whose real-world dates are **near the current month** (timeliness helps SEO), but
-any uncovered major event is fine. If the backlog is empty, pick another
-well-known high-tech conference not yet covered and add it.
+Pick ONE conference that is **not already covered**, using this priority order:
+
+1. **What our users attend (highest priority).** Run:
+   `node scripts/user-conferences.mjs`
+   It prints conference names our users have entered in the app, most-used
+   first (or nothing if unavailable). Choose the most popular uncovered one. This
+   is the whole point: write about the conferences our users actually care about.
+2. **The static Backlog** at the bottom of this file — if the script returns
+   nothing usable (empty, or every result already covered). Prefer one whose
+   real-world dates are near the current month.
+3. **Web research** — if both above are exhausted, use web search to find a
+   well-known, currently-relevant high-tech/business conference not yet covered,
+   and add it to the backlog for next time.
+
+Whatever you pick, double-check it is not already in `BLOG_POSTS` or the
+"Already covered" list before writing.
 
 ## Step 3 — Write the post
 
