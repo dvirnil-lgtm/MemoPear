@@ -24,6 +24,7 @@
 
 The MemoPear blog publishes tactical lead-capture playbooks for the biggest conferences in high tech. Each article covers a specific event and how field marketers, field sales reps, founders, and exhibitors can capture, organize, and follow up on leads at it.
 
+- VivaTech 2026 Paris: A Lead-Capture Guide for Startups & Scale-ups (2026-06-30): https://go.memopear.com/blog/vivatech-2026-paris-lead-capture-guide — Capturing investor, partner, and customer leads among 165,000+ attendees at Europe's biggest tech event in Paris.
 - SaaStr Annual 2025: The Field Sales Lead-Capture Playbook (2025-09-09): https://go.memopear.com/blog/saastr-annual-2025-lead-capture-playbook — Turning 12,500+ B2B SaaS attendees in San Mateo into clean pipeline.
 - Dreamforce 2025: Turning 40,000 Conversations Into Pipeline (2025-09-16): https://go.memopear.com/blog/dreamforce-2025-turn-conversations-into-pipeline — Capturing and following up on leads at Salesforce's flagship San Francisco event.
 - Web Summit 2025 Lisbon: A Lead-Capture Guide for Startups (2025-11-10): https://go.memopear.com/blog/web-summit-2025-lisbon-lead-capture-guide — How founders capture investor and customer leads among 70,000+ attendees in Lisbon.

@@ -45,6 +45,79 @@ const SUBSCRIBE_BANNER: BlogBlock = { type: 'banner' };
 
 export const BLOG_POSTS: BlogPost[] = [
   {
+    slug: 'vivatech-2026-paris-lead-capture-guide',
+    title: 'VivaTech 2026 Paris: A Lead-Capture Guide for Startups & Scale-ups',
+    description:
+      'VivaTech 2026 drew 165,000+ attendees to Paris. How startups, scale-ups, and enterprise teams can capture investor, partner, and customer leads at Europe’s biggest tech event.',
+    date: '2026-06-30',
+    author: 'The MemoPear Team',
+    readTime: '6 min read',
+    conference: 'VivaTech 2026',
+    location: 'Paris, France',
+    tags: ['Startups', 'Europe', 'Investors', 'Innovation'],
+    excerpt:
+      'VivaTech turns Paris into Europe’s startup capital for four days. Here is how to leave with investor meetings and customer pipeline — not a lanyard full of forgotten names.',
+    blocks: [
+      {
+        type: 'p',
+        text: 'Viva Technology — VivaTech — has become Europe’s flagship technology conference. Held each June at the Porte de Versailles in Paris, it brings together startups, scale-ups, investors, CAC 40 enterprises, and government leaders. The 2026 edition again drew more than 165,000 attendees from over 160 countries, with thousands of exhibiting startups, a packed investor program, and keynote stages that set the tone for European innovation.',
+      },
+      {
+        type: 'p',
+        text: 'For a founder or a commercial team, VivaTech is a uniquely concentrated opportunity. In a single hall you can meet a venture investor, an enterprise buyer running an open-innovation program, and a distribution partner for a new market — often within the same hour. The hard part is not finding people worth meeting. It is making sure none of them evaporate before you can follow up.',
+      },
+      { type: 'h2', text: 'Why lead capture breaks down at VivaTech' },
+      {
+        type: 'ul',
+        items: [
+          'The crowd is enormous and international, so names, companies, and email spellings are easy to lose in a loud, fast conversation.',
+          'Roles blur: one badge might be an investor, the next an enterprise innovation lead, the next a journalist — each needing a completely different follow-up.',
+          'Startup teams are tiny. Two or three people cannot manually log hundreds of conversations across four days and still demo their product.',
+        ],
+      },
+      {
+        type: 'p',
+        text: 'The teams that win VivaTech treat capture as a core workflow, not an afterthought. They record the contact and the context together, in the moment, on the phone already in their hand.',
+      },
+      { type: 'banner' },
+      { type: 'h2', text: 'Capturing investors, buyers, and partners in one flow' },
+      {
+        type: 'p',
+        text: 'MemoPear was built for exactly this environment. Scan a badge or snap a business card and the AI fills in the name, title, company, and contact details instantly — no squinting at unfamiliar spellings. Then add a one-line voice note that classifies the lead while it is fresh: “Series A investor, asked about our European traction.” “Enterprise innovation lead, wants a pilot in Q4.” “Partner, covers the DACH region.” Every contact is tagged to VivaTech and synced across your team, so your co-founder sees the same pipeline you do.',
+      },
+      {
+        type: 'quote',
+        text: 'At VivaTech, the lead you capture cleanly becomes your next round, your first enterprise pilot, or your entry into a new market. The one you lose simply never happened.',
+      },
+      { type: 'h2', text: 'The follow-up that actually gets a reply' },
+      {
+        type: 'p',
+        text: 'Investors and enterprise buyers leave VivaTech with hundreds of business cards and a flooded inbox. A generic “great to meet you” gets ignored. Because MemoPear captured the specific context of each conversation, it can draft a personalized follow-up per contact — one that references the actual question that investor asked or the pilot that buyer described. Personalized, specific, and sent within a day: that is how a 30-second hallway exchange in Paris becomes a real meeting back home.',
+      },
+      {
+        type: 'faq',
+        items: [
+          {
+            q: 'What is the best way to capture leads at VivaTech?',
+            a: 'Capture the contact and the context together in the moment. Use a mobile tool like MemoPear to scan the badge or business card, then add a short voice note describing who the person is and why they matter before moving on. This beats a booth scanner alone, which records who stopped by but not why they cared.',
+          },
+          {
+            q: 'How can a small startup team cover an event as large as VivaTech?',
+            a: 'Lean on fast mobile capture and a shared, synced pipeline. When every team member scans badges and adds voice notes into one place, even a two- or three-person startup can cover far more ground than its headcount suggests and avoid duplicate follow-ups.',
+          },
+          {
+            q: 'How should you follow up with VivaTech leads?',
+            a: 'Within 24 to 48 hours, with a personalized message that references the specific conversation. Segment investors, enterprise buyers, and partners so each receives a relevant follow-up rather than one generic email sent to everyone you met.',
+          },
+        ],
+      },
+      {
+        type: 'p',
+        text: 'Paris in June is Europe’s innovation engine running at full speed. Walk into VivaTech with a capture system, and you walk out with relationships — and a pipeline — you can actually act on.',
+      },
+    ],
+  },
+  {
     slug: 'saastr-annual-2025-lead-capture-playbook',
     title: 'SaaStr Annual 2025: The Field Sales Lead-Capture Playbook',
     description:
