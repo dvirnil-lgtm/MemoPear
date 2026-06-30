@@ -2112,6 +2112,7 @@ const App: React.FC = () => {
                                   setUserProfile(prev => ({ ...prev, conferences: prev.conferences.filter(c => c !== conf) }));
                                 } else {
                                   setUserProfile(prev => ({ ...prev, conferences: [...prev.conferences, conf] }));
+                                  logConferenceName(conf).catch(() => {});
                                 }
                               }}
                               className={`w-full text-left px-3 py-2 rounded-lg text-[10px] font-bold transition-colors flex items-center justify-between ${userProfile.conferences.includes(conf) ? 'bg-pear-600 text-white' : 'hover:bg-slate-50 dark:hover:bg-white/5'}`}
