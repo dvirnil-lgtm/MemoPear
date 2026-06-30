@@ -9,6 +9,17 @@ import { BlogIndex, BlogPostView, BLOG_POSTS, getPostBySlug, SITE_URL } from './
 import { parseScannedData, parseBusinessCard, generateLeadReport, QuotaError, QUOTA_ERROR_MESSAGE, isQuotaError } from './services/geminiService';
 import { signInWithGoogle, signInWithLinkedIn, signUpWithEmail, signInWithEmail, firebaseSignOut, auth, logLoginEvent, logCancellationRequest, exportLeadsToGoogleSheet, ensureSubscription, getSubscription, watchSubscription, regenerateInviteToken, removeSeatMember, claimSeat, getSeatClaim, getUserLeads, saveUserLeads, watchUserLeads, SubscriptionDoc } from './firebase';
 
+// Open 10times.com — the large global event-discovery directory — in a new tab
+// to help the user find the exact, canonical name of a conference. Prefills the
+// site search with whatever they've typed so they can grab the official name.
+const openOn10times = (query?: string) => {
+  const q = (query || '').trim();
+  const url = q
+    ? `https://10times.com/search?kw=${encodeURIComponent(q)}`
+    : 'https://10times.com/conferences';
+  window.open(url, '_blank', 'noopener,noreferrer');
+};
+
 // Constants for retention and session
 const RETENTION_DAYS = 30;
 const SESSION_DAYS = 7;
@@ -455,6 +466,7 @@ const App: React.FC = () => {
   const [showRetentionNotice, setShowRetentionNotice] = useState(false);
 
   const cardInputRef = useRef<HTMLInputElement>(null);
+  const confSearchRef = useRef<HTMLInputElement>(null);
   const testimonialRef = useRef<HTMLDivElement>(null);
   const mainRef = useRef<HTMLElement>(null);
   // Set when a device locks the user on the pricing page because its local
@@ -2046,9 +2058,10 @@ const App: React.FC = () => {
                       
                       {showConfDropdown && (
                         <div className="absolute right-0 top-full mt-2 w-64 glass rounded-2xl border border-pear-100 dark:border-white/10 shadow-2xl z-[100] max-h-64 overflow-y-auto p-2 animate-in slide-in-from-top-2">
-                          <div className="p-2 border-b border-slate-100 dark:border-white/5 mb-2">
-                            <input 
-                              type="text" 
+                          <div className="p-2 border-b border-slate-100 dark:border-white/5 mb-2 space-y-2">
+                            <input
+                              type="text"
+                              ref={confSearchRef}
                               placeholder="Search or Add Custom..."
                               className="w-full px-3 py-2 rounded-lg bg-slate-50 dark:bg-white/5 text-[10px] font-bold outline-none"
                               onKeyDown={(e) => {
@@ -2061,6 +2074,15 @@ const App: React.FC = () => {
                                 }
                               }}
                             />
+                            <button
+                              type="button"
+                              onClick={() => openOn10times(confSearchRef.current?.value)}
+                              title="Find the exact event name on 10times.com"
+                              className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-[9px] font-black uppercase tracking-widest text-pear-600 border border-pear-200 dark:border-white/10 hover:bg-pear-50 dark:hover:bg-white/5 transition-colors"
+                            >
+                              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" /></svg>
+                              Find on 10times.com
+                            </button>
                           </div>
                           {suggestedConferences.map((conf, i) => (
                             <button 
@@ -2346,6 +2368,15 @@ const App: React.FC = () => {
                            <button key={i} type="button" onMouseDown={() => setConferenceName(c)} className="w-full text-left px-4 py-2 text-xs font-bold hover:bg-pear-50 dark:hover:bg-white/5 transition-colors border-b border-slate-100 dark:border-white/5 last:border-0">{c}</button>
                          ))}
                        </div>
+                       <button
+                         type="button"
+                         onClick={() => openOn10times(conferenceName)}
+                         title="Look up the exact event name on 10times.com"
+                         className="mt-1.5 inline-flex items-center gap-1 text-[10px] font-bold text-pear-600 hover:text-pear-700 hover:underline transition-colors"
+                       >
+                         <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" /></svg>
+                         Find the exact name on 10times.com
+                       </button>
                     </div>
 
                     {/* Row 1b: Big, easy-to-tap scan buttons */}
