@@ -6,19 +6,9 @@ import { QRScanner } from './components/QRScanner';
 import { CommMethodToggle } from './components/CommMethodToggle';
 import { PrivacyPolicy, TermsAndConditions, ContactUs, Company } from './components/LegalPages';
 import { BlogIndex, BlogPostView, BLOG_POSTS, getPostBySlug, SITE_URL } from './components/Blog';
+import { useConferenceSearch, ConferenceResult } from './services/conferenceService';
 import { parseScannedData, parseBusinessCard, generateLeadReport, QuotaError, QUOTA_ERROR_MESSAGE, isQuotaError } from './services/geminiService';
 import { signInWithGoogle, signInWithLinkedIn, signUpWithEmail, signInWithEmail, firebaseSignOut, auth, logLoginEvent, logCancellationRequest, exportLeadsToGoogleSheet, ensureSubscription, getSubscription, watchSubscription, regenerateInviteToken, removeSeatMember, claimSeat, getSeatClaim, getUserLeads, saveUserLeads, watchUserLeads, SubscriptionDoc } from './firebase';
-
-// Open 10times.com — the large global event-discovery directory — in a new tab
-// to help the user find the exact, canonical name of a conference. Prefills the
-// site search with whatever they've typed so they can grab the official name.
-const openOn10times = (query?: string) => {
-  const q = (query || '').trim();
-  const url = q
-    ? `https://10times.com/search?kw=${encodeURIComponent(q)}`
-    : 'https://10times.com/conferences';
-  window.open(url, '_blank', 'noopener,noreferrer');
-};
 
 // Constants for retention and session
 const RETENTION_DAYS = 30;
@@ -448,6 +438,11 @@ const App: React.FC = () => {
   const [jobTitle, setJobTitle] = useState('');
   const [website, setWebsite] = useState('');
   const [conferenceName, setConferenceName] = useState('');
+  // Live conference autocomplete (Wikidata + bundled list). One instance drives
+  // the Add-Contact field, the other the Profile "My Conferences" picker.
+  const [confSearchInput, setConfSearchInput] = useState('');
+  const confLookup = useConferenceSearch(conferenceName);
+  const profConfLookup = useConferenceSearch(confSearchInput);
   const [fullName, setFullName] = useState('');
   const [notes, setNotes] = useState('');
   const [commMethods, setCommMethods] = useState<CommMethod[]>([]);
@@ -466,7 +461,6 @@ const App: React.FC = () => {
   const [showRetentionNotice, setShowRetentionNotice] = useState(false);
 
   const cardInputRef = useRef<HTMLInputElement>(null);
-  const confSearchRef = useRef<HTMLInputElement>(null);
   const testimonialRef = useRef<HTMLDivElement>(null);
   const mainRef = useRef<HTMLElement>(null);
   // Set when a device locks the user on the pricing page because its local
@@ -2058,31 +2052,52 @@ const App: React.FC = () => {
                       
                       {showConfDropdown && (
                         <div className="absolute right-0 top-full mt-2 w-64 glass rounded-2xl border border-pear-100 dark:border-white/10 shadow-2xl z-[100] max-h-64 overflow-y-auto p-2 animate-in slide-in-from-top-2">
-                          <div className="p-2 border-b border-slate-100 dark:border-white/5 mb-2 space-y-2">
+                          <div className="p-2 border-b border-slate-100 dark:border-white/5 mb-2">
                             <input
                               type="text"
-                              ref={confSearchRef}
-                              placeholder="Search or Add Custom..."
+                              value={confSearchInput}
+                              onChange={(e) => setConfSearchInput(e.target.value)}
+                              placeholder="Search conferences or add custom..."
                               className="w-full px-3 py-2 rounded-lg bg-slate-50 dark:bg-white/5 text-[10px] font-bold outline-none"
                               onKeyDown={(e) => {
                                 if (e.key === 'Enter') {
-                                  const val = (e.target as HTMLInputElement).value;
+                                  const val = confSearchInput.trim();
                                   if (val && !userProfile.conferences.includes(val)) {
                                     setUserProfile(prev => ({ ...prev, conferences: [...prev.conferences, val] }));
-                                    (e.target as HTMLInputElement).value = '';
+                                    setConfSearchInput('');
                                   }
                                 }
                               }}
                             />
-                            <button
-                              type="button"
-                              onClick={() => openOn10times(confSearchRef.current?.value)}
-                              title="Find the exact event name on 10times.com"
-                              className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-[9px] font-black uppercase tracking-widest text-pear-600 border border-pear-200 dark:border-white/10 hover:bg-pear-50 dark:hover:bg-white/5 transition-colors"
-                            >
-                              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" /></svg>
-                              Find on 10times.com
-                            </button>
+                            {confSearchInput.trim().length >= 1 && (
+                              <div className="mt-2 space-y-0.5">
+                                {profConfLookup.results.map((c, i) => (
+                                  <button
+                                    key={i}
+                                    type="button"
+                                    onClick={() => {
+                                      if (!userProfile.conferences.includes(c.name)) {
+                                        setUserProfile(prev => ({ ...prev, conferences: [...prev.conferences, c.name] }));
+                                      }
+                                      setConfSearchInput('');
+                                    }}
+                                    className="w-full text-left px-3 py-2 rounded-lg hover:bg-pear-50 dark:hover:bg-white/5 transition-colors flex items-center justify-between gap-2"
+                                  >
+                                    <span className="text-[10px] font-bold truncate">{c.name}</span>
+                                    {c.location && <span className="text-[9px] font-medium text-slate-400 whitespace-nowrap flex-shrink-0">{c.location}</span>}
+                                  </button>
+                                ))}
+                                {profConfLookup.results.length === 0 && (
+                                  <p className="px-3 py-2 text-[9px] font-bold text-slate-400">
+                                    {profConfLookup.loading ? 'Searching…' : 'Press Enter to add as custom'}
+                                  </p>
+                                )}
+                                <div className="px-3 pt-1.5 flex items-center gap-1 text-[8px] font-bold uppercase tracking-widest text-slate-400">
+                                  <svg className="w-2.5 h-2.5 text-pear-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+                                  Powered by Wikidata
+                                </div>
+                              </div>
+                            )}
                           </div>
                           {suggestedConferences.map((conf, i) => (
                             <button 
@@ -2363,20 +2378,31 @@ const App: React.FC = () => {
                          placeholder="Conference name"
                          className="w-full min-w-0 px-3 py-2 rounded-xl bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 text-xs font-bold outline-none focus:border-pear-500/50 transition-all"
                        />
-                       <div className="absolute top-full left-0 right-0 z-50 mt-1 glass rounded-xl border border-pear-100 dark:border-white/10 shadow-2xl max-h-40 overflow-y-auto hidden group-focus-within:block">
-                         {[...userProfile.conferences, 'MWC Barcelona', 'Web Summit', 'Dreamforce', 'CES 2025'].map((c, i) => (
-                           <button key={i} type="button" onMouseDown={() => setConferenceName(c)} className="w-full text-left px-4 py-2 text-xs font-bold hover:bg-pear-50 dark:hover:bg-white/5 transition-colors border-b border-slate-100 dark:border-white/5 last:border-0">{c}</button>
-                         ))}
-                       </div>
-                       <button
-                         type="button"
-                         onClick={() => openOn10times(conferenceName)}
-                         title="Look up the exact event name on 10times.com"
-                         className="mt-1.5 inline-flex items-center gap-1 text-[10px] font-bold text-pear-600 hover:text-pear-700 hover:underline transition-colors"
-                       >
-                         <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" /></svg>
-                         Find the exact name on 10times.com
-                       </button>
+                       {(() => {
+                         const typed = conferenceName.trim();
+                         const list: ConferenceResult[] = typed
+                           ? confLookup.results
+                           : userProfile.conferences.map((c) => ({ name: c, location: '' }));
+                         return (
+                           <div className="absolute top-full left-0 right-0 z-50 mt-1 glass rounded-xl border border-pear-100 dark:border-white/10 shadow-2xl max-h-56 overflow-y-auto hidden group-focus-within:block">
+                             {list.map((c, i) => (
+                               <button key={i} type="button" onMouseDown={() => setConferenceName(c.name)} className="w-full text-left px-4 py-2.5 hover:bg-pear-50 dark:hover:bg-white/5 transition-colors border-b border-slate-100 dark:border-white/5 last:border-0 flex items-center justify-between gap-3">
+                                 <span className="text-xs font-bold truncate">{c.name}</span>
+                                 {c.location && <span className="text-[10px] font-medium text-slate-400 whitespace-nowrap flex-shrink-0">{c.location}</span>}
+                               </button>
+                             ))}
+                             {list.length === 0 && (
+                               <div className="px-4 py-3 text-[11px] font-bold text-slate-400">
+                                 {confLookup.loading ? 'Searching conferences…' : (typed.length < 2 ? 'Keep typing to search…' : 'No matches — type your conference name')}
+                               </div>
+                             )}
+                             <div className="px-4 py-2 border-t border-slate-100 dark:border-white/5 flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-widest text-slate-400">
+                               <svg className="w-3 h-3 text-pear-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+                               Conferences powered by Wikidata
+                             </div>
+                           </div>
+                         );
+                       })()}
                     </div>
 
                     {/* Row 1b: Big, easy-to-tap scan buttons */}
