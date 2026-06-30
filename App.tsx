@@ -5,6 +5,7 @@ import { Lead, CommMethod, UserProfile, PaymentCycle, TeamMember } from './types
 import { QRScanner } from './components/QRScanner';
 import { CommMethodToggle } from './components/CommMethodToggle';
 import { PrivacyPolicy, TermsAndConditions, ContactUs, Company } from './components/LegalPages';
+import { BlogIndex, BlogPostView, BLOG_POSTS, getPostBySlug, SITE_URL } from './components/Blog';
 import { parseScannedData, parseBusinessCard, generateLeadReport, QuotaError, QUOTA_ERROR_MESSAGE, isQuotaError } from './services/geminiService';
 import { signInWithGoogle, signInWithLinkedIn, signUpWithEmail, signInWithEmail, firebaseSignOut, auth, logLoginEvent, logCancellationRequest, exportLeadsToGoogleSheet, ensureSubscription, getSubscription, watchSubscription, regenerateInviteToken, removeSeatMember, claimSeat, getSeatClaim, getUserLeads, saveUserLeads, watchUserLeads, SubscriptionDoc } from './firebase';
 
@@ -342,15 +343,24 @@ const App: React.FC = () => {
   };
   const [linkedinConnected, setLinkedinConnected] = useState(false);
   const [authMode, setAuthMode] = useState<'login' | 'signup'>('signup');
-  type AppView = 'home' | 'login' | 'pricing' | 'form' | 'history' | 'payment' | 'profile' | 'privacy' | 'terms' | 'contact' | 'team' | 'company';
-  const [view, setView] = useState<AppView>(() => {
+  type AppView = 'home' | 'login' | 'pricing' | 'form' | 'history' | 'payment' | 'profile' | 'privacy' | 'terms' | 'contact' | 'team' | 'company' | 'blog' | 'blogPost';
+  // Resolve a pathname to a view (and, for blog posts, the post slug). Blog
+  // posts live at /blog/<slug>, so they need prefix matching rather than the
+  // exact-path lookup used for every other page.
+  const resolveRoute = (pathname: string): { view: AppView; slug: string } => {
     const pathMap: Record<string, AppView> = {
       '/': 'home', '/login': 'login', '/pricing': 'pricing', '/billing': 'pricing', '/gather': 'form',
       '/pipeline': 'history', '/payment': 'payment', '/profile': 'profile',
       '/privacy': 'privacy', '/terms': 'terms', '/contact': 'contact', '/team': 'team', '/company': 'company',
+      '/blog': 'blog',
     };
-    return pathMap[window.location.pathname] || 'home';
-  });
+    const clean = pathname.replace(/\/$/, '') || '/';
+    if (clean === '/blog') return { view: 'blog', slug: '' };
+    if (clean.startsWith('/blog/')) return { view: 'blogPost', slug: clean.slice('/blog/'.length) };
+    return { view: pathMap[clean] || 'home', slug: '' };
+  };
+  const [blogSlug, setBlogSlug] = useState<string>(() => resolveRoute(window.location.pathname).slug);
+  const [view, setView] = useState<AppView>(() => resolveRoute(window.location.pathname).view);
   const [seatCount, setSeatCount] = useState<number>(() => {
     const saved = localStorage.getItem(STORAGE_KEY_SEATS);
     return saved ? parseInt(saved, 10) : 1;
@@ -1314,6 +1324,7 @@ const App: React.FC = () => {
     home: '/', login: '/login', pricing: '/pricing', form: '/gather',
     history: '/pipeline', payment: '/payment', profile: '/profile',
     privacy: '/privacy', terms: '/terms', contact: '/contact', team: '/team', company: '/company',
+    blog: '/blog',
   };
 
   const PAGE_META: Record<string, { title: string; description: string }> = {
@@ -1329,31 +1340,151 @@ const App: React.FC = () => {
     contact: { title: 'Contact Us | MemoPear', description: 'Get in touch with the MemoPear team.' },
     team: { title: 'Team | MemoPear', description: 'Invite your team members and manage your seats.' },
     company: { title: 'Our Story | MemoPear', description: 'Born on the conference floor — how years of working trade shows built MemoPear, and our mission to help field marketers, field sales, and attendees gather leads and follow up with ease.' },
+    blog: { title: 'Blog: Conference Lead-Capture Playbooks | MemoPear', description: 'Tactical guides to capturing, organizing, and following up on leads at the biggest high-tech conferences — CES, AWS re:Invent, Web Summit, Dreamforce, MWC, and SaaStr.' },
   };
 
   const navigateTo = (nextView: AppView) => {
     const url = VIEW_URLS[nextView] || '/';
-    window.history.pushState({ view: nextView }, '', url);
+    setBlogSlug('');
+    window.history.pushState({ view: nextView, slug: '' }, '', url);
     setView(nextView);
+    window.scrollTo(0, 0);
   };
 
+  // Blog posts carry a slug, so they need their own navigation helper.
+  const navigateToBlogPost = (slug: string) => {
+    const url = `/blog/${slug}`;
+    setBlogSlug(slug);
+    window.history.pushState({ view: 'blogPost', slug }, '', url);
+    setView('blogPost');
+    window.scrollTo(0, 0);
+  };
+
+  // Keep <title>, meta description, canonical URL, Open Graph tags, and JSON-LD
+  // structured data in sync with the active view. Blog posts get full
+  // BlogPosting + FAQPage schema so they are eligible for rich results and are
+  // easy for LLM crawlers to parse and cite.
   useEffect(() => {
-    const meta = PAGE_META[view] || PAGE_META.home;
-    document.title = meta.title;
-    const metaDesc = document.querySelector('meta[name="description"]');
-    if (metaDesc) metaDesc.setAttribute('content', meta.description);
-  }, [view]);
+    const setMeta = (selector: string, attr: string, value: string) => {
+      let el = document.head.querySelector(selector) as HTMLElement | null;
+      if (!el) {
+        el = document.createElement('meta');
+        const [, name] = selector.match(/\[(?:name|property)="(.+)"\]/) || [];
+        if (selector.includes('property=')) el.setAttribute('property', name);
+        else el.setAttribute('name', name);
+        document.head.appendChild(el);
+      }
+      el.setAttribute(attr, value);
+    };
+    const setCanonical = (href: string) => {
+      let link = document.head.querySelector('link[rel="canonical"]') as HTMLLinkElement | null;
+      if (!link) {
+        link = document.createElement('link');
+        link.setAttribute('rel', 'canonical');
+        document.head.appendChild(link);
+      }
+      link.setAttribute('href', href);
+    };
+    const setJsonLd = (data: object | null) => {
+      const existing = document.getElementById('ld-blog');
+      if (existing) existing.remove();
+      if (!data) return;
+      const script = document.createElement('script');
+      script.type = 'application/ld+json';
+      script.id = 'ld-blog';
+      script.text = JSON.stringify(data);
+      document.head.appendChild(script);
+    };
+
+    let title: string;
+    let description: string;
+    let canonical = SITE_URL + (VIEW_URLS[view] || '/');
+
+    if (view === 'blogPost') {
+      const post = getPostBySlug(blogSlug);
+      if (post) {
+        title = `${post.title} | MemoPear Blog`;
+        description = post.description;
+        canonical = `${SITE_URL}/blog/${post.slug}`;
+        const faqBlock = post.blocks.find((b) => b.type === 'faq') as
+          | { type: 'faq'; items: { q: string; a: string }[] }
+          | undefined;
+        const graph: object[] = [
+          {
+            '@type': 'BlogPosting',
+            headline: post.title,
+            description: post.description,
+            datePublished: post.date,
+            dateModified: post.date,
+            author: { '@type': 'Organization', name: post.author, url: SITE_URL },
+            publisher: {
+              '@type': 'Organization',
+              name: 'MemoPear',
+              logo: { '@type': 'ImageObject', url: `${SITE_URL}/favicon-512.png` },
+            },
+            mainEntityOfPage: { '@type': 'WebPage', '@id': canonical },
+            keywords: post.tags.join(', '),
+            image: `${SITE_URL}/og-image-1200x630.png`,
+          },
+        ];
+        if (faqBlock) {
+          graph.push({
+            '@type': 'FAQPage',
+            mainEntity: faqBlock.items.map((qa) => ({
+              '@type': 'Question',
+              name: qa.q,
+              acceptedAnswer: { '@type': 'Answer', text: qa.a },
+            })),
+          });
+        }
+        setJsonLd({ '@context': 'https://schema.org', '@graph': graph });
+      } else {
+        title = 'Blog | MemoPear';
+        description = PAGE_META.blog.description;
+        setJsonLd(null);
+      }
+    } else {
+      const meta = PAGE_META[view] || PAGE_META.home;
+      title = meta.title;
+      description = meta.description;
+      if (view === 'blog') {
+        setJsonLd({
+          '@context': 'https://schema.org',
+          '@type': 'Blog',
+          name: 'MemoPear Blog',
+          description: PAGE_META.blog.description,
+          url: `${SITE_URL}/blog`,
+          blogPost: BLOG_POSTS.map((p) => ({
+            '@type': 'BlogPosting',
+            headline: p.title,
+            description: p.description,
+            datePublished: p.date,
+            url: `${SITE_URL}/blog/${p.slug}`,
+          })),
+        });
+      } else {
+        setJsonLd(null);
+      }
+    }
+
+    document.title = title;
+    setMeta('meta[name="description"]', 'content', description);
+    setMeta('meta[property="og:title"]', 'content', title);
+    setMeta('meta[property="og:description"]', 'content', description);
+    setMeta('meta[property="og:url"]', 'content', canonical);
+    setMeta('meta[property="og:type"]', 'content', view === 'blogPost' ? 'article' : 'website');
+    setCanonical(canonical);
+  }, [view, blogSlug]);
 
   useEffect(() => {
     const handlePopState = (e: PopStateEvent) => {
-      if (e.state?.view) setView(e.state.view);
-      else {
-        const pathMap: Record<string, AppView> = {
-          '/': 'home', '/login': 'login', '/pricing': 'pricing', '/billing': 'pricing', '/gather': 'form',
-          '/pipeline': 'history', '/payment': 'payment', '/profile': 'profile',
-          '/privacy': 'privacy', '/terms': 'terms', '/contact': 'contact', '/team': 'team', '/company': 'company',
-        };
-        setView(pathMap[window.location.pathname] || 'home');
+      if (e.state?.view) {
+        setView(e.state.view);
+        setBlogSlug(e.state.slug || '');
+      } else {
+        const resolved = resolveRoute(window.location.pathname);
+        setView(resolved.view);
+        setBlogSlug(resolved.slug);
       }
     };
     window.addEventListener('popstate', handlePopState);
@@ -1363,11 +1494,14 @@ const App: React.FC = () => {
   const navLinks: { name: string; view: AppView }[] = [
     { name: 'Home', view: 'home' },
     { name: 'Pricing', view: 'pricing' },
+    { name: 'Blog', view: 'blog' },
     { name: 'Company', view: 'company' },
     ...(isLoggedIn ? [{ name: 'Pipeline', view: 'history' as AppView }] : []),
     ...(isLoggedIn && seatCount > 1 ? [{ name: 'Team', view: 'team' as AppView }] : []),
     ...(isLoggedIn ? [{ name: 'Profile', view: 'profile' as AppView }] : []),
   ];
+  // A blog post is still "within" the Blog section, so highlight Blog for both.
+  const activeNav: AppView = view === 'blogPost' ? 'blog' : view;
 
   const completeTour = () => {
     localStorage.setItem(STORAGE_KEY_TOUR_COMPLETE, 'true');
@@ -1409,7 +1543,7 @@ const App: React.FC = () => {
         {/* Desktop Nav */}
         <div className="hidden md:flex items-center gap-5">
           {navLinks.map(link => (
-            <button key={link.name} onClick={() => navigateTo(link.view)} className={`text-[10px] font-black uppercase tracking-widest transition-colors ${view === link.view ? 'text-blue-600' : 'text-slate-400 hover:text-slate-900 dark:hover:text-white'}`}>
+            <button key={link.name} onClick={() => navigateTo(link.view)} className={`text-[10px] font-black uppercase tracking-widest transition-colors ${activeNav === link.view ? 'text-blue-600' : 'text-slate-400 hover:text-slate-900 dark:hover:text-white'}`}>
               {link.name}
             </button>
           ))}
@@ -1459,7 +1593,7 @@ const App: React.FC = () => {
               <button 
                 key={link.name} 
                 onClick={() => { navigateTo(link.view); setIsMenuOpen(false); }}
-                className={`w-full text-center py-6 text-3xl font-black uppercase tracking-[0.25em] transition-all duration-300 active:scale-95 ${view === link.view ? 'text-blue-600' : 'text-slate-400 hover:text-slate-900 dark:hover:text-white'}`}
+                className={`w-full text-center py-6 text-3xl font-black uppercase tracking-[0.25em] transition-all duration-300 active:scale-95 ${activeNav === link.view ? 'text-blue-600' : 'text-slate-400 hover:text-slate-900 dark:hover:text-white'}`}
               >
                 {link.name}
               </button>
@@ -2514,6 +2648,12 @@ const App: React.FC = () => {
         {view === 'terms' && <TermsAndConditions onBack={() => navigateTo('home')} />}
         {view === 'contact' && <ContactUs onBack={() => navigateTo('home')} />}
         {view === 'company' && <Company onBack={() => navigateTo('home')} />}
+        {view === 'blog' && <BlogIndex onBack={() => navigateTo('home')} onOpenPost={navigateToBlogPost} />}
+        {view === 'blogPost' && (() => {
+          const post = getPostBySlug(blogSlug);
+          if (!post) return <BlogIndex onBack={() => navigateTo('home')} onOpenPost={navigateToBlogPost} />;
+          return <BlogPostView post={post} onBack={() => navigateTo('blog')} onOpenPost={navigateToBlogPost} />;
+        })()}
       </main>
 
       {!['form', 'history', 'team'].includes(view) && (
@@ -2581,7 +2721,7 @@ const App: React.FC = () => {
         />
       )}
 
-      {isLoggedIn && !['login', 'pricing', 'payment', 'privacy', 'terms', 'contact'].includes(view) && !isMenuOpen && (
+      {isLoggedIn && !['login', 'pricing', 'payment', 'privacy', 'terms', 'contact', 'blog', 'blogPost'].includes(view) && !isMenuOpen && (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 w-[95%] max-w-sm z-[60]">
           <div className="glass p-2 rounded-[3rem] border border-slate-200 dark:border-white/10 flex relative shadow-[0_30px_60px_rgba(0,0,0,0.3)]">
             {seatCount <= 1 ? (
