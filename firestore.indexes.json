@@ -5,6 +5,7 @@
       "queryScope": "COLLECTION",
       "fields": [
         { "fieldPath": "trialEndedEmailSent", "order": "ASCENDING" },
+        { "fieldPath": "hasPaid", "order": "ASCENDING" },
         { "fieldPath": "trialStartAt", "order": "ASCENDING" }
       ]
     }

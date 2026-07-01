@@ -151,9 +151,10 @@ async function sendWelcomeEmail(toEmail: string, name?: string): Promise<void> {
 
 // Records every sign-in (with IP) to Firestore for trial-abuse review, and —
 // the first time a `users/{uid}` doc is created — fires the welcome email and
-// stamps `trialStartAt`/`trialEndedEmailSent` so the `sendTrialEndedEmails`
-// scheduled Cloud Function (see functions/index.js) can follow up later.
-// Must never block or fail the login itself.
+// stamps `trialStartAt`/`trialEndedEmailSent`/`hasPaid` so the scheduled
+// `sendTrialEndedEmails` function (see functions/index.js) can follow up
+// later, skipping anyone the `stripeWebhook` function has already marked
+// paid. Must never block or fail the login itself.
 export async function logLoginEvent(user: User, provider: string): Promise<void> {
   try {
     const ip = await fetchClientIp();
@@ -176,6 +177,7 @@ export async function logLoginEvent(user: User, provider: string): Promise<void>
       ...(isNewUser && {
         trialStartAt: Date.parse(user.metadata.creationTime || '') || Date.now(),
         trialEndedEmailSent: false,
+        hasPaid: false,
       }),
     }, { merge: true });
     if (isNewUser) {

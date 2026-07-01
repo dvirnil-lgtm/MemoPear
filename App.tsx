@@ -1902,6 +1902,7 @@ const App: React.FC = () => {
                 const fallback = `${links[1]}?quantity=${seatQuantity}`;
                 const stripeUrl = new URL(dedicated ?? fallback);
                 if (email) stripeUrl.searchParams.set('prefilled_email', email);
+                if (accountId) stripeUrl.searchParams.set('client_reference_id', accountId);
                 localStorage.setItem(STORAGE_KEY_SEATS, String(seatQuantity));
                 setSeatCount(seatQuantity);
                 sessionStorage.setItem('lcp_pending_activation', '1');
