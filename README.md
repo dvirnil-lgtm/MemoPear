@@ -206,6 +206,30 @@ match /userLeads/{accountId} {
 > Without this rule the writes fail silently (the app keeps working from the
 > local cache, but contacts won't follow the user to another device).
 
+## Conference Suggestions (Firestore)
+
+`logConferenceName` in `firebase.ts` records each conference name a user
+enters (no personal data — just the name, a running count, and a last-seen
+timestamp) into a shared, public collection so the monthly blog automation
+(`scripts/user-conferences.mjs`) can see which conferences our users actually
+attend:
+
+- `conferenceSuggestions/{id}` — one doc per conference, keyed by a
+  slugified name.
+
+Add this rule alongside the existing `userLeads` rule:
+
+```
+match /conferenceSuggestions/{id} {
+  // Public read: conference names only, no personal data.
+  allow read: if true;
+  // Any signed-in user can record a conference name.
+  allow create, update: if request.auth != null
+    && request.resource.data.name is string
+    && request.resource.data.name.size() < 121;
+}
+```
+
 ## Exporting Leads (Google Sheets + Email)
 
 From the **Contacts** tab the user can export captured leads two ways. Both
