@@ -8,12 +8,10 @@ const Stripe = require('stripe');
 initializeApp();
 const db = getFirestore();
 
-const TRIAL_DAYS = 2;
-const TRIAL_MS = TRIAL_DAYS * 24 * 60 * 60 * 1000;
-
 function trialEndedEmailHtml() {
   return `
     <div style="font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;max-width:480px;margin:0 auto;color:#1e293b;line-height:1.5;">
+      <img src="https://go.memopear.com/favicon-512.png" alt="MemoPear" width="48" height="48" style="display:block;margin-bottom:16px;border-radius:12px;">
       <h1 style="color:#65a30d;font-size:22px;margin-bottom:4px;">Your free trial has ended</h1>
       <p>Your 2-day MemoPear trial just wrapped up. We hope you got a taste of how much faster lead capture can be.</p>
       <p>Subscribe to keep scanning badges, snapping business cards, and syncing every contact you've already saved.</p>
@@ -25,19 +23,23 @@ function trialEndedEmailHtml() {
   `;
 }
 
-// Runs a few times a day looking for accounts whose 2-day trial just lapsed
-// and haven't already gone on to pay (see `stripeWebhook` below, which is
-// what keeps `hasPaid` accurate for every account). Writing to the `mail`
-// collection is the same trigger the client uses elsewhere in this app (see
-// firebase.ts) — the "Trigger Email from Firestore" extension picks it up
-// and sends it through SendGrid. `trialEndedEmailSent` is flipped to true in
-// the same batch so a doc is never emailed twice even if a run overlaps.
+// Runs every 6 hours looking for accounts whose Stripe trial just lapsed
+// without converting to a paid subscription (see `stripeWebhook` below,
+// which is what keeps `trialStartAt`/`hasPaid` accurate for every account —
+// someone who converted or is still mid-trial has `hasPaid: true` or a
+// `trialStartAt` that hasn't reached the cutoff yet, so this only ever
+// matches people whose card didn't go through or who canceled in time).
+// Writing to the `mail` collection is the same trigger the client uses
+// elsewhere in this app (see firebase.ts) — the "Trigger Email from
+// Firestore" extension picks it up and sends it through SendGrid.
+// `trialEndedEmailSent` is flipped to true in the same batch so a doc is
+// never emailed twice even if a run overlaps.
 exports.sendTrialEndedEmails = onSchedule('every 6 hours', async () => {
-  const cutoff = Date.now() - TRIAL_MS;
+  const now = Date.now();
   const snap = await db.collection('users')
     .where('trialEndedEmailSent', '==', false)
     .where('hasPaid', '==', false)
-    .where('trialStartAt', '<=', cutoff)
+    .where('trialEndAt', '<=', now)
     .get();
 
   if (snap.empty) return;
@@ -63,20 +65,31 @@ exports.sendTrialEndedEmails = onSchedule('every 6 hours', async () => {
 
 // ── Stripe webhook: keeps `users/{uid}.hasPaid` accurate for every account ──
 //
-// The client only knows about a purchase because the user clicks "I've
-// paid" after returning from Stripe checkout — that's a self-report, not
-// proof, and single-seat buyers never got a server-side record at all
-// (only multi-seat team owners get a `subscriptions` doc). This endpoint is
-// the source of truth instead: register it in the Stripe Dashboard
-// (Developers -> Webhooks) for the `checkout.session.completed` and
-// `customer.subscription.deleted` events, pointing at this function's URL.
+// MemoPear's trial requires a card: signing up sends the user to Stripe
+// Checkout, where the Price has a free trial period configured (set that up
+// in the Stripe Dashboard on each Payment Link — no code needed there).
+// Checkout completing does NOT mean they've paid — it means Stripe now holds
+// a card and the subscription is sitting in "trialing" status until the
+// trial period elapses, at which point Stripe auto-charges it. So this
+// function tracks the subscription's actual status rather than treating
+// "checkout completed" as "paid":
+//   - trialing  -> hasPaid stays false; trialStartAt/trialEndAt come from
+//                  Stripe's own trial_start/trial_end.
+//   - active    -> hasPaid true (either the trial converted, or this was an
+//                  immediate no-trial purchase).
+//   - canceled / unpaid / incomplete_expired -> hasPaid false.
+//
+// Register this endpoint in the Stripe Dashboard (Developers -> Webhooks)
+// for: checkout.session.completed, customer.subscription.updated, and
+// customer.subscription.deleted.
 //
 // Matching a Stripe event back to a `users/{uid}` doc:
-//   1. `client_reference_id` — set by the app to the Firebase uid when the
-//      buyer is logged in (see the pricing page checkout button in App.tsx).
-//   2. Falls back to the checkout email if there's no client_reference_id
-//      (e.g. a logged-out visitor bought first, then created/linked an
-//      account with the same email).
+//   1. `client_reference_id` on the checkout session — set by the app to the
+//      Firebase uid whenever the buyer is logged in (see App.tsx).
+//   2. Falls back to the checkout email if there's no client_reference_id.
+//   3. subscription.updated/deleted events carry no reference id at all, so
+//      those match by the `stripeCustomerId` this function stamped onto the
+//      user doc when the checkout session first completed.
 const stripeSecretKey = defineSecret('STRIPE_SECRET_KEY');
 const stripeWebhookSecret = defineSecret('STRIPE_WEBHOOK_SECRET');
 
@@ -90,6 +103,32 @@ async function findUserRef(uid, email) {
     if (!match.empty) return match.docs[0].ref;
   }
   return null;
+}
+
+async function findUserRefByCustomerId(customerId) {
+  if (!customerId) return null;
+  const match = await db.collection('users').where('stripeCustomerId', '==', customerId).limit(1).get();
+  return match.empty ? null : match.docs[0].ref;
+}
+
+function applySubscriptionStatus(ref, subscription) {
+  const base = {
+    stripeSubscriptionId: subscription.id,
+    stripeCustomerId: subscription.customer,
+  };
+  if (subscription.status === 'trialing') {
+    return ref.set({
+      ...base,
+      hasPaid: false,
+      trialStartAt: subscription.trial_start ? subscription.trial_start * 1000 : Date.now(),
+      trialEndAt: subscription.trial_end ? subscription.trial_end * 1000 : null,
+    }, { merge: true });
+  }
+  if (subscription.status === 'active') {
+    return ref.set({ ...base, hasPaid: true, paidAt: FieldValue.serverTimestamp() }, { merge: true });
+  }
+  // canceled, unpaid, incomplete_expired, etc. — access should not continue.
+  return ref.set({ ...base, hasPaid: false }, { merge: true });
 }
 
 exports.stripeWebhook = onRequest(
@@ -114,21 +153,22 @@ exports.stripeWebhook = onRequest(
         const uid = session.client_reference_id || '';
         const email = session.customer_details?.email || session.customer_email || '';
         const ref = await findUserRef(uid, email);
-        if (ref) {
-          await ref.set({
-            hasPaid: true,
-            stripeCustomerId: session.customer || '',
-            paidAt: FieldValue.serverTimestamp(),
-          }, { merge: true });
-        } else {
+        if (!ref) {
           console.warn('[stripeWebhook] no matching user for checkout session', { uid, email });
+        } else if (session.subscription) {
+          const subscription = await stripe.subscriptions.retrieve(session.subscription);
+          await applySubscriptionStatus(ref, subscription);
+        } else {
+          // Not a subscription checkout (e.g. a one-off charge) — treat as paid.
+          await ref.set({ hasPaid: true, stripeCustomerId: session.customer || '', paidAt: FieldValue.serverTimestamp() }, { merge: true });
         }
+      } else if (event.type === 'customer.subscription.updated') {
+        const subscription = event.data.object;
+        const ref = await findUserRefByCustomerId(subscription.customer);
+        if (ref) await applySubscriptionStatus(ref, subscription);
       } else if (event.type === 'customer.subscription.deleted') {
-        const customerId = event.data.object.customer;
-        const match = await db.collection('users').where('stripeCustomerId', '==', customerId).limit(1).get();
-        if (!match.empty) {
-          await match.docs[0].ref.set({ hasPaid: false }, { merge: true });
-        }
+        const ref = await findUserRefByCustomerId(event.data.object.customer);
+        if (ref) await ref.set({ hasPaid: false }, { merge: true });
       }
     } catch (err) {
       console.error('[stripeWebhook] handling error', err);

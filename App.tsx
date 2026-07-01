@@ -8,7 +8,7 @@ import { PrivacyPolicy, TermsAndConditions, ContactUs, Company } from './compone
 import { BlogIndex, BlogPostView, BLOG_POSTS, getPostBySlug, SITE_URL } from './components/Blog';
 import { useConferenceSearch, ConferenceResult } from './services/conferenceService';
 import { parseScannedData, parseBusinessCard, generateLeadReport, QuotaError, QUOTA_ERROR_MESSAGE, isQuotaError } from './services/geminiService';
-import { signInWithGoogle, signInWithLinkedIn, signUpWithEmail, signInWithEmail, firebaseSignOut, auth, logLoginEvent, logCancellationRequest, exportLeadsToGoogleSheet, ensureSubscription, getSubscription, watchSubscription, regenerateInviteToken, removeSeatMember, claimSeat, getSeatClaim, getUserLeads, saveUserLeads, watchUserLeads, logConferenceName, SubscriptionDoc } from './firebase';
+import { signInWithGoogle, signInWithLinkedIn, signUpWithEmail, signInWithEmail, firebaseSignOut, auth, logLoginEvent, getUserPaidStatus, logCancellationRequest, exportLeadsToGoogleSheet, ensureSubscription, getSubscription, watchSubscription, regenerateInviteToken, removeSeatMember, claimSeat, getSeatClaim, getUserLeads, saveUserLeads, watchUserLeads, logConferenceName, SubscriptionDoc } from './firebase';
 
 // Constants for retention and session
 const RETENTION_DAYS = 30;
@@ -63,6 +63,23 @@ const STRIPE_LINKS: Record<'monthly' | 'annual', Partial<Record<number, string>>
     10: 'https://buy.stripe.com/5kQeVf3ZB4tx3SRdn1fEk0u',
   },
 };
+
+// Builds a Stripe Checkout URL for a given seat count / billing cycle,
+// prefilling the email and (when known) tagging the Firebase uid as
+// `client_reference_id` so the stripeWebhook Cloud Function can match the
+// resulting subscription back to this account. Used both for an outright
+// purchase and for starting a trial — trials require a card too, so both
+// paths go through the same Stripe Checkout link (the free trial period is
+// configured on the Price/Payment Link in the Stripe Dashboard, not here).
+function buildCheckoutUrl(cycle: PaymentCycle, seats: number, email: string, uid: string): string {
+  const links = STRIPE_LINKS[cycle];
+  const dedicated = links[seats];
+  const fallback = `${links[1]}?quantity=${seats}`;
+  const url = new URL(dedicated ?? fallback);
+  if (email) url.searchParams.set('prefilled_email', email);
+  if (uid) url.searchParams.set('client_reference_id', uid);
+  return url.toString();
+}
 
 const TESTIMONIALS = [
   { quote: "MemoPear turned our trade show chaos into a streamlined pipeline. We captured 300% more context than ever before.", author: "Sarah Chen", role: "VP Field Marketing, HyperScale" },
@@ -968,29 +985,35 @@ const App: React.FC = () => {
       setSeatCount(3);
       localStorage.setItem(STORAGE_KEY_SEATS, '3');
     }
-    // Anchor the trial to the Firebase account creation time (survives re-login).
-    const createdAt = Date.parse(user.metadata.creationTime || '') || Date.now();
-    localStorage.setItem(STORAGE_KEY_TRIAL_START, String(createdAt));
-    setTrialStart(createdAt);
     logLoginEvent(user, 'password').catch(() => {});
-    const paid = localStorage.getItem(STORAGE_KEY_PAID) === 'true';
-    const onTrial = createdAt + TRIAL_DAYS * 24 * 60 * 60 * 1000 > Date.now();
-    // A teammate covered by an owner's plan keeps access even after their own
-    // trial lapses, so don't bounce them to pricing — check seat membership.
-    let memberOfTeam = false;
-    if (!paid && !onTrial) {
-      const claim = await getSeatClaim(user.uid).catch(() => null);
-      if (claim) {
-        memberOfTeam = true;
-        setIsSeatMember(true);
-        localStorage.setItem(STORAGE_KEY_MEMBERSHIP, claim.ownerUid);
-      }
+    const alreadyPaid = localStorage.getItem(STORAGE_KEY_PAID) === 'true';
+    if (alreadyPaid) { navigateTo('form'); return; }
+    if (authMode === 'signup') {
+      // Every trial now requires a card: send new signups to Stripe Checkout
+      // (which has a free trial period configured on the Price there)
+      // instead of granting free access. Access unlocks when they return to
+      // this tab (see the 'payment' view / activatePlan below), and the
+      // stripeWebhook Cloud Function confirms it server-side in the
+      // background so it's also there next time they log in elsewhere.
+      sessionStorage.setItem('lcp_pending_activation', '1');
+      window.open(buildCheckoutUrl(paymentCycle, seatCount, userEmail, user.uid), '_blank');
+      navigateTo('payment');
+      return;
     }
-    if (paid || onTrial || memberOfTeam) navigateTo('form');
-    else {
-      navigateTo('pricing');
-      setStatusMsg({ type: 'error', text: 'Your free trial has ended — subscribe to keep capturing contacts.' });
+    // Returning login: fall back to this account's server-confirmed paid
+    // status (kept accurate by stripeWebhook regardless of device), then
+    // team membership, before bouncing to pricing.
+    const serverPaid = await getUserPaidStatus(user.uid).catch(() => false);
+    if (serverPaid) { localStorage.setItem(STORAGE_KEY_PAID, 'true'); setHasPaid(true); navigateTo('form'); return; }
+    const claim = await getSeatClaim(user.uid).catch(() => null);
+    if (claim) {
+      setIsSeatMember(true);
+      localStorage.setItem(STORAGE_KEY_MEMBERSHIP, claim.ownerUid);
+      navigateTo('form');
+      return;
     }
+    navigateTo('pricing');
+    setStatusMsg({ type: 'error', text: 'Subscribe to keep capturing contacts.' });
   };
 
   const handleSocialAuth = async (provider: 'google' | 'linkedin') => {
@@ -1025,20 +1048,38 @@ const App: React.FC = () => {
         setSeatCount(3);
         localStorage.setItem(STORAGE_KEY_SEATS, '3');
       }
-      // Anchor the free trial to the Firebase account creation time so it
-      // survives localStorage clears and re-logins.
-      const createdAt = Date.parse(user.metadata.creationTime || '') || Date.now();
-      localStorage.setItem(STORAGE_KEY_TRIAL_START, String(createdAt));
-      setTrialStart(createdAt);
       // Audit log (login + IP) for trial-abuse review; never blocks login.
       logLoginEvent(user, provider).catch(() => {});
-      const paid = localStorage.getItem(STORAGE_KEY_PAID) === 'true';
-      const onTrial = createdAt + TRIAL_DAYS * 24 * 60 * 60 * 1000 > Date.now();
-      if (paid || onTrial) navigateTo('form');
-      else {
-        navigateTo('pricing');
-        setStatusMsg({ type: 'error', text: 'Your free trial has ended — subscribe to keep capturing contacts.' });
+      const alreadyPaid = localStorage.getItem(STORAGE_KEY_PAID) === 'true';
+      if (alreadyPaid) { navigateTo('form'); return; }
+      // Google/LinkedIn sign-in doesn't distinguish "sign up" from "log in" —
+      // it's the same popup either way — so check Firebase's own signal for
+      // a genuinely brand-new account rather than trusting the signup/login
+      // toggle the user happened to have selected.
+      const isBrandNewAccount = user.metadata.creationTime === user.metadata.lastSignInTime;
+      if (isBrandNewAccount && !TEST_USER_EMAILS.includes(userEmail.toLowerCase())) {
+        // Every trial now requires a card: send new signups to Stripe
+        // Checkout (which has a free trial period configured on the Price
+        // there) instead of granting free access.
+        sessionStorage.setItem('lcp_pending_activation', '1');
+        window.open(buildCheckoutUrl(paymentCycle, seatCount, userEmail, user.uid), '_blank');
+        navigateTo('payment');
+        return;
       }
+      // Returning account: fall back to its server-confirmed paid status
+      // (kept accurate by stripeWebhook regardless of device), then team
+      // membership, before bouncing to pricing.
+      const serverPaid = await getUserPaidStatus(user.uid).catch(() => false);
+      if (serverPaid) { localStorage.setItem(STORAGE_KEY_PAID, 'true'); setHasPaid(true); navigateTo('form'); return; }
+      const claim = await getSeatClaim(user.uid).catch(() => null);
+      if (claim) {
+        setIsSeatMember(true);
+        localStorage.setItem(STORAGE_KEY_MEMBERSHIP, claim.ownerUid);
+        navigateTo('form');
+        return;
+      }
+      navigateTo('pricing');
+      setStatusMsg({ type: 'error', text: 'Subscribe to keep capturing contacts.' });
     } catch (err: any) {
       const code = err?.code || '';
       console.error('[MemoPear] Social auth error:', code, err);
@@ -1810,7 +1851,7 @@ const App: React.FC = () => {
           <div className="p-4 md:p-8 text-center max-w-4xl mx-auto animate-in fade-in duration-500">
             <h2 className="text-4xl md:text-5xl font-black mb-4 tracking-tighter text-pear-600 dark:text-pear-400">Simple Pricing</h2>
             <p className="text-sm md:text-lg text-slate-500 mb-2 font-medium">One plan. Everything included. No surprises.</p>
-            <p className="text-xs md:text-sm font-black text-pear-600 dark:text-pear-400 uppercase tracking-widest mb-8">Your first {TRIAL_DAYS} days are free — no card needed</p>
+            <p className="text-xs md:text-sm font-black text-pear-600 dark:text-pear-400 uppercase tracking-widest mb-8">Your first {TRIAL_DAYS} days are free — card required, cancel anytime before you're billed</p>
 
             {/* Billing cycle toggle */}
             <div className="flex justify-center gap-3 mb-6">
@@ -1897,16 +1938,10 @@ const App: React.FC = () => {
               </div>
 
               <button onClick={() => {
-                const links = STRIPE_LINKS[paymentCycle];
-                const dedicated = links[seatQuantity];
-                const fallback = `${links[1]}?quantity=${seatQuantity}`;
-                const stripeUrl = new URL(dedicated ?? fallback);
-                if (email) stripeUrl.searchParams.set('prefilled_email', email);
-                if (accountId) stripeUrl.searchParams.set('client_reference_id', accountId);
                 localStorage.setItem(STORAGE_KEY_SEATS, String(seatQuantity));
                 setSeatCount(seatQuantity);
                 sessionStorage.setItem('lcp_pending_activation', '1');
-                window.open(stripeUrl.toString(), '_blank');
+                window.open(buildCheckoutUrl(paymentCycle, seatQuantity, email || userProfile.email || '', accountId), '_blank');
                 navigateTo('payment');
               }} className="w-full py-4 bg-pear-600 text-white font-black rounded-2xl shadow-xl hover:scale-[1.02] active:scale-95 transition-all text-[10px] uppercase tracking-widest">
                 {seatQuantity > 1 ? `Get ${seatQuantity} Seats Now` : 'Get Started Now'}

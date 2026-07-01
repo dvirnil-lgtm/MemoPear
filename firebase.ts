@@ -122,13 +122,14 @@ function welcomeEmailHtml(name?: string): string {
   const greeting = name ? `, ${name.split(' ')[0]}` : '';
   return `
     <div style="font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;max-width:480px;margin:0 auto;color:#1e293b;line-height:1.5;">
+      <img src="https://go.memopear.com/favicon-512.png" alt="MemoPear" width="48" height="48" style="display:block;margin-bottom:16px;border-radius:12px;">
       <h1 style="color:#65a30d;font-size:22px;margin-bottom:4px;">Welcome to MemoPear${greeting}! 🍐</h1>
-      <p>Your 2-day free trial just started — no card needed.</p>
+      <p>Your account is ready — add a card to start your 2-day free trial. You won't be charged until the trial ends, and you can cancel anytime before then.</p>
       <p>MemoPear helps you capture conference leads in seconds: scan a badge, snap a business card, or jot a quick note, and we enrich the rest automatically.</p>
       <p style="margin:28px 0;">
-        <a href="https://go.memopear.com/gather" style="background:#65a30d;color:#fff;padding:14px 28px;border-radius:12px;text-decoration:none;font-weight:700;display:inline-block;">Start capturing leads &rarr;</a>
+        <a href="https://go.memopear.com/pricing" style="background:#65a30d;color:#fff;padding:14px 28px;border-radius:12px;text-decoration:none;font-weight:700;display:inline-block;">Start your free trial &rarr;</a>
       </p>
-      <p>If you love it (you will), plans start at just $2.80/mo — cancel anytime.</p>
+      <p>Plans start at just $2.80/mo after your trial.</p>
       <p style="color:#94a3b8;font-size:12px;margin-top:32px;">&mdash; The MemoPear Team</p>
     </div>
   `;
@@ -140,7 +141,7 @@ async function sendWelcomeEmail(toEmail: string, name?: string): Promise<void> {
     await addDoc(collection(db, 'mail'), {
       to: [toEmail],
       message: {
-        subject: 'Welcome to MemoPear — your free trial just started 🍐',
+        subject: 'Welcome to MemoPear — start your free trial 🍐',
         html: welcomeEmailHtml(name),
       },
     });
@@ -151,10 +152,10 @@ async function sendWelcomeEmail(toEmail: string, name?: string): Promise<void> {
 
 // Records every sign-in (with IP) to Firestore for trial-abuse review, and —
 // the first time a `users/{uid}` doc is created — fires the welcome email and
-// stamps `trialStartAt`/`trialEndedEmailSent`/`hasPaid` so the scheduled
-// `sendTrialEndedEmails` function (see functions/index.js) can follow up
-// later, skipping anyone the `stripeWebhook` function has already marked
-// paid. Must never block or fail the login itself.
+// defaults `trialEndedEmailSent`/`hasPaid` to false. `trialStartAt` is NOT set
+// here: trials require a card now, so it's stamped by the `stripeWebhook`
+// Cloud Function (from Stripe's own trial_start) once checkout completes —
+// see functions/index.js. Must never block or fail the login itself.
 export async function logLoginEvent(user: User, provider: string): Promise<void> {
   try {
     const ip = await fetchClientIp();
@@ -175,7 +176,6 @@ export async function logLoginEvent(user: User, provider: string): Promise<void>
       accountCreatedAt: user.metadata.creationTime || '',
       ips: arrayUnion(ip),
       ...(isNewUser && {
-        trialStartAt: Date.parse(user.metadata.creationTime || '') || Date.now(),
         trialEndedEmailSent: false,
         hasPaid: false,
       }),
@@ -185,6 +185,20 @@ export async function logLoginEvent(user: User, provider: string): Promise<void>
     }
   } catch (err) {
     console.warn('[MemoPear] login logging skipped:', err);
+  }
+}
+
+// One-shot read of this account's server-confirmed paid status, kept
+// accurate by the `stripeWebhook` Cloud Function regardless of which device
+// or browser the user last completed checkout on. Used to restore Pro
+// access on a fresh login where localStorage has no record of a purchase.
+export async function getUserPaidStatus(uid: string): Promise<boolean> {
+  try {
+    const snap = await getDoc(doc(db, 'users', uid));
+    return snap.exists() && (snap.data() as any).hasPaid === true;
+  } catch (err) {
+    console.warn('[MemoPear] paid-status check skipped:', err);
+    return false;
   }
 }
 
