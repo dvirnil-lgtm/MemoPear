@@ -115,7 +115,44 @@ async function fetchClientIp(): Promise<string> {
   }
 }
 
-// Records every sign-in (with IP) to Firestore for trial-abuse review.
+// Sends the one-time welcome email via the same "Trigger Email from
+// Firestore" extension used elsewhere in this file — adding a doc to `mail`
+// is all it takes for the extension to hand it to SendGrid.
+function welcomeEmailHtml(name?: string): string {
+  const greeting = name ? `, ${name.split(' ')[0]}` : '';
+  return `
+    <div style="font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;max-width:480px;margin:0 auto;color:#1e293b;line-height:1.5;">
+      <h1 style="color:#65a30d;font-size:22px;margin-bottom:4px;">Welcome to MemoPear${greeting}! 🍐</h1>
+      <p>Your 2-day free trial just started — no card needed.</p>
+      <p>MemoPear helps you capture conference leads in seconds: scan a badge, snap a business card, or jot a quick note, and we enrich the rest automatically.</p>
+      <p style="margin:28px 0;">
+        <a href="https://go.memopear.com/gather" style="background:#65a30d;color:#fff;padding:14px 28px;border-radius:12px;text-decoration:none;font-weight:700;display:inline-block;">Start capturing leads &rarr;</a>
+      </p>
+      <p>If you love it (you will), plans start at just $2.80/mo — cancel anytime.</p>
+      <p style="color:#94a3b8;font-size:12px;margin-top:32px;">&mdash; The MemoPear Team</p>
+    </div>
+  `;
+}
+
+async function sendWelcomeEmail(toEmail: string, name?: string): Promise<void> {
+  if (!toEmail) return;
+  try {
+    await addDoc(collection(db, 'mail'), {
+      to: [toEmail],
+      message: {
+        subject: 'Welcome to MemoPear — your free trial just started 🍐',
+        html: welcomeEmailHtml(name),
+      },
+    });
+  } catch (err) {
+    console.warn('[MemoPear] welcome email skipped:', err);
+  }
+}
+
+// Records every sign-in (with IP) to Firestore for trial-abuse review, and —
+// the first time a `users/{uid}` doc is created — fires the welcome email and
+// stamps `trialStartAt`/`trialEndedEmailSent` so the `sendTrialEndedEmails`
+// scheduled Cloud Function (see functions/index.js) can follow up later.
 // Must never block or fail the login itself.
 export async function logLoginEvent(user: User, provider: string): Promise<void> {
   try {
@@ -129,12 +166,21 @@ export async function logLoginEvent(user: User, provider: string): Promise<void>
       accountCreatedAt: user.metadata.creationTime || '',
       at: serverTimestamp(),
     });
-    await setDoc(doc(db, 'users', user.uid), {
+    const userRef = doc(db, 'users', user.uid);
+    const isNewUser = !(await getDoc(userRef)).exists();
+    await setDoc(userRef, {
       email: user.email || '',
       lastLoginAt: serverTimestamp(),
       accountCreatedAt: user.metadata.creationTime || '',
       ips: arrayUnion(ip),
+      ...(isNewUser && {
+        trialStartAt: Date.parse(user.metadata.creationTime || '') || Date.now(),
+        trialEndedEmailSent: false,
+      }),
     }, { merge: true });
+    if (isNewUser) {
+      await sendWelcomeEmail(user.email || '', user.displayName || undefined);
+    }
   } catch (err) {
     console.warn('[MemoPear] login logging skipped:', err);
   }
