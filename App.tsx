@@ -984,15 +984,20 @@ const App: React.FC = () => {
       // QA accounts get a 3-seat team so the invite flow can be tested.
       setSeatCount(3);
       localStorage.setItem(STORAGE_KEY_SEATS, '3');
+      logLoginEvent(user, 'password').catch(() => {});
+      navigateTo('form');
+      return;
     }
     logLoginEvent(user, 'password').catch(() => {});
-    const alreadyPaid = localStorage.getItem(STORAGE_KEY_PAID) === 'true';
-    if (alreadyPaid) { navigateTo('form'); return; }
     if (authMode === 'signup') {
-      // Every trial now requires a card: send new signups to Stripe Checkout
-      // (which has a free trial period configured on the Price there)
-      // instead of granting free access. Access unlocks when they return to
-      // this tab (see the 'payment' view / activatePlan below), and the
+      // A brand-new account can never legitimately already be paid, so this
+      // branch never looks at localStorage — a stale `hasPaid: true` left
+      // over from a *different* account that previously used this same
+      // browser must never leak into a fresh signup. Every trial now
+      // requires a card: send new signups to Stripe Checkout (which has a
+      // free trial period configured on the Price there) instead of
+      // granting free access. Access unlocks when they return to this tab
+      // (see the 'payment' view / activatePlan below), and the
       // stripeWebhook Cloud Function confirms it server-side in the
       // background so it's also there next time they log in elsewhere.
       sessionStorage.setItem('lcp_pending_activation', '1');
@@ -1000,11 +1005,14 @@ const App: React.FC = () => {
       navigateTo('payment');
       return;
     }
-    // Returning login: fall back to this account's server-confirmed paid
-    // status (kept accurate by stripeWebhook regardless of device), then
-    // team membership, before bouncing to pricing.
+    // Returning login: always defer to this account's server-confirmed paid
+    // status rather than trusting localStorage, which is scoped to this
+    // browser/device, not to any one account — a shared or reused device
+    // could otherwise carry over a previous account's paid flag.
     const serverPaid = await getUserPaidStatus(user.uid).catch(() => false);
     if (serverPaid) { localStorage.setItem(STORAGE_KEY_PAID, 'true'); setHasPaid(true); navigateTo('form'); return; }
+    localStorage.removeItem(STORAGE_KEY_PAID);
+    setHasPaid(false);
     const claim = await getSeatClaim(user.uid).catch(() => null);
     if (claim) {
       setIsSeatMember(true);
@@ -1047,17 +1055,21 @@ const App: React.FC = () => {
         // QA accounts get a 3-seat team so the invite flow can be tested.
         setSeatCount(3);
         localStorage.setItem(STORAGE_KEY_SEATS, '3');
+        logLoginEvent(user, provider).catch(() => {});
+        navigateTo('form');
+        return;
       }
       // Audit log (login + IP) for trial-abuse review; never blocks login.
       logLoginEvent(user, provider).catch(() => {});
-      const alreadyPaid = localStorage.getItem(STORAGE_KEY_PAID) === 'true';
-      if (alreadyPaid) { navigateTo('form'); return; }
       // Google/LinkedIn sign-in doesn't distinguish "sign up" from "log in" —
       // it's the same popup either way — so check Firebase's own signal for
       // a genuinely brand-new account rather than trusting the signup/login
-      // toggle the user happened to have selected.
+      // toggle the user happened to have selected, or any localStorage flag
+      // (which is scoped to this browser/device, not to any one account — a
+      // shared or reused device could otherwise carry over a *different*
+      // account's paid flag onto this brand-new signup).
       const isBrandNewAccount = user.metadata.creationTime === user.metadata.lastSignInTime;
-      if (isBrandNewAccount && !TEST_USER_EMAILS.includes(userEmail.toLowerCase())) {
+      if (isBrandNewAccount) {
         // Every trial now requires a card: send new signups to Stripe
         // Checkout (which has a free trial period configured on the Price
         // there) instead of granting free access.
@@ -1066,11 +1078,13 @@ const App: React.FC = () => {
         navigateTo('payment');
         return;
       }
-      // Returning account: fall back to its server-confirmed paid status
-      // (kept accurate by stripeWebhook regardless of device), then team
-      // membership, before bouncing to pricing.
+      // Returning account: always defer to its server-confirmed paid status
+      // rather than trusting localStorage, then team membership, before
+      // bouncing to pricing.
       const serverPaid = await getUserPaidStatus(user.uid).catch(() => false);
       if (serverPaid) { localStorage.setItem(STORAGE_KEY_PAID, 'true'); setHasPaid(true); navigateTo('form'); return; }
+      localStorage.removeItem(STORAGE_KEY_PAID);
+      setHasPaid(false);
       const claim = await getSeatClaim(user.uid).catch(() => null);
       if (claim) {
         setIsSeatMember(true);
@@ -1110,6 +1124,14 @@ const App: React.FC = () => {
     localStorage.removeItem(STORAGE_KEY_AUTH);
     localStorage.removeItem(STORAGE_KEY_ACCOUNT);
     localStorage.removeItem(STORAGE_KEY_MEMBERSHIP);
+    // Clear this device's paid/trial/seat flags too — they're scoped to the
+    // browser, not the account, so leaving them behind would hand the next
+    // person to sign in on this device the previous account's paid access.
+    localStorage.removeItem(STORAGE_KEY_PAID);
+    localStorage.removeItem(STORAGE_KEY_TRIAL_START);
+    localStorage.removeItem(STORAGE_KEY_SEATS);
+    setHasPaid(false);
+    setTrialStart(null);
     // Clear this device's lead cache so a different account signing in next
     // doesn't merge the previous user's contacts into their synced set.
     localStorage.removeItem(STORAGE_KEY_LEADS);
