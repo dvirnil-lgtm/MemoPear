@@ -22,6 +22,8 @@ steps:
       - 'VITE_FIREBASE_MEASUREMENT_ID=${_FIREBASE_MEASUREMENT_ID}'
       - '--build-arg'
       - 'VITE_GOOGLE_OAUTH_CLIENT_ID=${_GOOGLE_OAUTH_CLIENT_ID}'
+      - '--build-arg'
+      - 'VITE_HUBSPOT_CLIENT_ID=${_HUBSPOT_CLIENT_ID}'
       - '.'
 
   - name: 'gcr.io/cloud-builders/docker'
@@ -56,6 +58,7 @@ substitutions:
   _FIREBASE_APP_ID: ''
   _FIREBASE_MEASUREMENT_ID: ''
   _GOOGLE_OAUTH_CLIENT_ID: ''
+  _HUBSPOT_CLIENT_ID: ''
 
 options:
   substitution_option: ALLOW_LOOSE

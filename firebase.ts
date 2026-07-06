@@ -27,6 +27,8 @@ import {
   arrayUnion,
   increment,
 } from 'firebase/firestore';
+import { getFunctions, httpsCallable } from 'firebase/functions';
+import { Lead } from './types';
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -513,6 +515,44 @@ export async function exportLeadsToGoogleSheet(
   if (!writeRes.ok) throw new Error(`write-failed-${writeRes.status}`);
 
   return sheet.spreadsheetUrl as string;
+}
+
+// ── HubSpot integration ─────────────────────────────────────────────────────
+// OAuth tokens live only in the `crmConnections/{uid}` doc, written by the
+// `hubspotOAuthCallback` Cloud Function — this file never reads or writes
+// them directly. The client only ever sees the non-secret
+// `users/{uid}.hubspotConnected` flag and calls the `syncLeadsToHubspot`
+// callable, which does the actual HubSpot API work server-side.
+const HUBSPOT_CLIENT_ID = import.meta.env.VITE_HUBSPOT_CLIENT_ID as string | undefined;
+// Must exactly match the Redirect URL configured on the HubSpot app's Auth
+// tab, and the host this exact Cloud Function is actually deployed at.
+const HUBSPOT_REDIRECT_URI = 'https://hubspotoauthcallback-yxfmpirqaa-uc.a.run.app';
+const HUBSPOT_SCOPES = 'crm.objects.contacts.read crm.objects.contacts.write';
+
+// Sends the user to HubSpot's consent screen; `state` carries the Firebase
+// uid through the redirect so the callback function knows whose account to
+// attach the resulting tokens to.
+export function buildHubspotAuthUrl(uid: string): string {
+  const url = new URL('https://app.hubspot.com/oauth/authorize');
+  url.searchParams.set('client_id', HUBSPOT_CLIENT_ID || '');
+  url.searchParams.set('redirect_uri', HUBSPOT_REDIRECT_URI);
+  url.searchParams.set('scope', HUBSPOT_SCOPES);
+  url.searchParams.set('state', uid);
+  return url.toString();
+}
+
+export function watchHubspotConnection(uid: string, cb: (connected: boolean) => void): () => void {
+  return onSnapshot(
+    doc(db, 'users', uid),
+    (snap) => cb(!!snap.exists() && (snap.data() as any).hubspotConnected === true),
+    () => cb(false),
+  );
+}
+
+export async function syncLeadsToHubspot(leads: Lead[]): Promise<{ synced: number; skipped: number }> {
+  const fn = httpsCallable(getFunctions(app), 'syncLeadsToHubspot');
+  const result = await fn({ leads });
+  return result.data as { synced: number; skipped: number };
 }
 
 export async function logCancellationRequest(details: {

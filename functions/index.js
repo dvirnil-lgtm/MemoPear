@@ -1,5 +1,5 @@
 const { onSchedule } = require('firebase-functions/v2/scheduler');
-const { onRequest } = require('firebase-functions/v2/https');
+const { onRequest, onCall, HttpsError } = require('firebase-functions/v2/https');
 const { defineSecret } = require('firebase-functions/params');
 const { initializeApp } = require('firebase-admin/app');
 const { getFirestore, FieldValue } = require('firebase-admin/firestore');
@@ -175,5 +175,156 @@ exports.stripeWebhook = onRequest(
     }
 
     res.status(200).send('ok');
+  },
+);
+
+// ── HubSpot integration: connect a user's HubSpot account, then push leads ──
+//
+// Each MemoPear user authorizes MemoPear against their *own* HubSpot account
+// (OAuth 2.0, authorization-code grant). Tokens are stored server-side in
+// `crmConnections/{uid}.hubspot` — a collection the client is never granted
+// read/write access to in Firestore rules, since a refresh token is
+// equivalent to a permanent login to that person's HubSpot account. Only
+// `users/{uid}.hubspotConnected` (a plain boolean, no secrets) is exposed to
+// the client so the UI can show connection status.
+//
+// Setup required in the HubSpot Developer Account (developers.hubspot.com):
+//   1. Create an app, add scopes crm.objects.contacts.read + .write.
+//   2. Add this function's URL as a Redirect URL on the app's Auth tab.
+//   3. Set HUBSPOT_CLIENT_ID (also needed by the frontend as
+//      VITE_HUBSPOT_CLIENT_ID — it's not secret, OAuth client IDs are public
+//      by design) and HUBSPOT_CLIENT_SECRET via
+//      `firebase functions:secrets:set`.
+const hubspotClientId = defineSecret('HUBSPOT_CLIENT_ID');
+const hubspotClientSecret = defineSecret('HUBSPOT_CLIENT_SECRET');
+
+const HUBSPOT_CONTACT_PROPERTIES = ['email', 'firstname', 'lastname', 'phone', 'company', 'jobtitle', 'website'];
+
+function leadToHubspotProperties(lead) {
+  const props = {
+    email: lead.email || '',
+    firstname: lead.firstName || '',
+    lastname: lead.lastName || '',
+    phone: lead.phone || '',
+    company: lead.company || '',
+    jobtitle: lead.jobTitle || '',
+    website: lead.website || '',
+  };
+  // Only send fields with a value — HubSpot doesn't need empty-string writes.
+  return Object.fromEntries(Object.entries(props).filter(([k, v]) => v && HUBSPOT_CONTACT_PROPERTIES.includes(k)));
+}
+
+exports.hubspotOAuthCallback = onRequest(
+  { secrets: [hubspotClientId, hubspotClientSecret] },
+  async (req, res) => {
+    const uid = String(req.query.state || '');
+    if (req.query.error || !req.query.code || !uid) {
+      res.redirect('https://go.memopear.com/profile?hubspot=error');
+      return;
+    }
+    try {
+      const redirectUri = `${req.protocol}://${req.get('host')}${req.path}`;
+      const tokenRes = await fetch('https://api.hubapi.com/oauth/v1/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          grant_type: 'authorization_code',
+          client_id: hubspotClientId.value(),
+          client_secret: hubspotClientSecret.value(),
+          redirect_uri: redirectUri,
+          code: String(req.query.code),
+        }),
+      });
+      const tokens = await tokenRes.json();
+      if (!tokenRes.ok || !tokens.access_token) {
+        console.error('[hubspotOAuthCallback] token exchange failed', tokens);
+        res.redirect('https://go.memopear.com/profile?hubspot=error');
+        return;
+      }
+      await db.collection('crmConnections').doc(uid).set({
+        hubspot: {
+          accessToken: tokens.access_token,
+          refreshToken: tokens.refresh_token,
+          expiresAt: Date.now() + tokens.expires_in * 1000,
+          connectedAt: FieldValue.serverTimestamp(),
+        },
+      }, { merge: true });
+      await db.collection('users').doc(uid).set({ hubspotConnected: true }, { merge: true });
+      res.redirect('https://go.memopear.com/profile?hubspot=connected');
+    } catch (err) {
+      console.error('[hubspotOAuthCallback] error', err);
+      res.redirect('https://go.memopear.com/profile?hubspot=error');
+    }
+  },
+);
+
+// Returns a valid (refreshing if needed) HubSpot access token for this uid,
+// or null if they haven't connected HubSpot.
+async function getValidHubspotToken(uid, clientId, clientSecret) {
+  const ref = db.collection('crmConnections').doc(uid);
+  const snap = await ref.get();
+  const hubspot = snap.exists ? snap.data().hubspot : null;
+  if (!hubspot) return null;
+  if (hubspot.expiresAt > Date.now() + 60_000) return hubspot.accessToken;
+
+  const refreshRes = await fetch('https://api.hubapi.com/oauth/v1/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      grant_type: 'refresh_token',
+      client_id: clientId,
+      client_secret: clientSecret,
+      refresh_token: hubspot.refreshToken,
+    }),
+  });
+  const refreshed = await refreshRes.json();
+  if (!refreshRes.ok || !refreshed.access_token) {
+    console.error('[hubspotSync] token refresh failed', refreshed);
+    return null;
+  }
+  await ref.set({
+    hubspot: {
+      ...hubspot,
+      accessToken: refreshed.access_token,
+      refreshToken: refreshed.refresh_token || hubspot.refreshToken,
+      expiresAt: Date.now() + refreshed.expires_in * 1000,
+    },
+  }, { merge: true });
+  return refreshed.access_token;
+}
+
+// Callable from the client (firebase.ts -> httpsCallable) with the signed-in
+// user's Firebase ID token verified automatically — no manual auth check
+// needed beyond `request.auth`. Upserts each lead into HubSpot Contacts by
+// email, so re-syncing the same lead later updates it instead of duplicating.
+exports.syncLeadsToHubspot = onCall(
+  { secrets: [hubspotClientId, hubspotClientSecret] },
+  async (request) => {
+    if (!request.auth) throw new HttpsError('unauthenticated', 'Sign in required.');
+    const leads = Array.isArray(request.data?.leads) ? request.data.leads : [];
+    const withEmail = leads.filter((l) => l && l.email);
+    const skipped = leads.length - withEmail.length;
+    if (!withEmail.length) return { synced: 0, skipped, errors: [] };
+
+    const accessToken = await getValidHubspotToken(request.auth.uid, hubspotClientId.value(), hubspotClientSecret.value());
+    if (!accessToken) throw new HttpsError('failed-precondition', 'Connect HubSpot first.');
+
+    const inputs = withEmail.map((lead) => ({
+      idProperty: 'email',
+      id: lead.email,
+      properties: leadToHubspotProperties(lead),
+    }));
+
+    const upsertRes = await fetch('https://api.hubapi.com/crm/v3/objects/contacts/batch/upsert', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
+      body: JSON.stringify({ inputs }),
+    });
+    const result = await upsertRes.json();
+    if (!upsertRes.ok) {
+      console.error('[syncLeadsToHubspot] HubSpot upsert failed', result);
+      throw new HttpsError('internal', result.message || 'HubSpot rejected the request.');
+    }
+    return { synced: inputs.length, skipped, errors: [] };
   },
 );

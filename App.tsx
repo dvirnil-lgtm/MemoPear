@@ -8,7 +8,7 @@ import { PrivacyPolicy, TermsAndConditions, ContactUs, Company } from './compone
 import { BlogIndex, BlogPostView, BLOG_POSTS, getPostBySlug, SITE_URL } from './components/Blog';
 import { useConferenceSearch, ConferenceResult } from './services/conferenceService';
 import { parseScannedData, parseBusinessCard, generateLeadReport, QuotaError, QUOTA_ERROR_MESSAGE, isQuotaError } from './services/geminiService';
-import { signInWithGoogle, signInWithLinkedIn, signUpWithEmail, signInWithEmail, firebaseSignOut, auth, logLoginEvent, getUserPaidStatus, logCancellationRequest, exportLeadsToGoogleSheet, ensureSubscription, getSubscription, watchSubscription, regenerateInviteToken, removeSeatMember, claimSeat, getSeatClaim, getUserLeads, saveUserLeads, watchUserLeads, logConferenceName, SubscriptionDoc } from './firebase';
+import { signInWithGoogle, signInWithLinkedIn, signUpWithEmail, signInWithEmail, firebaseSignOut, auth, logLoginEvent, getUserPaidStatus, logCancellationRequest, exportLeadsToGoogleSheet, ensureSubscription, getSubscription, watchSubscription, regenerateInviteToken, removeSeatMember, claimSeat, getSeatClaim, getUserLeads, saveUserLeads, watchUserLeads, logConferenceName, buildHubspotAuthUrl, watchHubspotConnection, syncLeadsToHubspot, SubscriptionDoc } from './firebase';
 
 // Constants for retention and session
 const RETENTION_DAYS = 30;
@@ -398,6 +398,8 @@ const App: React.FC = () => {
   // Team-seat / invitation state (Firestore-backed).
   const [accountId, setAccountId] = useState<string>(() => localStorage.getItem(STORAGE_KEY_ACCOUNT) || '');
   const [subscription, setSubscription] = useState<SubscriptionDoc | null>(null);
+  const [hubspotConnected, setHubspotConnected] = useState(false);
+  const [isSyncingHubspot, setIsSyncingHubspot] = useState(false);
   const [joinIntent, setJoinIntent] = useState<{ ownerUid: string; token: string } | null>(null);
   const [inviteCopied, setInviteCopied] = useState(false);
   const [receipts, setReceipts] = useState<{id: string; date: number; plan: string; cycle: string; seats: number; amount: string}[]>(() => {
@@ -553,6 +555,14 @@ const App: React.FC = () => {
   // Firebase uid as the stable account id when auth state resolves.
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
+    const hubspot = params.get('hubspot');
+    if (hubspot === 'connected') {
+      setStatusMsg({ type: 'success', text: 'HubSpot connected — you can now push contacts to it.' });
+      window.history.replaceState({}, '', window.location.pathname);
+    } else if (hubspot === 'error') {
+      setStatusMsg({ type: 'error', text: "Couldn't connect HubSpot — please try again." });
+      window.history.replaceState({}, '', window.location.pathname);
+    }
     const sub = params.get('sub');
     const token = params.get('token');
     if (params.get('join') && sub && token) {
@@ -625,6 +635,13 @@ const App: React.FC = () => {
     });
     return () => { active = false; unsub(); };
   }, [accountId, isLoggedIn, hasPaid, seatCount, paymentCycle]);
+
+  // Mirrors this account's HubSpot connection status from Firestore (set by
+  // the hubspotOAuthCallback Cloud Function once the OAuth redirect completes).
+  useEffect(() => {
+    if (!accountId || !isLoggedIn) { setHubspotConnected(false); return; }
+    return watchHubspotConnection(accountId, setHubspotConnected);
+  }, [accountId, isLoggedIn]);
 
   // Once authenticated, redeem any pending invite-link seat claim.
   const claimingRef = useRef(false);
@@ -812,6 +829,29 @@ const App: React.FC = () => {
     if (!hasAccess) { navigateTo('pricing'); return; }
     if (modal === 'email') setEmailRecipient(userProfile.email || '');
     setActiveModal(modal);
+  };
+
+  const handlePushToHubspot = async () => {
+    if (!hasAccess) { navigateTo('pricing'); return; }
+    if (!hubspotConnected) {
+      setStatusMsg({ type: 'error', text: 'Connect HubSpot from your Profile first.' });
+      navigateTo('profile');
+      return;
+    }
+    const list = leadsForExport();
+    if (!list.length) { setStatusMsg({ type: 'error', text: 'No contacts to push yet.' }); return; }
+    setIsSyncingHubspot(true);
+    try {
+      const { synced, skipped } = await syncLeadsToHubspot(list);
+      setSelectedLeadIds(new Set());
+      const skippedNote = skipped ? ` (${skipped} skipped — no email on file)` : '';
+      setStatusMsg({ type: 'success', text: `Pushed ${synced} contact${synced === 1 ? '' : 's'} to HubSpot${skippedNote}.` });
+    } catch (err: any) {
+      console.error('[MemoPear] HubSpot sync failed:', err);
+      setStatusMsg({ type: 'error', text: `Couldn't push to HubSpot (${err?.message || 'unknown error'}).` });
+    } finally {
+      setIsSyncingHubspot(false);
+    }
   };
 
   // Leads chosen for export — the current selection, or everything if nothing
@@ -2272,7 +2312,32 @@ const App: React.FC = () => {
                 </div>
               </div>
 
-              <button 
+              {/* Integrations */}
+              <div className="space-y-4">
+                <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest pl-2">Integrations</label>
+                <div className="glass p-6 rounded-3xl border border-slate-200 dark:border-white/10">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-black">HubSpot CRM</p>
+                      <p className="text-[9px] text-slate-400 font-medium mt-0.5">
+                        {hubspotConnected ? 'Connected — push contacts from your Pipeline.' : 'Connect your HubSpot account to push captured contacts straight into it.'}
+                      </p>
+                    </div>
+                    {hubspotConnected ? (
+                      <span className="text-[8px] font-black uppercase px-2.5 py-1 bg-emerald-500/10 text-emerald-500 rounded-full flex-shrink-0">Connected</span>
+                    ) : (
+                      <button
+                        onClick={() => { window.location.href = buildHubspotAuthUrl(accountId); }}
+                        className="px-4 py-2 bg-orange-600 text-white text-[9px] font-black uppercase rounded-xl shadow-lg hover:scale-105 transition-all flex-shrink-0"
+                      >
+                        Connect
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <button
                 onClick={() => {
                   localStorage.setItem('memo_profile', JSON.stringify(userProfile));
                   setStatusMsg({ type: 'success', text: 'Profile Synchronized.' });
@@ -2562,7 +2627,7 @@ const App: React.FC = () => {
                        <div className="flex gap-2 overflow-x-auto no-scrollbar">
                           <button onClick={() => handleSyncAttempt('sheets')} className="px-8 py-4 bg-emerald-600 text-white rounded-[1.5rem] text-[10px] font-black uppercase shadow-lg hover:bg-emerald-700 transition-all">📊 Export to Sheets</button>
                           <button onClick={() => handleSyncAttempt('email')} className="px-8 py-4 bg-indigo-600 text-white rounded-[1.5rem] text-[10px] font-black uppercase shadow-lg hover:bg-indigo-700 transition-all">✉️ Send Emails</button>
-                          
+                          <button onClick={handlePushToHubspot} disabled={isSyncingHubspot} className="px-8 py-4 bg-orange-600 text-white rounded-[1.5rem] text-[10px] font-black uppercase shadow-lg hover:bg-orange-700 transition-all disabled:opacity-50">{isSyncingHubspot ? 'Pushing...' : '🧡 Push to HubSpot'}</button>
                        </div>
                     </div>
                     <div className="mb-8">
