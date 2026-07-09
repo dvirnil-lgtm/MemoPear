@@ -5,6 +5,7 @@ import { Lead, CommMethod, UserProfile, PaymentCycle, TeamMember } from './types
 import { QRScanner } from './components/QRScanner';
 import { CommMethodToggle } from './components/CommMethodToggle';
 import { PrivacyPolicy, TermsAndConditions, ContactUs, Company } from './components/LegalPages';
+import { Integrations } from './components/Integrations';
 import { BlogIndex, BlogPostView, BLOG_POSTS, getPostBySlug, SITE_URL } from './components/Blog';
 import { useConferenceSearch, ConferenceResult } from './services/conferenceService';
 import { parseScannedData, parseBusinessCard, generateLeadReport, QuotaError, QUOTA_ERROR_MESSAGE, isQuotaError } from './services/geminiService';
@@ -367,7 +368,7 @@ const App: React.FC = () => {
   // Sign-up consent: the user must agree to the Terms and opt in to emails
   // before an account can be created (email/password or social).
   const [agreedToTerms, setAgreedToTerms] = useState(false);
-  type AppView = 'home' | 'login' | 'pricing' | 'form' | 'history' | 'payment' | 'profile' | 'privacy' | 'terms' | 'contact' | 'team' | 'company' | 'blog' | 'blogPost';
+  type AppView = 'home' | 'login' | 'pricing' | 'form' | 'history' | 'payment' | 'profile' | 'privacy' | 'terms' | 'contact' | 'team' | 'company' | 'blog' | 'blogPost' | 'integrations';
   // Resolve a pathname to a view (and, for blog posts, the post slug). Blog
   // posts live at /blog/<slug>, so they need prefix matching rather than the
   // exact-path lookup used for every other page.
@@ -376,7 +377,7 @@ const App: React.FC = () => {
       '/': 'home', '/login': 'login', '/pricing': 'pricing', '/billing': 'pricing', '/gather': 'form',
       '/pipeline': 'history', '/payment': 'payment', '/profile': 'profile',
       '/privacy': 'privacy', '/terms': 'terms', '/contact': 'contact', '/team': 'team', '/company': 'company',
-      '/blog': 'blog',
+      '/blog': 'blog', '/integrations': 'integrations',
     };
     const clean = pathname.replace(/\/$/, '') || '/';
     if (clean === '/blog') return { view: 'blog', slug: '' };
@@ -1456,7 +1457,7 @@ const App: React.FC = () => {
     home: '/', login: '/login', pricing: '/pricing', form: '/gather',
     history: '/pipeline', payment: '/payment', profile: '/profile',
     privacy: '/privacy', terms: '/terms', contact: '/contact', team: '/team', company: '/company',
-    blog: '/blog',
+    blog: '/blog', integrations: '/integrations',
   };
 
   const PAGE_META: Record<string, { title: string; description: string }> = {
@@ -1472,6 +1473,7 @@ const App: React.FC = () => {
     contact: { title: 'Contact Us | MemoPear', description: 'Get in touch with the MemoPear team.' },
     team: { title: 'Team | MemoPear', description: 'Invite your team members and manage your seats.' },
     company: { title: 'Our Story | MemoPear', description: 'Born on the conference floor — how years of working trade shows built MemoPear, and our mission to help field marketers, field sales, and attendees gather leads and follow up with ease.' },
+    integrations: { title: 'Integrations | MemoPear', description: 'Push your captured leads to email, Google Sheets, and HubSpot CRM — with Salesforce, monday.com, Zoho, and more on the way.' },
     blog: { title: 'Blog: Conference Lead-Capture Playbooks | MemoPear', description: 'Tactical guides to capturing, organizing, and following up on leads at the biggest high-tech conferences — CES, AWS re:Invent, Web Summit, Dreamforce, MWC, and SaaStr.' },
   };
 
@@ -1626,6 +1628,7 @@ const App: React.FC = () => {
   const navLinks: { name: string; view: AppView }[] = [
     { name: 'Home', view: 'home' },
     { name: 'Pricing', view: 'pricing' },
+    { name: 'Integrations', view: 'integrations' },
     { name: 'Blog', view: 'blog' },
     { name: 'Company', view: 'company' },
     ...(isLoggedIn ? [{ name: 'Pipeline', view: 'history' as AppView }] : []),
@@ -2868,6 +2871,17 @@ const App: React.FC = () => {
         {view === 'terms' && <TermsAndConditions onBack={() => navigateTo('home')} />}
         {view === 'contact' && <ContactUs onBack={() => navigateTo('home')} />}
         {view === 'company' && <Company onBack={() => navigateTo('home')} />}
+        {view === 'integrations' && (
+          <Integrations
+            onBack={() => navigateTo('home')}
+            isLoggedIn={isLoggedIn}
+            hubspotConnected={hubspotConnected}
+            onConnectHubspot={() => {
+              if (!isLoggedIn) { navigateTo('login'); return; }
+              window.location.href = buildHubspotAuthUrl(accountId);
+            }}
+          />
+        )}
         {view === 'blog' && <BlogIndex onBack={() => navigateTo('home')} onOpenPost={navigateToBlogPost} onGetStarted={() => navigateTo('pricing')} />}
         {view === 'blogPost' && (() => {
           const post = getPostBySlug(blogSlug);
