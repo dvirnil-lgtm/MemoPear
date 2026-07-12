@@ -64,10 +64,13 @@ export const Integrations: React.FC<{
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-16">
         {AVAILABLE.map((item) => {
           const isHubspot = item.name === 'HubSpot CRM';
+          const isGoogleSheets = item.name === 'Google Sheets';
           return (
             <div key={item.name} className="glass p-6 rounded-[2rem] border border-slate-200 dark:border-white/10 flex flex-col">
               {isHubspot ? (
                 <img src="/hubspot-logo.png" alt="HubSpot" className="w-12 h-12 rounded-2xl shadow-lg mb-4" />
+              ) : isGoogleSheets ? (
+                <img src="/google-sheets-logo.png" alt="Google Sheets" className="w-12 h-12 object-contain mb-4" />
               ) : (
                 <div className={`w-12 h-12 rounded-2xl ${item.iconBg} text-white flex items-center justify-center text-xl shadow-lg mb-4`}>
                   {item.icon}

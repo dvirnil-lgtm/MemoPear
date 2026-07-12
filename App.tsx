@@ -324,7 +324,9 @@ const MockLeadSelection = () => (
 
 const MockExportSheets = () => (
   <div className="glass p-5 rounded-3xl border border-slate-200 dark:border-white/10 shadow-xl scale-95 flex flex-col items-center justify-center h-48 w-full max-w-sm">
-    <div className="w-20 h-20 bg-emerald-600 rounded-[2rem] flex items-center justify-center text-4xl text-white shadow-2xl mb-4 animate-bounce">📊</div>
+    <div className="w-20 h-20 bg-emerald-600 rounded-[2rem] flex items-center justify-center shadow-2xl mb-4 animate-bounce p-3">
+      <img src="/google-sheets-logo.png" alt="Google Sheets" className="w-full h-full object-contain" />
+    </div>
     <div className="text-center">
       <h4 className="text-[10px] font-black uppercase text-emerald-600 tracking-widest">Pipeline Dispatched</h4>
       <p className="text-[8px] text-slate-400 font-bold">Encrypted sync to Google Sheets complete.</p>
@@ -1849,7 +1851,9 @@ const App: React.FC = () => {
                       <h3 className="text-4xl font-black tracking-tight leading-none">Follow Up Without the Hassle</h3>
                       <p className="text-lg text-slate-500 font-medium leading-relaxed">Export to Google Sheets with one tap, or let AI write a personalized follow-up email for every contact you captured.</p>
                       <div className="flex gap-2 lg:justify-end">
-                        <div className="w-10 h-10 bg-emerald-600/10 rounded-xl flex items-center justify-center text-xl">📊</div>
+                        <div className="w-10 h-10 bg-emerald-600/10 rounded-xl flex items-center justify-center p-1.5">
+                          <img src="/google-sheets-logo.png" alt="Google Sheets" className="w-full h-full object-contain" />
+                        </div>
                         <div className="w-10 h-10 bg-indigo-600/10 rounded-xl flex items-center justify-center text-xl">✉️</div>
                       </div>
                     </div>
@@ -2631,7 +2635,7 @@ const App: React.FC = () => {
                           <button onClick={deleteSelectedLeads} className="px-6 py-3 bg-rose-600/10 text-rose-500 rounded-2xl text-[10px] font-black uppercase border border-rose-600/20 active:scale-95 transition-all">Delete Selected</button>
                        </div>
                        <div className="flex gap-2 overflow-x-auto no-scrollbar">
-                          <button onClick={() => handleSyncAttempt('sheets')} className="px-8 py-4 bg-emerald-600 text-white rounded-[1.5rem] text-[10px] font-black uppercase shadow-lg hover:bg-emerald-700 transition-all">📊 Export to Sheets</button>
+                          <button onClick={() => handleSyncAttempt('sheets')} className="flex items-center gap-2 px-8 py-4 bg-emerald-600 text-white rounded-[1.5rem] text-[10px] font-black uppercase shadow-lg hover:bg-emerald-700 transition-all"><img src="/google-sheets-logo.png" alt="" className="w-4 h-4" /> Export to Sheets</button>
                           <button onClick={() => handleSyncAttempt('email')} className="px-8 py-4 bg-indigo-600 text-white rounded-[1.5rem] text-[10px] font-black uppercase shadow-lg hover:bg-indigo-700 transition-all">✉️ Send Emails</button>
                           <button onClick={handlePushToHubspot} disabled={isSyncingHubspot} className="flex items-center gap-2 px-8 py-4 bg-orange-600 text-white rounded-[1.5rem] text-[10px] font-black uppercase shadow-lg hover:bg-orange-700 transition-all disabled:opacity-50">{isSyncingHubspot ? 'Pushing...' : (<><img src="/hubspot-logo.png" alt="" className="w-4 h-4 rounded-md" /> Push to HubSpot</>)}</button>
                        </div>
@@ -2639,7 +2643,7 @@ const App: React.FC = () => {
                     <div className="mb-8">
                        <h2 className="text-5xl font-black tracking-tighter mb-2">Your Contacts</h2>
                         <div className="flex gap-2 mt-4">
-                           <button onClick={() => setStatusMsg({type:'success', text:'Google Spreadsheet Linked.'})} className="px-4 py-2 bg-slate-800 text-white rounded-xl text-[9px] font-black uppercase shadow-lg hover:bg-slate-900 transition-all">🔗 Link Sheets</button>
+                           <button onClick={() => setStatusMsg({type:'success', text:'Google Spreadsheet Linked.'})} className="flex items-center gap-1.5 px-4 py-2 bg-slate-800 text-white rounded-xl text-[9px] font-black uppercase shadow-lg hover:bg-slate-900 transition-all"><img src="/google-sheets-logo.png" alt="" className="w-3.5 h-3.5" /> Link Sheets</button>
                            <button onClick={() => setShowRetentionNotice(true)} className="px-4 py-2 bg-blue-600/10 text-blue-600 rounded-xl text-[9px] font-black uppercase border border-blue-600/20 active:scale-95 transition-all">Retention Policy</button>
                            {leads.length > 0 && (
                              <button onClick={deleteAllLeads} className="px-4 py-2 bg-rose-600/10 text-rose-500 rounded-xl text-[9px] font-black uppercase border border-rose-600/20 active:scale-95 transition-all">Delete All</button>
@@ -3046,6 +3050,7 @@ const App: React.FC = () => {
       {activeModal === 'sheets' && (
         <div className="fixed inset-0 z-[220] flex items-center justify-center p-6 bg-black/70 backdrop-blur-md">
           <div className="max-w-xs w-full glass p-8 md:p-10 rounded-[2.5rem] md:rounded-[3.5rem] text-center shadow-2xl animate-in zoom-in-95">
+            <img src="/google-sheets-logo.png" alt="Google Sheets" className="w-12 h-12 mx-auto mb-3" />
             <h2 className="text-lg md:text-xl font-black mb-1 tracking-tighter uppercase text-emerald-600">Export to Google Sheets</h2>
             <p className="text-[9px] md:text-[10px] text-slate-400 font-bold mt-2">Creates a new Google Spreadsheet in your Drive with {leadsForExport().length} selected lead{leadsForExport().length === 1 ? '' : 's'}.</p>
             <input type="text" value={sheetName} onChange={(e) => setSheetName(e.target.value)} placeholder="Spreadsheet name" className="w-full px-5 md:px-6 py-3 md:py-4 rounded-xl md:rounded-2xl bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 text-[10px] md:text-xs font-bold mb-4 md:mb-6 mt-3 md:mt-4 outline-none" />
