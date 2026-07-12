@@ -197,6 +197,13 @@ exports.stripeWebhook = onRequest(
 //      `firebase functions:secrets:set`.
 const hubspotClientId = defineSecret('HUBSPOT_CLIENT_ID');
 const hubspotClientSecret = defineSecret('HUBSPOT_CLIENT_SECRET');
+// Must be byte-for-byte identical to the redirect_uri used in the initial
+// authorize request (firebase.ts's HUBSPOT_REDIRECT_URI) and to the Redirect
+// URL configured on the HubSpot app's Auth tab — HubSpot rejects the token
+// exchange if it doesn't match exactly. Recomputing it from the incoming
+// request (protocol/host) is fragile behind Cloud Run's proxy, so it's kept
+// as the same literal constant instead.
+const HUBSPOT_REDIRECT_URI = 'https://hubspotoauthcallback-yxfmpirqaa-uc.a.run.app';
 
 const HUBSPOT_CONTACT_PROPERTIES = ['email', 'firstname', 'lastname', 'phone', 'company', 'jobtitle', 'website'];
 
@@ -223,7 +230,6 @@ exports.hubspotOAuthCallback = onRequest(
       return;
     }
     try {
-      const redirectUri = `${req.protocol}://${req.get('host')}${req.path}`;
       const tokenRes = await fetch('https://api.hubapi.com/oauth/v1/token', {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -231,7 +237,7 @@ exports.hubspotOAuthCallback = onRequest(
           grant_type: 'authorization_code',
           client_id: hubspotClientId.value(),
           client_secret: hubspotClientSecret.value(),
-          redirect_uri: redirectUri,
+          redirect_uri: HUBSPOT_REDIRECT_URI,
           code: String(req.query.code),
         }),
       });
