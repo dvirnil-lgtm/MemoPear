@@ -20,18 +20,14 @@ const AVAILABLE: AvailableIntegration[] = [
     iconBg: 'bg-emerald-600',
     description: 'One tap creates a brand-new spreadsheet in your Google Drive with every contact you\'ve captured.',
   },
-  {
-    name: 'HubSpot CRM',
-    icon: '🧡',
-    iconBg: 'bg-orange-600',
-    description: 'Connect your HubSpot account and push captured leads straight in as Contacts — matched and updated by email.',
-  },
 ];
 
-// Coming-soon CRMs. We don't have licensed logo artwork for these brands, so
-// each gets a plain wordmark chip in a color that evokes the brand rather
-// than a reproduction of its actual logo mark.
+// Coming-soon CRMs. HubSpot is pending HubSpot App Marketplace approval;
+// the rest don't have licensed logo artwork yet, so they get a plain
+// wordmark chip in a color that evokes the brand rather than a
+// reproduction of its actual logo mark.
 const COMING_SOON: { name: string; accent: string }[] = [
+  { name: 'HubSpot CRM', accent: '#FF7A59' },
   { name: 'Salesforce', accent: '#00A1E0' },
   { name: 'monday.com', accent: '#FF3D57' },
   { name: 'Zoho CRM', accent: '#E42527' },
@@ -41,10 +37,7 @@ const COMING_SOON: { name: string; accent: string }[] = [
 
 export const Integrations: React.FC<{
   onBack: () => void;
-  isLoggedIn: boolean;
-  hubspotConnected: boolean;
-  onConnectHubspot: () => void;
-}> = ({ onBack, isLoggedIn, hubspotConnected, onConnectHubspot }) => {
+}> = ({ onBack }) => {
   return (
     <div className="p-8 max-w-4xl mx-auto animate-in fade-in duration-500 pb-32">
       <button onClick={onBack} className="flex items-center gap-2 text-[10px] font-black uppercase text-slate-400 tracking-widest mb-8 hover:text-pear-600 transition-colors">
@@ -63,13 +56,10 @@ export const Integrations: React.FC<{
       <h2 className="text-xs font-black uppercase tracking-[0.2em] text-slate-400 mb-4">Available now</h2>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-16">
         {AVAILABLE.map((item) => {
-          const isHubspot = item.name === 'HubSpot CRM';
           const isGoogleSheets = item.name === 'Google Sheets';
           return (
             <div key={item.name} className="glass p-6 rounded-[2rem] border border-slate-200 dark:border-white/10 flex flex-col">
-              {isHubspot ? (
-                <img src="/hubspot-logo.png" alt="HubSpot" className="w-12 h-12 rounded-2xl shadow-lg mb-4" />
-              ) : isGoogleSheets ? (
+              {isGoogleSheets ? (
                 <img src="/google-sheets-logo.png" alt="Google Sheets" className="w-12 h-12 object-contain mb-4" />
               ) : (
                 <div className={`w-12 h-12 rounded-2xl ${item.iconBg} text-white flex items-center justify-center text-xl shadow-lg mb-4`}>
@@ -79,17 +69,7 @@ export const Integrations: React.FC<{
               <h3 className="font-black text-lg mb-2">{item.name}</h3>
               <p className="text-sm text-slate-500 dark:text-slate-400 font-medium leading-relaxed flex-grow">{item.description}</p>
               <div className="mt-6">
-                {isHubspot ? (
-                  hubspotConnected ? (
-                    <span className="text-[9px] font-black uppercase px-3 py-1.5 bg-emerald-500/10 text-emerald-500 rounded-full">Connected</span>
-                  ) : (
-                    <button onClick={onConnectHubspot} className="text-[9px] font-black uppercase px-4 py-2 bg-pear-600 text-white rounded-xl shadow-lg hover:scale-105 transition-all">
-                      {isLoggedIn ? 'Connect' : 'Log in to connect'}
-                    </button>
-                  )
-                ) : (
-                  <span className="text-[9px] font-black uppercase px-3 py-1.5 bg-emerald-500/10 text-emerald-500 rounded-full">Available</span>
-                )}
+                <span className="text-[9px] font-black uppercase px-3 py-1.5 bg-emerald-500/10 text-emerald-500 rounded-full">Available</span>
               </div>
             </div>
           );

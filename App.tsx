@@ -2319,34 +2319,6 @@ const App: React.FC = () => {
                 </div>
               </div>
 
-              {/* Integrations */}
-              <div className="space-y-4">
-                <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest pl-2">Integrations</label>
-                <div className="glass p-6 rounded-3xl border border-slate-200 dark:border-white/10">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <img src="/hubspot-logo.png" alt="HubSpot" className="w-9 h-9 rounded-xl shadow-md flex-shrink-0" />
-                      <div>
-                        <p className="text-sm font-black">HubSpot CRM</p>
-                        <p className="text-[9px] text-slate-400 font-medium mt-0.5">
-                          {hubspotConnected ? 'Connected — push contacts from your Pipeline.' : 'Connect your HubSpot account to push captured contacts straight into it.'}
-                        </p>
-                      </div>
-                    </div>
-                    {hubspotConnected ? (
-                      <span className="text-[8px] font-black uppercase px-2.5 py-1 bg-emerald-500/10 text-emerald-500 rounded-full flex-shrink-0">Connected</span>
-                    ) : (
-                      <button
-                        onClick={() => { window.location.href = buildHubspotAuthUrl(accountId); }}
-                        className="px-4 py-2 bg-orange-600 text-white text-[9px] font-black uppercase rounded-xl shadow-lg hover:scale-105 transition-all flex-shrink-0"
-                      >
-                        Connect
-                      </button>
-                    )}
-                  </div>
-                </div>
-              </div>
-
               <button
                 onClick={() => {
                   localStorage.setItem('memo_profile', JSON.stringify(userProfile));
@@ -2637,7 +2609,6 @@ const App: React.FC = () => {
                        <div className="flex gap-2 overflow-x-auto no-scrollbar">
                           <button onClick={() => handleSyncAttempt('sheets')} className="flex items-center gap-2 px-8 py-4 bg-emerald-600 text-white rounded-[1.5rem] text-[10px] font-black uppercase shadow-lg hover:bg-emerald-700 transition-all"><img src="/google-sheets-logo.png" alt="" className="w-4 h-4" /> Export to Sheets</button>
                           <button onClick={() => handleSyncAttempt('email')} className="px-8 py-4 bg-indigo-600 text-white rounded-[1.5rem] text-[10px] font-black uppercase shadow-lg hover:bg-indigo-700 transition-all">✉️ Send Emails</button>
-                          <button onClick={handlePushToHubspot} disabled={isSyncingHubspot} className="flex items-center gap-2 px-8 py-4 bg-orange-600 text-white rounded-[1.5rem] text-[10px] font-black uppercase shadow-lg hover:bg-orange-700 transition-all disabled:opacity-50">{isSyncingHubspot ? 'Pushing...' : (<><img src="/hubspot-logo.png" alt="" className="w-4 h-4 rounded-md" /> Push to HubSpot</>)}</button>
                        </div>
                     </div>
                     <div className="mb-8">
@@ -2879,15 +2850,7 @@ const App: React.FC = () => {
         {view === 'contact' && <ContactUs onBack={() => navigateTo('home')} />}
         {view === 'company' && <Company onBack={() => navigateTo('home')} />}
         {view === 'integrations' && (
-          <Integrations
-            onBack={() => navigateTo('home')}
-            isLoggedIn={isLoggedIn}
-            hubspotConnected={hubspotConnected}
-            onConnectHubspot={() => {
-              if (!isLoggedIn) { navigateTo('login'); return; }
-              window.location.href = buildHubspotAuthUrl(accountId);
-            }}
-          />
+          <Integrations onBack={() => navigateTo('home')} />
         )}
         {view === 'blog' && <BlogIndex onBack={() => navigateTo('home')} onOpenPost={navigateToBlogPost} onGetStarted={() => navigateTo('pricing')} />}
         {view === 'blogPost' && (() => {
