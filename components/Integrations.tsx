@@ -66,9 +66,13 @@ export const Integrations: React.FC<{
           const isHubspot = item.name === 'HubSpot CRM';
           return (
             <div key={item.name} className="glass p-6 rounded-[2rem] border border-slate-200 dark:border-white/10 flex flex-col">
-              <div className={`w-12 h-12 rounded-2xl ${item.iconBg} text-white flex items-center justify-center text-xl shadow-lg mb-4`}>
-                {item.icon}
-              </div>
+              {isHubspot ? (
+                <img src="/hubspot-logo.png" alt="HubSpot" className="w-12 h-12 rounded-2xl shadow-lg mb-4" />
+              ) : (
+                <div className={`w-12 h-12 rounded-2xl ${item.iconBg} text-white flex items-center justify-center text-xl shadow-lg mb-4`}>
+                  {item.icon}
+                </div>
+              )}
               <h3 className="font-black text-lg mb-2">{item.name}</h3>
               <p className="text-sm text-slate-500 dark:text-slate-400 font-medium leading-relaxed flex-grow">{item.description}</p>
               <div className="mt-6">
