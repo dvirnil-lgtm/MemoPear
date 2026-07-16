@@ -45,6 +45,97 @@ const SUBSCRIBE_BANNER: BlogBlock = { type: 'banner' };
 
 export const BLOG_POSTS: BlogPost[] = [
   {
+    slug: 'why-more-business-cards-means-worse-follow-up',
+    title: 'Why the Rep With the Most Business Cards Has the Worst Follow-Up',
+    description:
+      'The rep who collects the most business cards at a conference is usually worst at follow-up. Here is why lead volume kills conversion, and what actually works instead.',
+    date: '2026-07-16',
+    author: 'The MemoPear Team',
+    readTime: '11 min read',
+    conference: 'Conference Follow-Up',
+    location: 'For Sales Teams & Founders',
+    tags: ['Lead Capture', 'Sales Strategy', 'Follow-Up', 'B2B Sales'],
+    excerpt:
+      'Collecting the most business cards at a conference feels productive. It usually predicts the worst follow-up. Here is why depth beats volume, and how to capture just enough context to actually convert.',
+    blocks: [
+      {
+        type: 'p',
+        text: 'Here is an unpopular opinion that holds up every time you look closely at a sales team\'s post-conference numbers: the rep who comes home with the most business cards is usually the worst at follow-up. Not occasionally. Usually. Walk any expo floor and you will spot them — moving fast, collecting cards at every booth and every handshake, treating the stack in their bag as a scoreboard. It looks like hustle. It photographs well for a LinkedIn recap post. It is almost never the thing that produces pipeline.',
+      },
+      {
+        type: 'p',
+        text: 'Volume feels productive because it is easy to measure in the moment. You can watch the stack get thicker. You cannot watch context evaporate at the same rate, because that happens quietly, on the flight home, in the three days it takes to "get through" everything from the show. By the time a rep is back at their desk, a pile of 40 cards is not a lead list. It is a to-do list they will never finish — and worse, one where half the entries are unreadable even to the person who collected them.',
+      },
+      { type: 'h2', text: 'The math of a 40-card stack' },
+      {
+        type: 'ul',
+        items: [
+          'No context survives the day. Without a note attached at the moment of the conversation, a business card fifteen hours later tells you a name, a title, and nothing about why that person mattered.',
+          'Every card looks the same. The person who wanted a demo next week and the person who was just being polite while waiting for the coffee line to move both end up as identical rectangles in the same pile.',
+          'Prioritization becomes guesswork. Facing 40 undifferentiated contacts, most reps either follow up with none of them properly or blast all 40 with the same generic template — the email equivalent of a form letter, and buyers can tell.',
+          'The backlog compounds. A stack that is not processed within a day or two just gets a second stack stacked on top of it at the next event, and the "I\'ll get to it" pile never actually gets got to.',
+        ],
+      },
+      {
+        type: 'p',
+        text: 'None of this is a discipline problem. It is a design problem. Collecting a card is nearly free — a few seconds, a polite exchange, a place to put it. Reconstructing the context of a conversation after the fact is expensive, and it gets more expensive the longer you wait and the more conversations you are trying to reconstruct at once. Volume without capture is not a lead-gen strategy. It is a bet that your memory will outperform forty other conversations happening at the same event, and that bet always loses.',
+      },
+      { type: 'banner' },
+      { type: 'h2', text: 'The three things worth writing down — and nothing else' },
+      {
+        type: 'p',
+        text: 'The reps who actually convert are not the ones running the widest net. They are the ones who capture almost nothing extra. Watch them closely at a conference and the pattern is consistent: what the person said, what they need, and one detail worth remembering. That is the entire capture. Not a transcript, not a form with twelve fields, not a personality assessment — three pieces of signal, recorded in the ten seconds after the handshake ends and before the next conversation starts. Everything else is noise that slows down capture without improving follow-up.',
+      },
+      {
+        type: 'p',
+        text: 'This matters because the goal of conference lead capture is not documentation. It is retrieval. You are not writing for an archive — you are writing a note to the version of yourself who will sit down in two days and needs to remember, instantly, why this specific contact deserves a specific message instead of a generic one. "VP Ops, evaluating a replacement for their current tool, wants pricing for a 40-seat team" does more work than a scanned badge and a business card photo ever could, because it tells future-you exactly what to write and why it matters.',
+      },
+      {
+        type: 'quote',
+        text: 'A stack of cards with no context is not a lead list. It is a to-do list you will never finish.',
+      },
+      { type: 'h2', text: 'Speed vs. depth is a false choice' },
+      {
+        type: 'p',
+        text: 'This is usually where the debate splits into two camps. One camp optimizes conference follow-up for speed — reply to everyone within a day, keep the message short, treat momentum as the whole game. The other optimizes for depth — take time to understand each lead properly, write something considered, accept that it will take longer. Framed that way, it looks like a real tradeoff. It is not. The reps who convert best are fast and specific, and the reason they can be both is that they refused to let depth become expensive in the first place.',
+      },
+      {
+        type: 'p',
+        text: 'Depth only competes with speed when you capture it the slow way — typing notes into a spreadsheet after the fact, trying to recall a conversation from six hours and a dozen handshakes ago. Capture the "what they need" and "the one detail" in the moment, while it costs you ten seconds instead of ten minutes of reconstruction, and depth stops being the thing that delays your follow-up. It becomes the thing that makes your fast follow-up worth opening. The real failure mode is not choosing speed over depth or depth over speed — it is deferring capture until later, which quietly destroys both.',
+      },
+      { type: 'h2', text: 'How MemoPear closes the gap between conversation and CRM' },
+      {
+        type: 'p',
+        text: 'We built MemoPear around that exact bet: that the winning move is not choosing between speed and depth, but making depth cheap enough that speed is automatic. Scan a business card or a badge and the AI fills in the contact fields instantly — no typing, no squinting at a name you half-caught over conference-floor noise. Say the context out loud in one sentence while it is still fresh, and the AI structures it — who they are, what they need, the detail worth remembering. That lead lands in your CRM, or as a drafted, personalized follow-up email, before the next session even starts. No pile of cards to process on the flight home. No guessing, three days later, which of the forty people you met actually asked for a demo.',
+      },
+      {
+        type: 'p',
+        text: 'The follow-up email that goes out because of this is not a template with a name merged in. It references the actual thing the person said — the tool they are replacing, the timeline they mentioned, the objection they raised. That is the difference between an email that gets a reply and one that gets deleted alongside the nine other "great to meet you" messages sitting in the same inbox that Monday. And because it happens within a day rather than after everything gets "organized" a week later, you are the first message in that inbox, not the tenth.',
+      },
+      {
+        type: 'faq',
+        items: [
+          {
+            q: 'Why does collecting more business cards at a conference lead to worse follow-up?',
+            a: 'Because context, not contact information, is what makes a follow-up land — and context decays fast. A rep who collects 40 cards without capturing why each conversation mattered is left with 40 identical-looking contacts and no way to prioritize or personalize outreach. By the time they are back at their desk, most of the detail is gone, so the follow-up either never happens or goes out as one generic message to everyone.',
+          },
+          {
+            q: 'Should conference follow-up be optimized for speed or for depth of the conversation?',
+            a: 'Both, and they are not actually in tension if you capture context at the moment of the conversation rather than afterward. Depth becomes expensive only when you try to reconstruct it later from memory — captured in real time, it costs seconds, not minutes, and it is what makes a fast follow-up specific enough to earn a reply instead of getting deleted with every other generic "great to meet you" email.',
+          },
+          {
+            q: 'What should you actually write down when you meet a lead at a conference?',
+            a: 'Three things: what the person said, what they need, and one detail worth remembering. That is enough to write a specific, personalized follow-up later — a full transcript or a dozen extra fields just slow down capture without improving the outcome. The test is retrieval, not documentation: will this note tell you, two days from now, exactly why this person deserves a tailored message?',
+          },
+        ],
+      },
+      {
+        type: 'p',
+        text: 'So here is the genuine question worth sitting with, the same one that sparks this debate every time it comes up among sales and founder crowds: when you think about conference follow-up, do you optimize for speed, or for depth of the conversation? Most people pick a camp. The reps who actually convert stopped treating it as a choice — they made depth cheap enough to capture in the moment, which is the only thing that lets speed follow naturally. Which camp are you in, and has it been working?',
+      },
+    ],
+  },
+  {
     slug: 'vivatech-2026-paris-lead-capture-guide',
     title: 'VivaTech 2026 Paris: A Lead-Capture Guide for Startups & Scale-ups',
     description:
