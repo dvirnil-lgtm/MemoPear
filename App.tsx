@@ -6,7 +6,9 @@ import { QRScanner } from './components/QRScanner';
 import { CommMethodToggle } from './components/CommMethodToggle';
 import { PrivacyPolicy, TermsAndConditions, ContactUs, Company } from './components/LegalPages';
 import { Integrations } from './components/Integrations';
-import { BlogIndex, BlogPostView, BLOG_POSTS, getPostBySlug, SITE_URL } from './components/Blog';
+import { BlogIndex, BlogPostView, getPostBySlug, SITE_URL } from './components/Blog';
+import { PAGE_META, VIEW_URLS } from './content/pageMeta';
+import { buildBlogPostJsonLd, buildBlogIndexJsonLd } from './content/seo';
 import { useConferenceSearch, ConferenceResult } from './services/conferenceService';
 import { parseScannedData, parseBusinessCard, generateLeadReport, QuotaError, QUOTA_ERROR_MESSAGE, isQuotaError } from './services/geminiService';
 import { signInWithGoogle, signInWithLinkedIn, signUpWithEmail, signInWithEmail, firebaseSignOut, auth, logLoginEvent, getUserPaidStatus, logCancellationRequest, exportLeadsToGoogleSheet, ensureSubscription, getSubscription, watchSubscription, regenerateInviteToken, removeSeatMember, claimSeat, getSeatClaim, getUserLeads, saveUserLeads, watchUserLeads, logConferenceName, buildHubspotAuthUrl, watchHubspotConnection, syncLeadsToHubspot, SubscriptionDoc } from './firebase';
@@ -1455,30 +1457,6 @@ const App: React.FC = () => {
     setShowSavedPopup(true);
   };
 
-  const VIEW_URLS: Record<string, string> = {
-    home: '/', login: '/login', pricing: '/pricing', form: '/gather',
-    history: '/pipeline', payment: '/payment', profile: '/profile',
-    privacy: '/privacy', terms: '/terms', contact: '/contact', team: '/team', company: '/company',
-    blog: '/blog', integrations: '/integrations',
-  };
-
-  const PAGE_META: Record<string, { title: string; description: string }> = {
-    home: { title: 'MemoPear: Simply Better Lead Collection', description: 'Stop losing contacts at conferences. MemoPear lets you scan badges, snap business cards, and record notes — all in one place.' },
-    login: { title: 'Sign In | MemoPear', description: 'Log in or create your MemoPear account to start capturing conference contacts.' },
-    pricing: { title: 'Pricing | MemoPear', description: 'One simple plan. Scan badges, snap business cards, sync to Google Sheets, and more for just $2.80/month.' },
-    form: { title: 'Add a Contact | MemoPear', description: 'Quickly add a new contact from a conference — scan a badge, snap a card, or just type their info.' },
-    history: { title: 'Your Contacts | MemoPear', description: 'Browse and manage all the contacts you\'ve gathered at events and conferences.' },
-    payment: { title: 'Upgrade | MemoPear', description: 'Unlock AI scanning, business card OCR, LinkedIn lookup, and Google Sheets sync.' },
-    profile: { title: 'Profile | MemoPear', description: 'Manage your MemoPear profile, conferences, and billing settings.' },
-    privacy: { title: 'Privacy Policy | MemoPear', description: 'How MemoPear handles your data and protects your privacy.' },
-    terms: { title: 'Terms & Conditions | MemoPear', description: 'MemoPear terms of service and subscription details.' },
-    contact: { title: 'Contact Us | MemoPear', description: 'Get in touch with the MemoPear team.' },
-    team: { title: 'Team | MemoPear', description: 'Invite your team members and manage your seats.' },
-    company: { title: 'Our Story | MemoPear', description: 'Born on the conference floor — how years of working trade shows built MemoPear, and our mission to help field marketers, field sales, and attendees gather leads and follow up with ease.' },
-    integrations: { title: 'Integrations | MemoPear', description: 'Push your captured leads to email, Google Sheets, and HubSpot CRM — with Salesforce, monday.com, Zoho, and more on the way.' },
-    blog: { title: 'Blog: Conference Lead-Capture Playbooks | MemoPear', description: 'Tactical guides to capturing, organizing, and following up on leads at the biggest high-tech conferences — CES, AWS re:Invent, Web Summit, Dreamforce, MWC, and SaaStr.' },
-  };
-
   const navigateTo = (nextView: AppView) => {
     const url = VIEW_URLS[nextView] || '/';
     setBlogSlug('');
@@ -1542,38 +1520,7 @@ const App: React.FC = () => {
         title = `${post.title} | MemoPear Blog`;
         description = post.description;
         canonical = `${SITE_URL}/blog/${post.slug}`;
-        const faqBlock = post.blocks.find((b) => b.type === 'faq') as
-          | { type: 'faq'; items: { q: string; a: string }[] }
-          | undefined;
-        const graph: object[] = [
-          {
-            '@type': 'BlogPosting',
-            headline: post.title,
-            description: post.description,
-            datePublished: post.date,
-            dateModified: post.date,
-            author: { '@type': 'Organization', name: post.author, url: SITE_URL },
-            publisher: {
-              '@type': 'Organization',
-              name: 'MemoPear',
-              logo: { '@type': 'ImageObject', url: `${SITE_URL}/favicon-512.png` },
-            },
-            mainEntityOfPage: { '@type': 'WebPage', '@id': canonical },
-            keywords: post.tags.join(', '),
-            image: `${SITE_URL}/og-image-1200x630.png`,
-          },
-        ];
-        if (faqBlock) {
-          graph.push({
-            '@type': 'FAQPage',
-            mainEntity: faqBlock.items.map((qa) => ({
-              '@type': 'Question',
-              name: qa.q,
-              acceptedAnswer: { '@type': 'Answer', text: qa.a },
-            })),
-          });
-        }
-        setJsonLd({ '@context': 'https://schema.org', '@graph': graph });
+        setJsonLd(buildBlogPostJsonLd(post));
       } else {
         title = 'Blog | MemoPear';
         description = PAGE_META.blog.description;
@@ -1584,20 +1531,7 @@ const App: React.FC = () => {
       title = meta.title;
       description = meta.description;
       if (view === 'blog') {
-        setJsonLd({
-          '@context': 'https://schema.org',
-          '@type': 'Blog',
-          name: 'MemoPear Blog',
-          description: PAGE_META.blog.description,
-          url: `${SITE_URL}/blog`,
-          blogPost: BLOG_POSTS.map((p) => ({
-            '@type': 'BlogPosting',
-            headline: p.title,
-            description: p.description,
-            datePublished: p.date,
-            url: `${SITE_URL}/blog/${p.slug}`,
-          })),
-        });
+        setJsonLd(buildBlogIndexJsonLd());
       } else {
         setJsonLd(null);
       }
@@ -1609,6 +1543,8 @@ const App: React.FC = () => {
     setMeta('meta[property="og:description"]', 'content', description);
     setMeta('meta[property="og:url"]', 'content', canonical);
     setMeta('meta[property="og:type"]', 'content', view === 'blogPost' ? 'article' : 'website');
+    setMeta('meta[name="twitter:title"]', 'content', title);
+    setMeta('meta[name="twitter:description"]', 'content', description);
     setCanonical(canonical);
   }, [view, blogSlug]);
 
