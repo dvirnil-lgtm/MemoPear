@@ -24,6 +24,7 @@
 
 The MemoPear blog publishes tactical lead-capture playbooks for the biggest conferences in high tech. Each article covers a specific event and how field marketers, field sales reps, founders, and exhibitors can capture, organize, and follow up on leads at it.
 
+- The August 2026 Conference Circuit: 5 Shows, One Lead-Capture Fix (2026-07-19): https://go.memopear.com/blog/august-2026-conference-circuit-guide — A field guide to GBTA Convention, NY NOW, SuperZoo, Black Hat USA, and Step San Francisco, and the shared lead-capture fix for all five.
 - Why the Rep With the Most Business Cards Has the Worst Follow-Up (2026-07-16): https://go.memopear.com/blog/why-more-business-cards-means-worse-follow-up — Why lead volume without in-the-moment context capture kills conference follow-up, and why speed and depth are not actually a tradeoff.
 - VivaTech 2026 Paris: A Lead-Capture Guide for Startups & Scale-ups (2026-06-30): https://go.memopear.com/blog/vivatech-2026-paris-lead-capture-guide — Capturing investor, partner, and customer leads among 165,000+ attendees at Europe's biggest tech event in Paris.
 - SaaStr Annual 2025: The Field Sales Lead-Capture Playbook (2025-09-09): https://go.memopear.com/blog/saastr-annual-2025-lead-capture-playbook — Turning 12,500+ B2B SaaS attendees in San Mateo into clean pipeline.
