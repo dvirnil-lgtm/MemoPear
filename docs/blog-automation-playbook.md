@@ -105,22 +105,36 @@ URL, and Open Graph tags from this data, so no extra SEO wiring is needed.
 Run `npm run lint` and `npm run build` — both must pass. Validate the sitemap is
 well-formed XML.
 
-## Step 6 — Commit & push to production
+## Step 6 — Commit & open a Pull Request into main
+
+**Do NOT push to `main` directly.** `main` is under active parallel development,
+so all changes go through a PR that a human reviews and merges.
 
 ```
-git fetch origin <default-branch>
-git checkout -B claude/memopear-blog-section-suhrdp origin/claude/memopear-blog-section-suhrdp   # or create from main if absent
-# (commit the changes)
+git fetch origin main
+# Start the branch fresh from the latest main so the PR is clean:
+git checkout -B claude/blog-monthly-<slug> origin/main
 git add components/Blog.tsx public/sitemap.xml public/llms.txt docs/blog-automation-playbook.md
 git commit -m "Add monthly conference blog post: <Conference>"
-git push -u origin claude/memopear-blog-section-suhrdp
-# Fast-forward main (production) and push:
-git checkout main && git merge --ff-only claude/memopear-blog-section-suhrdp && git push origin main
-git checkout claude/memopear-blog-section-suhrdp
+git push -u origin claude/blog-monthly-<slug>
 ```
 
-Use commit/PR co-author/footer conventions per the repo's standing instructions.
-Do **not** include any internal model identifiers in commits or pushed files.
+Then open a Pull Request into `main` (base `main`, head `claude/blog-monthly-<slug>`).
+Automated fire sessions have no `gh` CLI and no GitHub MCP tools, so open the PR
+in whichever of these works, in order:
+
+1. **GitHub MCP `create_pull_request`** — only if those tools are actually
+   available in the session.
+2. **REST API** — if a `GITHUB_TOKEN` / `GH_TOKEN` env var is present:
+   `curl -sS -X POST -H "Authorization: Bearer $GITHUB_TOKEN" -H "Accept: application/vnd.github+json" https://api.github.com/repos/dvirnil-lgtm/memopear/pulls -d '{"title":"...","head":"claude/blog-monthly-<slug>","base":"main","body":"..."}'`
+3. **Fallback (no PR API available):** do NOT push to `main`. Report the
+   one-click compare URL so a human can open the PR:
+   `https://github.com/dvirnil-lgtm/memopear/compare/main...claude/blog-monthly-<slug>?expand=1`
+
+Title: `Add monthly conference blog post: <Conference>`. Body: summarize the post
+and confirm lint + build passed; mirror any `.github/pull_request_template.md`.
+**Never merge the PR and never push to `main`.** Use the repo's commit/PR
+co-author/footer conventions; never include any internal model identifier.
 
 ## Step 7 — Update this playbook
 
