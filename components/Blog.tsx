@@ -21,6 +21,7 @@ export type BlogBlock =
   | { type: 'ul'; items: string[] }
   | { type: 'quote'; text: string }
   | { type: 'banner' }
+  | { type: 'link'; label: string; url: string }
   | { type: 'faq'; items: { q: string; a: string }[] };
 
 export interface BlogPost {
@@ -49,6 +50,110 @@ export interface BlogPost {
 const SUBSCRIBE_BANNER: BlogBlock = { type: 'banner' };
 
 export const BLOG_POSTS: BlogPost[] = [
+  {
+    slug: 'august-2026-conference-circuit-guide',
+    title: 'The August 2026 Conference Circuit: 5 Shows, One Lead-Capture Fix',
+    description:
+      "Five must-attend August 2026 shows — GBTA, NY NOW, SuperZoo, Black Hat USA, Step SF — and the fix for the lead you'll forget by Tuesday.",
+    date: '2026-07-19',
+    author: 'The MemoPear Team',
+    readTime: '8 min read',
+    conference: 'August 2026 Conference Circuit',
+    location: 'Chicago, New York, Las Vegas & San Francisco',
+    tags: ['Trade Shows', 'Event Marketing', 'Lead Capture', 'B2B Sales'],
+    excerpt:
+      'Five very different industries — business travel, home and lifestyle retail, pet care, cybersecurity, and AI — all converge in August 2026. Here is what each show offers, and the one habit that beats a pocket full of business cards.',
+    blocks: [
+      {
+        type: 'p',
+        text: "August is a scheduling nightmare and a pipeline opportunity at the same time. Five major conferences land inside four weeks this year, spanning business travel, home and lifestyle retail, pet care, cybersecurity, and early-stage AI — five industries that otherwise have almost nothing in common. If you sell into any of them, or you're a founder trying to be in the right room at the right time, August 2026 is worth clearing calendar space for.",
+      },
+      {
+        type: 'p',
+        text: "Here is the part that connects all five: whichever show you walk into, you will have a genuinely good conversation with someone worth remembering, put their card in your bag or badge in your pocket, and by the following Tuesday have no idea whether that VP wanted a demo, a discount, or was just being polite. That is not a memory problem. It is a capture problem, and it shows up the same way whether you are on the GBTA show floor in Chicago or a rooftop mixer during Step Week in San Francisco.",
+      },
+      { type: 'h2', text: '1. GBTA Convention — Aug 3–5, Chicago' },
+      {
+        type: 'p',
+        text: "The Global Business Travel Association's annual convention is the business travel industry's biggest gathering, and the 2026 edition — its 57th — brings more than 5,000 corporate travel buyers, suppliers, and travel management companies (TMCs) to McCormick Place. Three days, one hall, and a concentration of actual budget-holders that is hard to find anywhere else in the travel industry. For anyone selling into corporate travel — booking tools, expense platforms, duty-of-care software, TMC services — this is about as dense as decision-maker traffic gets.",
+      },
+      { type: 'link', label: 'Visit the official GBTA Convention site', url: 'https://convention.gbta.org/' },
+      { type: 'h2', text: '2. NY NOW — Aug 2–4, New York' },
+      {
+        type: 'p',
+        text: "NY NOW is home and lifestyle's big market week, held twice a year at the Javits Center, with the August edition setting the tone for the industry's fall and holiday buying cycles. Thousands of brands — from small-batch makers to established houses — show up alongside retail buyers who are there specifically to place orders, not just browse. If you sell into retail, wholesale, or specialty home goods, this is where those deals actually start, not where they get introduced.",
+      },
+      { type: 'link', label: 'Visit the official NY NOW site', url: 'https://nynow.com/' },
+      { type: 'h2', text: '3. SuperZoo — Aug 12–14, Las Vegas' },
+      {
+        type: 'p',
+        text: "SuperZoo is pet retail's flagship trade show, filling roughly 350,000 square feet of the Mandalay Bay Convention Center with more than 1,300 exhibitors. The floor is enormous, but what makes it valuable is who is walking it: thousands of independent pet retailers and buyers with real budget to spend on next year's shelf space. For brands in pet food, supplies, or grooming, SuperZoo is less a trade show and more a three-day buying event.",
+      },
+      { type: 'link', label: 'Visit the official SuperZoo site', url: 'https://www.superzoo.org/' },
+      { type: 'banner' },
+      { type: 'h2', text: '4. Black Hat USA — Aug 1–6, Las Vegas' },
+      {
+        type: 'p',
+        text: "Black Hat USA is cybersecurity's heaviest-hitting event of the year, also at Mandalay Bay. The week opens with trainings running for several days, then narrows into the core program — Briefings and the Business Hall — toward Aug 5–6. The audience is almost entirely technical: security engineers, CISOs, and researchers who have sat through a hundred vendor pitches and can tell within thirty seconds whether yours is worth their time. Dense, skeptical, and unusually well-informed — exactly the crowd you do not want to waste with a generic pitch.",
+      },
+      { type: 'link', label: 'Visit the official Black Hat USA site', url: 'https://blackhat.com/us-26/' },
+      { type: 'h2', text: '5. Step San Francisco — Aug 26–27, San Francisco' },
+      {
+        type: 'p',
+        text: "Step San Francisco closes out the month, and it is a different shape of event entirely: smaller, sharper, and concentrated at The Midway. The crowd is founders, investors, and operators building in AI — far fewer badges than the other four shows combined, but a much higher share of conversations worth having. It is the kind of event where a handful of high-signal conversations can matter more than a thousand low-intent booth scans, which makes losing the context of any single one especially costly.",
+      },
+      { type: 'link', label: 'Visit the official Step San Francisco site', url: 'https://stepsf.com/' },
+      { type: 'h2', text: 'Five industries, one identical failure mode' },
+      {
+        type: 'p',
+        text: 'Travel buyers, retail merchandisers, pet retailers, security engineers, and AI founders have almost nothing in common — except how they lose leads. Walk any of these five floors and the same pattern repeats itself:',
+      },
+      {
+        type: 'ul',
+        items: [
+          'A great five-minute conversation happens, and nothing about it gets written down until hours later, if at all.',
+          'The business card or badge scan captures a name and a title, but not why the conversation mattered.',
+          'By day two of a multi-day show, the stack from day one is already a blur — no way to tell the person who wanted a demo from the person who was just being polite.',
+          'The follow-up, when it finally goes out days later, is generic enough to read like it was sent to everyone — because it was.',
+        ],
+      },
+      { type: 'h2', text: "The one thing to bring that isn't more business cards" },
+      {
+        type: 'p',
+        text: "The fix is not a better memory, a bigger stack of cards, or a badge scanner that logs who stopped by without capturing why. It is not depending on memory at all. MemoPear was built for exactly this moment: scan a badge or snap a business card and the AI fills in the contact details instantly, then record a ten-second voice note right after the conversation ends — who they are, what they need, and the one detail worth remembering. Every contact gets tagged to the right conference and synced across your team in real time, whether you are working the GBTA floor solo or splitting SuperZoo's 350,000 square feet across a booth team.",
+      },
+      {
+        type: 'quote',
+        text: 'A stack of cards tells you who you met. A ten-second voice note tells you why it mattered.',
+      },
+      { type: 'h2', text: 'Following up before Tuesday' },
+      {
+        type: 'p',
+        text: 'Speed is what separates a lead from a missed opportunity. Every attendee at every one of these five shows comes home to an inbox full of "great to meet you" emails that all sound the same — and deletes most of them without reading past the first line. Because MemoPear captures the actual context of each conversation, it can draft a personalized follow-up per contact that references the real thing the person said, ready to send within 24 to 48 hours. That is the difference between being the message a CISO or a retail buyer actually opens, and being the ninth generic recap in a Monday morning inbox.',
+      },
+      {
+        type: 'faq',
+        items: [
+          {
+            q: 'Which August 2026 conference is right for my industry?',
+            a: "It depends on who you sell to. GBTA Convention (Aug 3–5, Chicago) is built for corporate travel buyers and TMCs; NY NOW (Aug 2–4, New York) is home and lifestyle retail; SuperZoo (Aug 12–14, Las Vegas) is pet retail; Black Hat USA (Aug 1–6, Las Vegas) is cybersecurity's technical buyers; and Step San Francisco (Aug 26–27) is founders, investors, and operators in AI. Anyone attending more than one is usually covering a broad territory or a diversified book of business, not a single vertical.",
+          },
+          {
+            q: 'How do you capture leads across several different conferences in one month?',
+            a: "Use the same lightweight system at every show instead of improvising a new process each time. Scan the badge or business card, add a short voice note on what the person needs while it is fresh, and tag every contact to its conference. That consistency is what makes it possible to walk five completely different floors in one month without losing track of who's who.",
+          },
+          {
+            q: 'How soon should you follow up after a conference?',
+            a: 'Within 24 to 48 hours, while the conversation is still specific in your memory and in theirs. Waiting longer means competing with every other vendor\'s delayed follow-up landing in the same inbox at once — and a personalized message sent promptly consistently outperforms a well-crafted one sent a week late.',
+          },
+        ],
+      },
+      {
+        type: 'p',
+        text: "Five very different industries, five very different floors, one identical failure mode. Whichever of these you are walking into this August, the fix is not a better memory — it is not depending on one.",
+      },
+    ],
+  },
   {
     slug: 'why-more-business-cards-means-worse-follow-up',
     title: 'Why the Rep With the Most Business Cards Has the Worst Follow-Up',
@@ -907,6 +1012,22 @@ const Block: React.FC<{ block: BlogBlock; id?: string }> = ({ block, id }) => {
       );
     case 'banner':
       return <SubscribeBanner />;
+    case 'link':
+      return (
+        <p className="not-prose">
+          <a
+            href={block.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 text-sm font-black text-pear-600 dark:text-pear-400 hover:underline underline-offset-2"
+          >
+            {block.label}
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4.5M14 4h6m0 0v6m0-6L10 14" />
+            </svg>
+          </a>
+        </p>
+      );
     case 'faq':
       return (
         <section id={id} className="not-prose scroll-mt-24 mt-12">
