@@ -83,6 +83,14 @@ oriented. Keep facts accurate; do not invent precise numbers you are unsure of
 The renderer already injects per-post `BlogPosting` + `FAQPage` JSON-LD, canonical
 URL, and Open Graph tags from this data, so no extra SEO wiring is needed.
 
+**Hero image & table of contents are automatic** — no extra work required:
+- A themed hero banner is generated from the post's `slug` (unique colours +
+  a network motif) with the conference/location overlaid. To use a real photo
+  instead, set the optional `heroImageUrl` field on the post.
+- The table of contents (with scroll-spy highlighting) is built automatically
+  from the post's `h2` headings plus the FAQ. So write clear, descriptive `h2`
+  headings — they become the TOC labels.
+
 ## Step 4 — Register in sitemap + llms.txt
 
 - `public/sitemap.xml`: add a `<url>` entry for

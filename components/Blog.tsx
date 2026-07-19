@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 
 // ---------------------------------------------------------------------------
 // MemoPear Blog
@@ -38,6 +38,11 @@ export interface BlogPost {
   tags: string[];
   /** One-line summary used on the index cards. */
   excerpt: string;
+  /**
+   * Optional hero image URL. When omitted, a themed, on-brand SVG hero is
+   * generated automatically from the post's slug and conference/location.
+   */
+  heroImageUrl?: string;
   blocks: BlogBlock[];
 }
 
@@ -663,6 +668,167 @@ const formatDate = (iso: string): string =>
   });
 
 // ---------------------------------------------------------------------------
+// Table-of-contents + hero helpers
+// ---------------------------------------------------------------------------
+
+const slugify = (text: string): string =>
+  text
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 60);
+
+export interface TocItem {
+  id: string;
+  label: string;
+}
+
+// The table of contents is built from every h2 heading plus the FAQ section.
+// Each id must match the id rendered on the corresponding heading (see Block).
+export function getSections(post: BlogPost): TocItem[] {
+  const items: TocItem[] = [];
+  post.blocks.forEach((b) => {
+    if (b.type === 'h2') items.push({ id: slugify(b.text), label: b.text });
+    else if (b.type === 'faq') items.push({ id: 'faq', label: 'FAQ' });
+  });
+  return items;
+}
+
+// Deterministic 32-bit hash of a string (for stable per-post hero styling).
+function hashString(s: string): number {
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return h >>> 0;
+}
+
+// Small seeded PRNG so a post's generated hero art is stable across renders.
+function mulberry32(seed: number): () => number {
+  return () => {
+    seed |= 0;
+    seed = (seed + 0x6d2b79f5) | 0;
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+// Gradient palettes for the generated hero — picked deterministically per post
+// so each article has its own look but the set stays on-brand.
+const HERO_PALETTES: { from: string; to: string; accent: string }[] = [
+  { from: '#155e63', to: '#08312f', accent: '#5eead4' }, // teal (brand)
+  { from: '#0c4a6e', to: '#082033', accent: '#7dd3fc' }, // sky
+  { from: '#3730a3', to: '#1e1b4b', accent: '#a5b4fc' }, // indigo
+  { from: '#6d28d9', to: '#2e1065', accent: '#d8b4fe' }, // violet
+  { from: '#9d174d', to: '#4a0e2a', accent: '#fda4af' }, // rose
+  { from: '#b45309', to: '#4a2408', accent: '#fcd34d' }, // amber
+  { from: '#065f46', to: '#052e26', accent: '#6ee7b7' }, // emerald
+];
+
+// A generated, on-brand hero banner. Renders the post's own image when
+// heroImageUrl is set; otherwise draws a themed gradient with a "network of
+// connections" motif (nodes + links) — a nod to capturing contacts at an event.
+export const BlogHero: React.FC<{ post: BlogPost; variant?: 'full' | 'card' }> = ({ post, variant = 'full' }) => {
+  const card = variant === 'card';
+  const { nodes, links, palette } = useMemo(() => {
+    const seed = hashString(post.slug);
+    const rnd = mulberry32(seed);
+    const palette = HERO_PALETTES[seed % HERO_PALETTES.length];
+    const count = 16;
+    const nodes = Array.from({ length: count }, () => ({
+      x: Math.round(rnd() * 100),
+      y: Math.round(rnd() * 100),
+      r: 0.6 + rnd() * 1.8,
+    }));
+    // Link each node to its nearest couple of neighbours for a constellation look.
+    const links: { x1: number; y1: number; x2: number; y2: number }[] = [];
+    nodes.forEach((n, i) => {
+      const nearest = nodes
+        .map((m, j) => ({ j, d: (m.x - n.x) ** 2 + (m.y - n.y) ** 2 }))
+        .filter((o) => o.j !== i)
+        .sort((a, b) => a.d - b.d)
+        .slice(0, 2);
+      nearest.forEach((o) => {
+        if (o.j > i) links.push({ x1: n.x, y1: n.y, x2: nodes[o.j].x, y2: nodes[o.j].y });
+      });
+    });
+    return { nodes, links, palette };
+  }, [post.slug]);
+
+  return (
+    <div className={card ? 'relative w-full h-32 overflow-hidden' : 'relative w-full h-52 md:h-72 rounded-[2rem] overflow-hidden mb-8 shadow-xl'}>
+      {post.heroImageUrl ? (
+        <img src={post.heroImageUrl} alt={`${post.conference} — ${post.location}`} className="absolute inset-0 w-full h-full object-cover" />
+      ) : (
+        <>
+          <div
+            className="absolute inset-0"
+            style={{ background: `linear-gradient(135deg, ${palette.from} 0%, ${palette.to} 100%)` }}
+          />
+          <svg className="absolute inset-0 w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+            {links.map((l, i) => (
+              <line key={i} x1={l.x1} y1={l.y1} x2={l.x2} y2={l.y2} stroke="#ffffff" strokeWidth={0.15} strokeOpacity={0.25} />
+            ))}
+            {nodes.map((n, i) => (
+              <circle key={i} cx={n.x} cy={n.y} r={n.r} fill={i % 4 === 0 ? palette.accent : '#ffffff'} fillOpacity={i % 4 === 0 ? 0.9 : 0.4} />
+            ))}
+          </svg>
+        </>
+      )}
+      {/* Legibility gradient + overlaid conference / location */}
+      <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-black/10 to-transparent" />
+      {card ? (
+        <div className="absolute left-4 right-4 bottom-3">
+          <p className="text-white font-black tracking-tight text-sm drop-shadow flex items-center gap-1.5">
+            <svg className="w-3.5 h-3.5 flex-shrink-0 opacity-90" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.2}><path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a2 2 0 01-2.828 0l-4.243-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+            {post.location}
+          </p>
+        </div>
+      ) : (
+        <div className="absolute left-6 right-6 bottom-6 md:left-8 md:right-8 md:bottom-8">
+          <span className="inline-block text-[9px] md:text-[10px] font-black uppercase tracking-[0.25em] text-white/90 bg-white/15 backdrop-blur-sm px-3 py-1 rounded-full">
+            {post.conference}
+          </span>
+          <p className="mt-3 text-white font-black tracking-tight text-lg md:text-2xl drop-shadow flex items-center gap-2">
+            <svg className="w-4 h-4 md:w-5 md:h-5 flex-shrink-0 opacity-90" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.2}><path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a2 2 0 01-2.828 0l-4.243-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+            {post.location}
+          </p>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// Table of contents with scroll-spy highlighting of the active section.
+export const TableOfContents: React.FC<{
+  items: TocItem[];
+  activeId: string;
+  onJump: (id: string) => void;
+}> = ({ items, activeId, onJump }) => (
+  <nav className="border-l border-slate-200 dark:border-white/10" aria-label="Table of contents">
+    {items.map((s) => {
+      const active = activeId === s.id;
+      return (
+        <button
+          key={s.id}
+          onClick={() => onJump(s.id)}
+          aria-current={active ? 'true' : undefined}
+          className={`block w-full text-left pl-4 -ml-px border-l-2 py-1.5 text-[11px] font-bold leading-snug transition-colors ${
+            active
+              ? 'border-pear-500 text-pear-600 dark:text-pear-400'
+              : 'border-transparent text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
+          }`}
+        >
+          {s.label}
+        </button>
+      );
+    })}
+  </nav>
+);
+
+// ---------------------------------------------------------------------------
 // Subscribe banner — the CTA woven through every post. Drives readers to the
 // pricing page to start with MemoPear. The pricing-navigation callback is
 // provided via context so banners nested deep inside post content (rendered by
@@ -715,13 +881,13 @@ export const SubscribeBanner: React.FC = () => {
 // Block renderer
 // ---------------------------------------------------------------------------
 
-const Block: React.FC<{ block: BlogBlock }> = ({ block }) => {
+const Block: React.FC<{ block: BlogBlock; id?: string }> = ({ block, id }) => {
   switch (block.type) {
     case 'p':
       return <p>{block.text}</p>;
     case 'h2':
       return (
-        <h2 className="text-2xl font-black text-slate-900 dark:text-white mt-12 mb-4 tracking-tight">
+        <h2 id={id} className="scroll-mt-24 text-2xl font-black text-slate-900 dark:text-white mt-12 mb-4 tracking-tight">
           {block.text}
         </h2>
       );
@@ -743,7 +909,7 @@ const Block: React.FC<{ block: BlogBlock }> = ({ block }) => {
       return <SubscribeBanner />;
     case 'faq':
       return (
-        <section className="not-prose mt-12">
+        <section id={id} className="not-prose scroll-mt-24 mt-12">
           <h2 className="text-2xl font-black text-slate-900 dark:text-white mb-6 tracking-tight">
             Frequently Asked Questions
           </h2>
@@ -804,8 +970,10 @@ export const BlogIndex: React.FC<{
           <article
             key={post.slug}
             onClick={() => onOpenPost(post.slug)}
-            className="group cursor-pointer glass p-7 rounded-[2rem] border border-slate-200 dark:border-white/10 hover:border-pear-500/50 transition-all shadow-lg flex flex-col"
+            className="group cursor-pointer glass rounded-[2rem] border border-slate-200 dark:border-white/10 hover:border-pear-500/50 transition-all shadow-lg flex flex-col overflow-hidden"
           >
+            <BlogHero post={post} variant="card" />
+            <div className="p-7 flex flex-col flex-1">
             <div className="flex items-center gap-2 mb-4 flex-wrap">
               <span className="text-[9px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full bg-pear-600/10 text-pear-600 dark:text-pear-400">
                 {post.conference}
@@ -830,6 +998,7 @@ export const BlogIndex: React.FC<{
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M9 5l7 7-7 7" />
                 </svg>
               </span>
+            </div>
             </div>
           </article>
         ))}
@@ -857,9 +1026,49 @@ export const BlogPostView: React.FC<{
     .filter((p) => p.slug !== post.slug)
     .slice(0, 2);
 
+  const sections = useMemo(() => getSections(post), [post.slug]);
+  const [activeId, setActiveId] = useState<string>('');
+
+  // Scroll-spy: highlight the section currently in view. The rootMargin biases
+  // the "active" band to just below the fixed nav so the highlight tracks the
+  // heading the reader is actually looking at.
+  useEffect(() => {
+    setActiveId(sections[0]?.id || '');
+    if (!sections.length) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const visible = entries
+          .filter((e) => e.isIntersecting)
+          .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
+        if (visible[0]) setActiveId((visible[0].target as HTMLElement).id);
+      },
+      { rootMargin: '-96px 0px -65% 0px', threshold: 0 },
+    );
+    sections.forEach((s) => {
+      const el = document.getElementById(s.id);
+      if (el) observer.observe(el);
+    });
+    return () => observer.disconnect();
+  }, [post.slug, sections]);
+
+  const jumpTo = (id: string) => {
+    const el = document.getElementById(id);
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      setActiveId(id);
+    }
+  };
+
+  // Per-block id: h2 headings and the FAQ section are the scroll anchors.
+  const blockId = (block: BlogBlock): string | undefined => {
+    if (block.type === 'h2') return slugify(block.text);
+    if (block.type === 'faq') return 'faq';
+    return undefined;
+  };
+
   return (
     <BlogCtaContext.Provider value={onGetStarted}>
-    <article className="p-8 max-w-3xl mx-auto animate-in fade-in duration-500 pb-32">
+    <div className="px-6 md:px-8 max-w-5xl mx-auto animate-in fade-in duration-500 pb-32 pt-2">
       <button
         onClick={onBack}
         className="flex items-center gap-2 text-[10px] font-black uppercase text-slate-400 tracking-widest mb-8 hover:text-pear-600 transition-colors"
@@ -870,59 +1079,87 @@ export const BlogPostView: React.FC<{
         All Articles
       </button>
 
-      <div className="flex items-center gap-2 mb-5 flex-wrap">
-        <span className="text-[9px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full bg-pear-600/10 text-pear-600 dark:text-pear-400">
-          {post.conference}
-        </span>
-        <span className="text-[9px] font-bold uppercase tracking-widest text-slate-400">
-          {post.location}
-        </span>
-      </div>
+      <div className="lg:grid lg:grid-cols-[200px_minmax(0,1fr)] lg:gap-12">
+        {/* Sticky table of contents (desktop) */}
+        {sections.length > 0 && (
+          <aside className="hidden lg:block">
+            <div className="sticky top-24">
+              <p className="text-[9px] font-black uppercase tracking-[0.2em] text-slate-400 mb-4 pl-4">On this page</p>
+              <TableOfContents items={sections} activeId={activeId} onJump={jumpTo} />
+            </div>
+          </aside>
+        )}
 
-      <h1 className="text-3xl md:text-5xl font-black mb-5 tracking-tighter text-slate-900 dark:text-white leading-[1.05]">
-        {post.title}
-      </h1>
+        <article className="min-w-0">
+          <BlogHero post={post} />
 
-      <div className="flex items-center gap-3 text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-10 flex-wrap">
-        <span>{post.author}</span>
-        <span className="w-1 h-1 rounded-full bg-slate-300" />
-        <time dateTime={post.date}>{formatDate(post.date)}</time>
-        <span className="w-1 h-1 rounded-full bg-slate-300" />
-        <span>{post.readTime}</span>
-      </div>
+          <div className="flex items-center gap-2 mb-5 flex-wrap">
+            <span className="text-[9px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full bg-pear-600/10 text-pear-600 dark:text-pear-400">
+              {post.conference}
+            </span>
+            <span className="text-[9px] font-bold uppercase tracking-widest text-slate-400">
+              {post.location}
+            </span>
+          </div>
 
-      <div className="space-y-6 text-base text-slate-600 dark:text-slate-300 leading-relaxed font-medium">
-        {post.blocks.map((block, i) => (
-          <Block key={i} block={block} />
-        ))}
-      </div>
+          <h1 className="text-3xl md:text-5xl font-black mb-5 tracking-tighter text-slate-900 dark:text-white leading-[1.05]">
+            {post.title}
+          </h1>
 
-      <SubscribeBanner />
+          <div className="flex items-center gap-3 text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-8 flex-wrap">
+            <span>{post.author}</span>
+            <span className="w-1 h-1 rounded-full bg-slate-300" />
+            <time dateTime={post.date}>{formatDate(post.date)}</time>
+            <span className="w-1 h-1 rounded-full bg-slate-300" />
+            <span>{post.readTime}</span>
+          </div>
 
-      {related.length > 0 && (
-        <section className="mt-16 pt-10 border-t border-slate-200 dark:border-white/10">
-          <h2 className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-6">
-            Keep reading
-          </h2>
-          <div className="grid gap-5 md:grid-cols-2">
-            {related.map((p) => (
-              <button
-                key={p.slug}
-                onClick={() => onOpenPost(p.slug)}
-                className="group text-left glass p-6 rounded-[1.5rem] border border-slate-200 dark:border-white/10 hover:border-pear-500/50 transition-all"
-              >
-                <span className="text-[9px] font-black uppercase tracking-widest text-pear-600 dark:text-pear-400">
-                  {p.conference}
-                </span>
-                <h3 className="text-base font-black tracking-tight mt-2 group-hover:text-pear-600 transition-colors">
-                  {p.title}
-                </h3>
-              </button>
+          {/* Collapsible table of contents (mobile / tablet) */}
+          {sections.length > 0 && (
+            <details className="lg:hidden mb-10 glass rounded-2xl border border-slate-200 dark:border-white/10 p-4">
+              <summary className="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-300 cursor-pointer select-none">
+                On this page
+              </summary>
+              <div className="mt-3">
+                <TableOfContents items={sections} activeId={activeId} onJump={jumpTo} />
+              </div>
+            </details>
+          )}
+
+          <div className="space-y-6 text-base text-slate-600 dark:text-slate-300 leading-relaxed font-medium">
+            {post.blocks.map((block, i) => (
+              <Block key={i} block={block} id={blockId(block)} />
             ))}
           </div>
-        </section>
-      )}
-    </article>
+
+          <SubscribeBanner />
+
+          {related.length > 0 && (
+            <section className="mt-16 pt-10 border-t border-slate-200 dark:border-white/10">
+              <h2 className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-6">
+                Keep reading
+              </h2>
+              <div className="grid gap-5 md:grid-cols-2">
+                {related.map((p) => (
+                  <button
+                    key={p.slug}
+                    onClick={() => onOpenPost(p.slug)}
+                    className="group text-left glass p-6 rounded-[1.5rem] border border-slate-200 dark:border-white/10 hover:border-pear-500/50 transition-all"
+                  >
+                    <span className="text-[9px] font-black uppercase tracking-widest text-pear-600 dark:text-pear-400">
+                      {p.conference}
+                    </span>
+                    <h3 className="text-base font-black tracking-tight mt-2 group-hover:text-pear-600 transition-colors">
+                      {p.title}
+                    </h3>
+                  </button>
+                ))}
+              </div>
+            </section>
+          )}
+        </article>
+      </div>
+    </div>
     </BlogCtaContext.Provider>
   );
 };
