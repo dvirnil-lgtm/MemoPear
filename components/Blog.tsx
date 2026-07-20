@@ -51,6 +51,114 @@ const SUBSCRIBE_BANNER: BlogBlock = { type: 'banner' };
 
 export const BLOG_POSTS: BlogPost[] = [
   {
+    slug: 'fall-2026-european-conference-circuit-guide',
+    title: "Europe's Fall 2026 Conference Circuit: 5 Shows, One Lead-Capture Fix",
+    description:
+      "Five must-attend fall 2026 European shows — Gamescom, IFA Berlin, IBC2026, it-sa, Slush — and the fix for the lead you'll forget by Monday.",
+    date: '2026-07-20',
+    author: 'The MemoPear Team',
+    readTime: '9 min read',
+    conference: "Europe's Fall 2026 Conference Circuit",
+    location: 'Cologne, Berlin, Amsterdam, Nuremberg & Helsinki',
+    tags: ['Trade Shows', 'Europe', 'Event Marketing', 'Lead Capture'],
+    excerpt:
+      'Five very different industries — gaming, consumer electronics, broadcast technology, cybersecurity, and startups — all converge across Europe this fall. Here is what each show offers, and the one habit that beats a pocket full of business cards.',
+    blocks: [
+      {
+        type: 'p',
+        text: "Autumn is when Europe's trade show calendar goes into overdrive. Between late August and mid-November 2026, five major conferences fill exhibition halls across four countries — spanning gaming, consumer electronics, broadcast technology, cybersecurity, and startups — five industries that otherwise have almost nothing in common. If you sell into any of them, or you're trying to be in the right hall in the right city at the right time, this fall's European circuit is worth blocking calendar space for.",
+      },
+      {
+        type: 'p',
+        text: "Here is the part that connects all five: whichever hall you walk into — Koelnmesse in Cologne, Messe Berlin, the RAI in Amsterdam, the Nuremberg Exhibition Centre, or Messukeskus in Helsinki — you will have a genuinely good conversation with someone worth remembering, tuck their badge scan or business card away, and by the time your flight lands back home have no real idea whether they wanted a demo, a distributor deal, or were just being polite. That is not a memory problem. It is a capture problem, and it looks identical whether you are on the Gamescom show floor in Cologne or at a founder mixer during Slush week in Helsinki.",
+      },
+      { type: 'h2', text: '1. Gamescom — Aug 26–30, Cologne' },
+      {
+        type: 'p',
+        text: "Gamescom is the world's largest gaming event, and the 2026 edition follows a record-breaking 2025 that drew roughly 357,000 visitors from 128 countries and more than 1,500 exhibitors from over 70 countries to Koelnmesse. Trade visitors alone numbered around 34,000 — publishers, platform holders, esports organizations, and hardware brands, all inside the same halls as the wider consumer crowd. For anyone selling into gaming, interactive entertainment, or gaming hardware, the trade-only hours are as concentrated as this industry gets.",
+      },
+      { type: 'link', label: 'Visit the official Gamescom site', url: 'https://www.gamescom.global/en' },
+      { type: 'h2', text: '2. IFA Berlin — Sept 4–8, Berlin' },
+      {
+        type: 'p',
+        text: "IFA is Europe's flagship consumer electronics and home tech show, filling Messe Berlin's grounds with more than 1,900 exhibitors across roughly 190,000 square meters. It draws around a quarter of a million visitors, and more than half of them are trade professionals — retail buyers, distributors, and product teams tracking what's next in smart home, robotics, and AI-powered appliances. If you sell into consumer electronics or retail tech, IFA is where next year's shelf space gets decided.",
+      },
+      { type: 'link', label: 'Visit the official IFA Berlin site', url: 'https://www.ifa-berlin.com/' },
+      { type: 'h2', text: '3. IBC2026 — Sept 11–14, Amsterdam' },
+      {
+        type: 'p',
+        text: "IBC is the broadcast and media technology industry's biggest gathering, held each September at the RAI Amsterdam. The 2026 edition brings more than 1,300 exhibitors and upward of 43,000 trade visitors together to cover every stage of production, post-production, and distribution. The audience is almost entirely professional — broadcasters, streaming platforms, and production technology buyers — which makes it a dense, high-intent floor for anyone selling into media and entertainment technology.",
+      },
+      { type: 'link', label: 'Visit the official IBC2026 site', url: 'https://show.ibc.org/' },
+      { type: 'banner' },
+      { type: 'h2', text: '4. it-sa Expo&Congress — Oct 27–29, Nuremberg' },
+      {
+        type: 'p',
+        text: "it-sa Expo&Congress is Europe's largest trade fair dedicated purely to IT security, filling the Nuremberg Exhibition Centre each October. The 2025 edition set a new record with 993 exhibitors from 64 countries and more than 28,000 trade visitors, and 2026 is expected to build on that growth. The crowd is technical and skeptical in the way cybersecurity crowds always are — CISOs, security engineers, and IT decision-makers who have sat through a hundred vendor pitches and can tell within thirty seconds whether yours is worth their time.",
+      },
+      {
+        type: 'link',
+        label: 'Visit the official it-sa Expo&Congress site',
+        url: 'https://www.itsa365.de/en/it-sa-expo-congress',
+      },
+      { type: 'h2', text: '5. Slush — Nov 18–19, Helsinki' },
+      {
+        type: 'p',
+        text: "Slush closes out the fall circuit, and it's a different shape of event entirely: concentrated, founder-led, and held at Messukeskus. The 2025 edition gathered around 13,000 founders, investors, and media — roughly 6,000 startups and 3,500 investors, with more than 80% of attendees coming from across Europe. Fewer badges than the other four shows combined, but a much higher share of conversations worth having, which makes losing the context of any single one especially costly.",
+      },
+      { type: 'link', label: 'Visit the official Slush site', url: 'https://slush.org/' },
+      { type: 'h2', text: 'Five industries, one identical failure mode' },
+      {
+        type: 'p',
+        text: 'Gaming publishers, consumer electronics buyers, broadcast engineers, security professionals, and startup founders have almost nothing in common — except how they lose leads. Walk any of these five halls and the same pattern repeats itself:',
+      },
+      {
+        type: 'ul',
+        items: [
+          'A great five-minute conversation happens, and nothing about it gets written down until hours later, if at all.',
+          'The business card or badge scan captures a name and a title, but not why the conversation mattered.',
+          'By day two of a multi-day show, the stack from day one is already a blur — no way to tell the person who wanted a demo from the person who was just being polite.',
+          'The follow-up, when it finally goes out days later, is generic enough to read like it was sent to everyone — because it was, and now it is also arriving in a different country and time zone than the one the conversation happened in.',
+        ],
+      },
+      { type: 'h2', text: "The one thing to bring that isn't more business cards" },
+      {
+        type: 'p',
+        text: "The fix is not a better memory, a bigger stack of cards, or a badge scanner that logs who stopped by without capturing why. It is not depending on memory at all. MemoPear was built for exactly this moment: scan a badge or snap a business card and the AI fills in the contact details instantly, then record a ten-second voice note right after the conversation ends — who they are, what they need, and the one detail worth remembering. Every contact gets tagged to the right conference and synced across your team in real time, whether you're working the Gamescom floor solo or splitting IFA's 190,000 square meters across a booth team.",
+      },
+      {
+        type: 'quote',
+        text: 'A stack of cards tells you who you met. A ten-second voice note tells you why it mattered.',
+      },
+      { type: 'h2', text: 'Following up before the inbox resets' },
+      {
+        type: 'p',
+        text: "Speed is what separates a lead from a missed opportunity, and it matters even more when the person you met is flying home to a different country than you are. Every attendee at every one of these five shows comes home to an inbox full of \"great to meet you\" messages that all sound the same — and deletes most of them without reading past the first line. Because MemoPear captures the actual context of each conversation, it can draft a personalized follow-up per contact that references the real thing the person said, ready to send within 24 to 48 hours. That is the difference between being the message a CISO in Nuremberg or an investor in Helsinki actually opens, and being the ninth generic recap competing for attention in an inbox spread across a different country and time zone than the one the conversation happened in.",
+      },
+      {
+        type: 'faq',
+        items: [
+          {
+            q: 'Which fall 2026 European conference is right for my industry?',
+            a: "It depends on who you sell to. Gamescom (Aug 26–30, Cologne) is built for gaming and interactive entertainment; IFA Berlin (Sept 4–8) is consumer electronics and smart home retail; IBC2026 (Sept 11–14, Amsterdam) is broadcast and media technology; it-sa Expo&Congress (Oct 27–29, Nuremberg) is cybersecurity's technical buyers; and Slush (Nov 18–19, Helsinki) is startup founders and venture investors. Anyone attending more than one is usually covering a broad European territory or a diversified book of business, not a single vertical.",
+          },
+          {
+            q: 'How do you capture leads across several different conferences across Europe in one season?',
+            a: "Use the same lightweight system at every show instead of improvising a new process each time. Scan the badge or business card, add a short voice note on what the person needs while it is fresh, and tag every contact to its conference. That consistency is what makes it possible to walk five completely different halls in four different countries without losing track of who's who.",
+          },
+          {
+            q: 'How soon should you follow up after a European trade show?',
+            a: "Within 24 to 48 hours, while the conversation is still specific in your memory and in theirs. That window matters even more across a multi-country circuit, where the person you met may already be back in a different country and a different inbox by the time a delayed follow-up arrives — and a personalized message sent promptly consistently outperforms a well-crafted one sent a week late.",
+          },
+        ],
+      },
+      {
+        type: 'p',
+        text: 'Five very different industries, five very different halls in four different countries, one identical failure mode. Whichever of these you are walking into this fall, the fix is not a better memory — it is not depending on one.',
+      },
+    ],
+  },
+  {
     slug: 'august-2026-conference-circuit-guide',
     title: 'The August 2026 Conference Circuit: 5 Shows, One Lead-Capture Fix',
     description:
