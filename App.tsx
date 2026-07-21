@@ -2626,6 +2626,16 @@ const App: React.FC = () => {
                   return matchesSearch && matchesTags;
                 });
                 const isFiltering = search !== '' || tagFilter.size > 0;
+                // "Select all" operates on the currently visible leads so it respects filters.
+                const allVisibleSelected = visibleLeads.length > 0 && visibleLeads.every(l => selectedLeadIds.has(l.id));
+                const toggleSelectAllVisible = () => {
+                  setSelectedLeadIds(prev => {
+                    const next = new Set(prev);
+                    if (allVisibleSelected) visibleLeads.forEach(l => next.delete(l.id));
+                    else visibleLeads.forEach(l => next.add(l.id));
+                    return next;
+                  });
+                };
                 return (
                  <div className="space-y-12 animate-in slide-in-from-bottom-8 max-w-2xl mx-auto pt-10">
                     <div className={`sticky top-20 z-30 glass p-5 rounded-[2.5rem] border border-pear-600/20 shadow-2xl ${selectedLeadIds.size > 0 ? 'block' : 'hidden'} transition-all duration-500 ${showTour && tourStep === 7 ? 'ring-4 ring-pear-500 ring-offset-4 dark:ring-offset-[#020617] animate-pulse scale-105' : ''}`}>
@@ -2643,7 +2653,10 @@ const App: React.FC = () => {
                     </div>
                     <div className="mb-8">
                        <h2 className="text-5xl font-black tracking-tighter mb-2">Your Contacts</h2>
-                        <div className="flex gap-2 mt-4">
+                        <div className="flex flex-wrap gap-2 mt-4">
+                           {leads.length > 0 && (
+                             <button onClick={toggleSelectAllVisible} className="px-4 py-2 bg-pear-600/10 text-pear-700 dark:text-pear-300 rounded-xl text-[9px] font-black uppercase border border-pear-600/20 active:scale-95 transition-all">{allVisibleSelected ? 'Deselect All' : 'Select All'}</button>
+                           )}
                            <button onClick={() => setStatusMsg({type:'success', text:'Google Spreadsheet Linked.'})} className="flex items-center gap-1.5 px-4 py-2 bg-slate-800 text-white rounded-xl text-[9px] font-black uppercase shadow-lg hover:bg-slate-900 transition-all"><img src="/google-sheets-logo.png" alt="" className="w-3.5 h-3.5" /> Link Sheets</button>
                            <button onClick={() => setShowRetentionNotice(true)} className="px-4 py-2 bg-blue-600/10 text-blue-600 rounded-xl text-[9px] font-black uppercase border border-blue-600/20 active:scale-95 transition-all">Retention Policy</button>
                            {leads.length > 0 && (
