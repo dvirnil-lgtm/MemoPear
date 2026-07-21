@@ -407,6 +407,24 @@ export async function saveUserLeads(accountId: string, leads: any[]): Promise<vo
   }
 }
 
+// Heartbeat: stamps `users/{accountId}.lastActiveAt` so the scheduled
+// `sendInactivityReminders` Cloud Function can tell who has stopped using the
+// app. Throttled to at most one write per hour (tracked in localStorage) so
+// opening the app repeatedly doesn't hammer Firestore.
+const LAST_ACTIVE_PING_KEY = 'mp_last_active_ping';
+const LAST_ACTIVE_THROTTLE_MS = 60 * 60 * 1000; // 1 hour
+export async function touchLastActive(accountId: string): Promise<void> {
+  if (!accountId) return;
+  try {
+    const last = Number(localStorage.getItem(LAST_ACTIVE_PING_KEY) || 0);
+    if (Date.now() - last < LAST_ACTIVE_THROTTLE_MS) return;
+    localStorage.setItem(LAST_ACTIVE_PING_KEY, String(Date.now()));
+    await setDoc(doc(db, 'users', accountId), { lastActiveAt: serverTimestamp() }, { merge: true });
+  } catch (err) {
+    console.warn('[MemoPear] lastActive heartbeat skipped:', err);
+  }
+}
+
 // Streams the account's leads as they change on other devices. Passes `null`
 // when the document does not yet exist (or on error) so the caller can decide
 // what to seed it with.

@@ -11,7 +11,7 @@ import { PAGE_META, VIEW_URLS } from './content/pageMeta';
 import { buildBlogPostJsonLd, buildBlogIndexJsonLd } from './content/seo';
 import { useConferenceSearch, ConferenceResult } from './services/conferenceService';
 import { parseScannedData, parseBusinessCard, generateLeadReport, QuotaError, QUOTA_ERROR_MESSAGE, isQuotaError } from './services/geminiService';
-import { signInWithGoogle, signInWithLinkedIn, signUpWithEmail, signInWithEmail, firebaseSignOut, auth, logLoginEvent, getUserPaidStatus, logCancellationRequest, exportLeadsToGoogleSheet, ensureSubscription, getSubscription, watchSubscription, regenerateInviteToken, removeSeatMember, claimSeat, getSeatClaim, getUserLeads, saveUserLeads, watchUserLeads, logConferenceName, buildHubspotAuthUrl, watchHubspotConnection, syncLeadsToHubspot, SubscriptionDoc } from './firebase';
+import { signInWithGoogle, signInWithLinkedIn, signUpWithEmail, signInWithEmail, firebaseSignOut, auth, logLoginEvent, getUserPaidStatus, logCancellationRequest, exportLeadsToGoogleSheet, ensureSubscription, getSubscription, watchSubscription, regenerateInviteToken, removeSeatMember, claimSeat, getSeatClaim, getUserLeads, saveUserLeads, watchUserLeads, logConferenceName, buildHubspotAuthUrl, watchHubspotConnection, syncLeadsToHubspot, touchLastActive, SubscriptionDoc } from './firebase';
 
 // Constants for retention and session
 const RETENTION_DAYS = 30;
@@ -612,6 +612,13 @@ const App: React.FC = () => {
   // The account id is the stable Firebase uid, so these Firestore records are
   // the same on every device the user signs in from — we re-hydrate the local
   // capability flags from them so all devices share the same capabilities.
+  // Activity heartbeat: record that this account is actively using the app so
+  // the inactivity-reminder email only ever reaches people who've gone quiet.
+  useEffect(() => {
+    if (!accountId || !isLoggedIn) return;
+    touchLastActive(accountId);
+  }, [accountId, isLoggedIn, view]);
+
   useEffect(() => {
     if (!accountId || !isLoggedIn) return;
     let active = true;

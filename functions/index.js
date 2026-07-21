@@ -2,7 +2,7 @@ const { onSchedule } = require('firebase-functions/v2/scheduler');
 const { onRequest, onCall, HttpsError } = require('firebase-functions/v2/https');
 const { defineSecret } = require('firebase-functions/params');
 const { initializeApp } = require('firebase-admin/app');
-const { getFirestore, FieldValue } = require('firebase-admin/firestore');
+const { getFirestore, FieldValue, Timestamp } = require('firebase-admin/firestore');
 const Stripe = require('stripe');
 
 initializeApp();
@@ -61,6 +61,154 @@ exports.sendTrialEndedEmails = onSchedule('every 6 hours', async () => {
     });
   }
   await batch.commit();
+});
+
+// ── Lead-retention housekeeping ─────────────────────────────────────────────
+//
+// Captured contacts are only kept for RETENTION_DAYS (mirrors RETENTION_DAYS in
+// App.tsx). Two scheduled jobs below nudge users by writing to the `mail`
+// collection — the same "Trigger Email from Firestore" (SendGrid) path used
+// everywhere else in this app:
+//   1. sendRetentionReminders  — 2 days before a user's leads age out, remind
+//      them to download a personal copy for safekeeping.
+//   2. sendInactivityReminders — after 3 quiet days, ask how the conference
+//      went and whether they've followed up with their leads.
+const RETENTION_DAYS = 30;
+const DAY_MS = 24 * 60 * 60 * 1000;
+// How far ahead of the RETENTION_DAYS cutoff we warn the user.
+const RETENTION_WARNING_DAYS = 2;
+// Days of silence before the "how was the conference?" nudge goes out.
+const INACTIVITY_DAYS = 3;
+
+function retentionReminderEmailHtml(expiringCount) {
+  const countLine = expiringCount > 0
+    ? `<strong>${expiringCount} of your saved contact${expiringCount === 1 ? '' : 's'}</strong> will be removed from your account in the next ${RETENTION_WARNING_DAYS} days.`
+    : `Some of your saved contacts will be removed from your account in the next ${RETENTION_WARNING_DAYS} days.`;
+  return `
+    <div style="font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;max-width:480px;margin:0 auto;color:#1e293b;line-height:1.5;">
+      <img src="https://go.memopear.com/favicon-512.png" alt="MemoPear" width="48" height="48" style="display:block;margin-bottom:16px;border-radius:12px;">
+      <h1 style="color:#65a30d;font-size:22px;margin-bottom:4px;">Back up your leads before they're cleared</h1>
+      <p>Heads up — for your security and privacy, MemoPear only keeps captured contacts for ${RETENTION_DAYS} days. ${countLine}</p>
+      <p>Take a moment to export them to your own spreadsheet so you keep a permanent copy:</p>
+      <p style="margin:28px 0;">
+        <a href="https://go.memopear.com/pipeline" style="background:#65a30d;color:#fff;padding:14px 28px;border-radius:12px;text-decoration:none;font-weight:700;display:inline-block;">Download my leads &rarr;</a>
+      </p>
+      <p style="color:#64748b;font-size:13px;">Open your Contacts, select the leads you want, and choose <em>Export to Sheets</em> — it drops everything, tags included, into a Google Spreadsheet you own.</p>
+      <p style="color:#94a3b8;font-size:12px;margin-top:32px;">&mdash; The MemoPear Team</p>
+    </div>
+  `;
+}
+
+function inactivityReminderEmailHtml() {
+  return `
+    <div style="font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;max-width:480px;margin:0 auto;color:#1e293b;line-height:1.5;">
+      <img src="https://go.memopear.com/favicon-512.png" alt="MemoPear" width="48" height="48" style="display:block;margin-bottom:16px;border-radius:12px;">
+      <h1 style="color:#65a30d;font-size:22px;margin-bottom:4px;">How was the conference? 🍐</h1>
+      <p>We noticed you've been away for a few days. Now's the perfect time to make those conversations count.</p>
+      <p><strong>Did you follow up with all of your leads?</strong> The contacts you captured are ready and waiting — a quick, personal note while you're still fresh in their memory goes a long way.</p>
+      <p style="margin:28px 0;">
+        <a href="https://go.memopear.com/pipeline" style="background:#65a30d;color:#fff;padding:14px 28px;border-radius:12px;text-decoration:none;font-weight:700;display:inline-block;">Review my leads &rarr;</a>
+      </p>
+      <p style="color:#64748b;font-size:13px;">MemoPear can even draft a follow-up email for each contact — open a lead and tap <em>Email Suggestion</em>.</p>
+      <p style="color:#94a3b8;font-size:12px;margin-top:32px;">&mdash; The MemoPear Team</p>
+    </div>
+  `;
+}
+
+// Resolves an account's owner email from `users/{accountId}` (accountId is the
+// owner's Firebase uid, so leads stored under it belong to that user).
+async function getAccountEmail(accountId) {
+  const snap = await db.collection('users').doc(accountId).get();
+  return snap.exists ? (snap.data().email || '') : '';
+}
+
+// Runs daily. For each account, if any lead is within RETENTION_WARNING_DAYS of
+// the RETENTION_DAYS cutoff (i.e. lead age is between 28 and 30 days), email the
+// owner a reminder to export a personal copy. `retentionReminderSentAt` on the
+// userLeads doc gives a short cooldown so a single expiry window is only ever
+// mailed once, while a later batch of leads can still trigger a fresh reminder.
+exports.sendRetentionReminders = onSchedule('every 24 hours', async () => {
+  const now = Date.now();
+  const warnFloor = (RETENTION_DAYS - RETENTION_WARNING_DAYS) * DAY_MS; // 28 days
+  const expireAt = RETENTION_DAYS * DAY_MS;                             // 30 days
+  const cooldownMs = RETENTION_WARNING_DAYS * DAY_MS;
+
+  const snap = await db.collection('userLeads').get();
+  if (snap.empty) return;
+
+  for (const docSnap of snap.docs) {
+    try {
+      const data = docSnap.data();
+      const leads = Array.isArray(data.leads) ? data.leads : [];
+      if (!leads.length) continue;
+
+      // Leads that will age out within the warning window but haven't yet.
+      const expiringSoon = leads.filter((l) => {
+        const age = now - (l.timestamp || 0);
+        return age >= warnFloor && age < expireAt;
+      });
+      if (!expiringSoon.length) continue;
+
+      const lastSent = data.retentionReminderSentAt || 0;
+      if (now - lastSent < cooldownMs) continue; // already reminded for this window
+
+      const email = await getAccountEmail(docSnap.id);
+      if (!email) continue;
+
+      await db.collection('mail').add({
+        to: [email],
+        message: {
+          subject: 'Your MemoPear leads are about to be cleared — save a copy',
+          html: retentionReminderEmailHtml(expiringSoon.length),
+        },
+      });
+      await docSnap.ref.set({ retentionReminderSentAt: now }, { merge: true });
+    } catch (err) {
+      console.error('[sendRetentionReminders] failed for', docSnap.id, err);
+    }
+  }
+});
+
+// Runs daily. Emails users who have captured leads but haven't opened the app
+// in INACTIVITY_DAYS. `inactivityEmailForActiveAt` records the `lastActiveAt`
+// value we last mailed about, so each quiet streak is nudged exactly once — the
+// moment the user returns, `lastActiveAt` changes and a future streak re-arms.
+exports.sendInactivityReminders = onSchedule('every 24 hours', async () => {
+  const now = Date.now();
+  const cutoff = Timestamp.fromMillis(now - INACTIVITY_DAYS * DAY_MS);
+
+  const snap = await db.collection('users').where('lastActiveAt', '<=', cutoff).get();
+  if (snap.empty) return;
+
+  for (const docSnap of snap.docs) {
+    try {
+      const data = docSnap.data();
+      const email = data.email;
+      if (!email || !data.lastActiveAt) continue;
+
+      const activeMs = data.lastActiveAt.toMillis();
+      if (data.inactivityEmailForActiveAt === activeMs) continue; // already nudged this streak
+
+      // Only reach out to people who actually captured leads at a conference.
+      const leadsSnap = await db.collection('userLeads').doc(docSnap.id).get();
+      const leads = leadsSnap.exists ? (leadsSnap.data().leads || []) : [];
+      if (!leads.length) continue;
+
+      await db.collection('mail').add({
+        to: [email],
+        message: {
+          subject: 'How was the conference? Did you follow up with your leads?',
+          html: inactivityReminderEmailHtml(),
+        },
+      });
+      await docSnap.ref.set({
+        inactivityEmailForActiveAt: activeMs,
+        inactivityEmailSentAt: FieldValue.serverTimestamp(),
+      }, { merge: true });
+    } catch (err) {
+      console.error('[sendInactivityReminders] failed for', docSnap.id, err);
+    }
+  }
 });
 
 // ── Stripe webhook: keeps `users/{uid}.hasPaid` accurate for every account ──
