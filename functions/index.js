@@ -1,6 +1,7 @@
 const { onSchedule } = require('firebase-functions/v2/scheduler');
 const { onRequest, onCall, HttpsError } = require('firebase-functions/v2/https');
-const { defineSecret } = require('firebase-functions/params');
+const { defineSecret, defineInt, defineString } = require('firebase-functions/params');
+const crypto = require('crypto');
 const { initializeApp } = require('firebase-admin/app');
 const { getFirestore, FieldValue, Timestamp } = require('firebase-admin/firestore');
 const Stripe = require('stripe');
@@ -73,33 +74,68 @@ exports.sendTrialEndedEmails = onSchedule('every 6 hours', async () => {
 //      them to download a personal copy for safekeeping.
 //   2. sendInactivityReminders — after 3 quiet days, ask how the conference
 //      went and whether they've followed up with their leads.
-const RETENTION_DAYS = 30;
 const DAY_MS = 24 * 60 * 60 * 1000;
-// How far ahead of the RETENTION_DAYS cutoff we warn the user.
-const RETENTION_WARNING_DAYS = 2;
-// Days of silence before the "how was the conference?" nudge goes out.
-const INACTIVITY_DAYS = 3;
+// These windows are configurable without a code change — set them per
+// environment with `firebase functions:config`-style params (a `.env` file in
+// functions/, or `--set-env-vars` at deploy). Defaults match the client:
+//   RETENTION_DAYS         — how long captured leads are kept (mirror the
+//                            RETENTION_DAYS constant in App.tsx if you change it)
+//   RETENTION_WARNING_DAYS — how far ahead of the cutoff we warn the user
+//   INACTIVITY_DAYS        — days of silence before the "how was the
+//                            conference?" nudge goes out
+const retentionDaysParam = defineInt('RETENTION_DAYS', { default: 30 });
+const retentionWarningDaysParam = defineInt('RETENTION_WARNING_DAYS', { default: 2 });
+const inactivityDaysParam = defineInt('INACTIVITY_DAYS', { default: 3 });
+// Base URL of the `unsubscribeEmails` function below, used to build the
+// one-click opt-out link in reminder emails. Defaults to this project's
+// Cloud Run naming convention (same host pattern as hubspotOAuthCallback);
+// override with the UNSUBSCRIBE_BASE_URL param if the deployed URL differs.
+const unsubscribeBaseUrlParam = defineString('UNSUBSCRIBE_BASE_URL', {
+  default: 'https://unsubscribeemails-yxfmpirqaa-uc.a.run.app',
+});
 
-function retentionReminderEmailHtml(expiringCount) {
+// Reusable unsubscribe footer for reminder emails.
+function unsubscribeFooterHtml(unsubUrl) {
+  if (!unsubUrl) return '';
+  return `<p style="color:#cbd5e1;font-size:11px;margin-top:8px;">Don't want these reminders? <a href="${unsubUrl}" style="color:#94a3b8;">Unsubscribe</a>.</p>`;
+}
+
+// Returns a stable per-user unsubscribe token, creating and persisting one on
+// first use so the link can be verified when the user clicks it.
+async function getOrCreateUnsubToken(ref, data) {
+  if (data && data.unsubToken) return data.unsubToken;
+  const token = crypto.randomUUID();
+  await ref.set({ unsubToken: token }, { merge: true });
+  return token;
+}
+
+function buildUnsubUrl(uid, token) {
+  const base = (unsubscribeBaseUrlParam.value() || '').trim();
+  if (!base) return '';
+  return `${base}?u=${encodeURIComponent(uid)}&t=${encodeURIComponent(token)}`;
+}
+
+function retentionReminderEmailHtml(expiringCount, retentionDays, warningDays, unsubUrl) {
   const countLine = expiringCount > 0
-    ? `<strong>${expiringCount} of your saved contact${expiringCount === 1 ? '' : 's'}</strong> will be removed from your account in the next ${RETENTION_WARNING_DAYS} days.`
-    : `Some of your saved contacts will be removed from your account in the next ${RETENTION_WARNING_DAYS} days.`;
+    ? `<strong>${expiringCount} of your saved contact${expiringCount === 1 ? '' : 's'}</strong> will be removed from your account in the next ${warningDays} day${warningDays === 1 ? '' : 's'}.`
+    : `Some of your saved contacts will be removed from your account in the next ${warningDays} day${warningDays === 1 ? '' : 's'}.`;
   return `
     <div style="font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;max-width:480px;margin:0 auto;color:#1e293b;line-height:1.5;">
       <img src="https://go.memopear.com/favicon-512.png" alt="MemoPear" width="48" height="48" style="display:block;margin-bottom:16px;border-radius:12px;">
       <h1 style="color:#65a30d;font-size:22px;margin-bottom:4px;">Back up your leads before they're cleared</h1>
-      <p>Heads up — for your security and privacy, MemoPear only keeps captured contacts for ${RETENTION_DAYS} days. ${countLine}</p>
+      <p>Heads up — for your security and privacy, MemoPear only keeps captured contacts for ${retentionDays} days. ${countLine}</p>
       <p>Take a moment to export them to your own spreadsheet so you keep a permanent copy:</p>
       <p style="margin:28px 0;">
         <a href="https://go.memopear.com/pipeline" style="background:#65a30d;color:#fff;padding:14px 28px;border-radius:12px;text-decoration:none;font-weight:700;display:inline-block;">Download my leads &rarr;</a>
       </p>
       <p style="color:#64748b;font-size:13px;">Open your Contacts, select the leads you want, and choose <em>Export to Sheets</em> — it drops everything, tags included, into a Google Spreadsheet you own.</p>
       <p style="color:#94a3b8;font-size:12px;margin-top:32px;">&mdash; The MemoPear Team</p>
+      ${unsubscribeFooterHtml(unsubUrl)}
     </div>
   `;
 }
 
-function inactivityReminderEmailHtml() {
+function inactivityReminderEmailHtml(unsubUrl) {
   return `
     <div style="font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;max-width:480px;margin:0 auto;color:#1e293b;line-height:1.5;">
       <img src="https://go.memopear.com/favicon-512.png" alt="MemoPear" width="48" height="48" style="display:block;margin-bottom:16px;border-radius:12px;">
@@ -111,15 +147,29 @@ function inactivityReminderEmailHtml() {
       </p>
       <p style="color:#64748b;font-size:13px;">MemoPear can even draft a follow-up email for each contact — open a lead and tap <em>Email Suggestion</em>.</p>
       <p style="color:#94a3b8;font-size:12px;margin-top:32px;">&mdash; The MemoPear Team</p>
+      ${unsubscribeFooterHtml(unsubUrl)}
     </div>
   `;
 }
 
-// Resolves an account's owner email from `users/{accountId}` (accountId is the
-// owner's Firebase uid, so leads stored under it belong to that user).
-async function getAccountEmail(accountId) {
+// Simple HTML page shown after a user clicks the unsubscribe link.
+function unsubscribeResultHtml(message) {
+  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>MemoPear</title></head>
+    <body style="font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;background:#f8fafc;margin:0;padding:48px 20px;color:#1e293b;">
+      <div style="max-width:420px;margin:0 auto;text-align:center;">
+        <img src="https://go.memopear.com/favicon-512.png" alt="MemoPear" width="56" height="56" style="border-radius:14px;margin-bottom:20px;">
+        <p style="font-size:16px;line-height:1.6;">${message}</p>
+        <p style="margin-top:28px;"><a href="https://go.memopear.com" style="color:#65a30d;font-weight:700;text-decoration:none;">Back to MemoPear &rarr;</a></p>
+      </div>
+    </body></html>`;
+}
+
+// Resolves an account's owner `users/{accountId}` doc (accountId is the owner's
+// Firebase uid, so leads stored under it belong to that user). Returns the doc
+// ref plus its data, or null if there's no such user.
+async function getAccountUser(accountId) {
   const snap = await db.collection('users').doc(accountId).get();
-  return snap.exists ? (snap.data().email || '') : '';
+  return snap.exists ? { ref: snap.ref, data: snap.data() } : null;
 }
 
 // Runs daily. For each account, if any lead is within RETENTION_WARNING_DAYS of
@@ -129,8 +179,10 @@ async function getAccountEmail(accountId) {
 // mailed once, while a later batch of leads can still trigger a fresh reminder.
 exports.sendRetentionReminders = onSchedule('every 24 hours', async () => {
   const now = Date.now();
-  const warnFloor = (RETENTION_DAYS - RETENTION_WARNING_DAYS) * DAY_MS; // 28 days
-  const expireAt = RETENTION_DAYS * DAY_MS;                             // 30 days
+  const RETENTION_DAYS = retentionDaysParam.value();
+  const RETENTION_WARNING_DAYS = retentionWarningDaysParam.value();
+  const warnFloor = (RETENTION_DAYS - RETENTION_WARNING_DAYS) * DAY_MS; // e.g. 28 days
+  const expireAt = RETENTION_DAYS * DAY_MS;                             // e.g. 30 days
   const cooldownMs = RETENTION_WARNING_DAYS * DAY_MS;
 
   const snap = await db.collection('userLeads').get();
@@ -152,14 +204,18 @@ exports.sendRetentionReminders = onSchedule('every 24 hours', async () => {
       const lastSent = data.retentionReminderSentAt || 0;
       if (now - lastSent < cooldownMs) continue; // already reminded for this window
 
-      const email = await getAccountEmail(docSnap.id);
-      if (!email) continue;
+      const user = await getAccountUser(docSnap.id);
+      if (!user || !user.data.email) continue;
+      if (user.data.emailOptOut === true) continue; // respect unsubscribe
+
+      const token = await getOrCreateUnsubToken(user.ref, user.data);
+      const unsubUrl = buildUnsubUrl(docSnap.id, token);
 
       await db.collection('mail').add({
-        to: [email],
+        to: [user.data.email],
         message: {
           subject: 'Your MemoPear leads are about to be cleared — save a copy',
-          html: retentionReminderEmailHtml(expiringSoon.length),
+          html: retentionReminderEmailHtml(expiringSoon.length, RETENTION_DAYS, RETENTION_WARNING_DAYS, unsubUrl),
         },
       });
       await docSnap.ref.set({ retentionReminderSentAt: now }, { merge: true });
@@ -175,6 +231,7 @@ exports.sendRetentionReminders = onSchedule('every 24 hours', async () => {
 // moment the user returns, `lastActiveAt` changes and a future streak re-arms.
 exports.sendInactivityReminders = onSchedule('every 24 hours', async () => {
   const now = Date.now();
+  const INACTIVITY_DAYS = inactivityDaysParam.value();
   const cutoff = Timestamp.fromMillis(now - INACTIVITY_DAYS * DAY_MS);
 
   const snap = await db.collection('users').where('lastActiveAt', '<=', cutoff).get();
@@ -185,6 +242,7 @@ exports.sendInactivityReminders = onSchedule('every 24 hours', async () => {
       const data = docSnap.data();
       const email = data.email;
       if (!email || !data.lastActiveAt) continue;
+      if (data.emailOptOut === true) continue; // respect unsubscribe
 
       const activeMs = data.lastActiveAt.toMillis();
       if (data.inactivityEmailForActiveAt === activeMs) continue; // already nudged this streak
@@ -194,11 +252,14 @@ exports.sendInactivityReminders = onSchedule('every 24 hours', async () => {
       const leads = leadsSnap.exists ? (leadsSnap.data().leads || []) : [];
       if (!leads.length) continue;
 
+      const token = await getOrCreateUnsubToken(docSnap.ref, data);
+      const unsubUrl = buildUnsubUrl(docSnap.id, token);
+
       await db.collection('mail').add({
         to: [email],
         message: {
           subject: 'How was the conference? Did you follow up with your leads?',
-          html: inactivityReminderEmailHtml(),
+          html: inactivityReminderEmailHtml(unsubUrl),
         },
       });
       await docSnap.ref.set({
@@ -208,6 +269,33 @@ exports.sendInactivityReminders = onSchedule('every 24 hours', async () => {
     } catch (err) {
       console.error('[sendInactivityReminders] failed for', docSnap.id, err);
     }
+  }
+});
+
+// One-click unsubscribe endpoint linked from reminder emails. Verifies the
+// per-user token before flipping `users/{uid}.emailOptOut` so a stranger can't
+// unsubscribe someone else by guessing their uid. Both scheduled reminders
+// above skip any user with emailOptOut === true.
+exports.unsubscribeEmails = onRequest(async (req, res) => {
+  const uid = String(req.query.u || '');
+  const token = String(req.query.t || '');
+  res.set('Content-Type', 'text/html; charset=utf-8');
+  if (!uid || !token) {
+    res.status(400).send(unsubscribeResultHtml('This unsubscribe link is invalid or incomplete.'));
+    return;
+  }
+  try {
+    const ref = db.collection('users').doc(uid);
+    const snap = await ref.get();
+    if (!snap.exists || snap.data().unsubToken !== token) {
+      res.status(400).send(unsubscribeResultHtml('This unsubscribe link is invalid or has expired.'));
+      return;
+    }
+    await ref.set({ emailOptOut: true, emailOptOutAt: FieldValue.serverTimestamp() }, { merge: true });
+    res.status(200).send(unsubscribeResultHtml("You're unsubscribed from MemoPear reminder emails. You won't receive retention or follow-up nudges anymore."));
+  } catch (err) {
+    console.error('[unsubscribeEmails] error', err);
+    res.status(500).send(unsubscribeResultHtml('Something went wrong. Please try again in a moment.'));
   }
 });
 
