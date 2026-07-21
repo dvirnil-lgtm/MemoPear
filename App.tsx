@@ -446,6 +446,10 @@ const App: React.FC = () => {
   const [tourStep, setTourStep] = useState(0);
   const [selectedLeadIds, setSelectedLeadIds] = useState<Set<string>>(new Set());
   const [expandedLeadId, setExpandedLeadId] = useState<string | null>(null);
+  // Pipeline filtering: free-text search over name/company plus a set of tags
+  // to narrow by. A lead matches when it carries ANY of the selected tags.
+  const [leadSearch, setLeadSearch] = useState('');
+  const [tagFilter, setTagFilter] = useState<Set<string>>(new Set());
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [scrollProgress, setScrollProgress] = useState(0);
   
@@ -1312,6 +1316,15 @@ const App: React.FC = () => {
 
   const removeTag = (tag: string) => {
     setTags(prev => prev.filter(t => t !== tag));
+  };
+
+  // Toggle a tag in the pipeline filter set.
+  const toggleTagFilter = (tag: string) => {
+    setTagFilter(prev => {
+      const next = new Set(prev);
+      next.has(tag) ? next.delete(tag) : next.add(tag);
+      return next;
+    });
   };
 
   const handleTagKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -2599,7 +2612,21 @@ const App: React.FC = () => {
                  </form>
               )}
               
-              {view === 'history' && (
+              {view === 'history' && (() => {
+                // Unique tags across all leads, sorted, for the filter bar.
+                const allTags = Array.from(new Set(leads.flatMap(l => l.tags || []))).sort((a, b) => a.localeCompare(b));
+                const search = leadSearch.trim().toLowerCase();
+                // Apply text search (name/company) and tag filter (match ANY selected tag).
+                const visibleLeads = leads.filter(l => {
+                  const matchesSearch = !search || (
+                    `${l.firstName} ${l.lastName}`.toLowerCase().includes(search) ||
+                    (l.company || '').toLowerCase().includes(search)
+                  );
+                  const matchesTags = tagFilter.size === 0 || (l.tags || []).some(t => tagFilter.has(t));
+                  return matchesSearch && matchesTags;
+                });
+                const isFiltering = search !== '' || tagFilter.size > 0;
+                return (
                  <div className="space-y-12 animate-in slide-in-from-bottom-8 max-w-2xl mx-auto pt-10">
                     <div className={`sticky top-20 z-30 glass p-5 rounded-[2.5rem] border border-pear-600/20 shadow-2xl ${selectedLeadIds.size > 0 ? 'block' : 'hidden'} transition-all duration-500 ${showTour && tourStep === 7 ? 'ring-4 ring-pear-500 ring-offset-4 dark:ring-offset-[#020617] animate-pulse scale-105' : ''}`}>
                        <div className="flex items-center justify-between mb-4">
@@ -2623,8 +2650,44 @@ const App: React.FC = () => {
                              <button onClick={deleteAllLeads} className="px-4 py-2 bg-rose-600/10 text-rose-500 rounded-xl text-[9px] font-black uppercase border border-rose-600/20 active:scale-95 transition-all">Delete All</button>
                            )}
                         </div>
-                       <p className="text-slate-400 font-bold uppercase text-[10px] tracking-[0.2em]">{leads.length} {leads.length === 1 ? 'contact' : 'contacts'} saved</p>
+                       <p className="text-slate-400 font-bold uppercase text-[10px] tracking-[0.2em]">
+                         {isFiltering
+                           ? `${visibleLeads.length} of ${leads.length} ${leads.length === 1 ? 'contact' : 'contacts'}`
+                           : `${leads.length} ${leads.length === 1 ? 'contact' : 'contacts'} saved`}
+                       </p>
                     </div>
+
+                    {leads.length > 0 && (
+                      <div className="space-y-3 -mt-6">
+                         <input
+                           type="text"
+                           value={leadSearch}
+                           onChange={(e) => setLeadSearch(e.target.value)}
+                           placeholder="Search by name or company…"
+                           className="w-full px-5 py-3 rounded-2xl bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 text-xs font-bold outline-none focus:border-pear-500/50 transition-all"
+                         />
+                         {allTags.length > 0 && (
+                           <div className="flex flex-wrap items-center gap-1.5">
+                              <span className="text-[9px] font-black uppercase text-slate-400 tracking-widest pr-1">Tags:</span>
+                              {allTags.map(tag => {
+                                const active = tagFilter.has(tag);
+                                return (
+                                  <button
+                                    key={tag}
+                                    onClick={() => toggleTagFilter(tag)}
+                                    className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase border transition-all ${active ? 'bg-pear-600 text-white border-pear-600 shadow-md' : 'bg-pear-600/10 text-pear-700 dark:text-pear-300 border-pear-600/20 hover:border-pear-500/50'}`}
+                                  >
+                                    {tag}
+                                  </button>
+                                );
+                              })}
+                              {isFiltering && (
+                                <button onClick={() => { setTagFilter(new Set()); setLeadSearch(''); }} className="px-3 py-1 rounded-lg text-[9px] font-black uppercase text-slate-400 hover:text-rose-500 transition-colors">Clear</button>
+                              )}
+                           </div>
+                         )}
+                      </div>
+                    )}
                     <div className="space-y-6">
                        {leads.length === 0 ? (
                          <div className="py-24 text-center glass rounded-[4rem] border-dashed border-slate-300 dark:border-white/10 flex flex-col items-center">
@@ -2632,7 +2695,13 @@ const App: React.FC = () => {
                             <p className="text-slate-400 font-black uppercase text-[10px] tracking-[0.2em]">No contacts yet</p>
                             <button onClick={() => navigateTo('form')} className="mt-8 text-blue-600 font-black uppercase text-xs tracking-widest">Add Your First Contact</button>
                          </div>
-                       ) : leads.map(lead => (
+                       ) : visibleLeads.length === 0 ? (
+                         <div className="py-20 text-center glass rounded-[4rem] border-dashed border-slate-300 dark:border-white/10 flex flex-col items-center">
+                            <div className="w-16 h-16 bg-slate-100 dark:bg-white/5 rounded-full flex items-center justify-center text-3xl mb-4 grayscale">🔍</div>
+                            <p className="text-slate-400 font-black uppercase text-[10px] tracking-[0.2em]">No contacts match your filters</p>
+                            <button onClick={() => { setTagFilter(new Set()); setLeadSearch(''); }} className="mt-6 text-blue-600 font-black uppercase text-xs tracking-widest">Clear Filters</button>
+                         </div>
+                       ) : visibleLeads.map(lead => (
                           <div key={lead.id} onClick={() => setExpandedLeadId(expandedLeadId === lead.id ? null : lead.id)} className={`glass p-4 md:p-8 rounded-2xl md:rounded-[3rem] border relative cursor-pointer shadow-md transition-all duration-300 ${selectedLeadIds.has(lead.id) ? 'border-pear-500 bg-pear-500/5 ring-1 ring-pear-500' : 'border-slate-200 dark:border-white/5 hover:border-pear-500/30'}`}>
                              <button onClick={(e) => { e.stopPropagation(); toggleLeadSelection(lead.id, e); }} className={`absolute top-4 md:top-8 left-4 md:left-6 w-6 h-6 md:w-8 md:h-8 rounded-lg md:rounded-xl border-2 flex items-center justify-center transition-all ${selectedLeadIds.has(lead.id) ? 'bg-blue-600 border-blue-600 text-white' : 'border-slate-300 dark:border-white/10 hover:border-blue-400'}`}>{selectedLeadIds.has(lead.id) && <span className="text-xs md:text-sm">✓</span>}</button>
                              <div className="pl-8 md:pl-12">
@@ -2694,7 +2763,8 @@ const App: React.FC = () => {
                        ))}
                     </div>
                  </div>
-              )}
+                );
+              })()}
            </div>
         )}
         {view === 'team' && isLoggedIn && (() => {
