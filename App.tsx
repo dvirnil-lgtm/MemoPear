@@ -11,7 +11,7 @@ import { PAGE_META, VIEW_URLS } from './content/pageMeta';
 import { buildBlogPostJsonLd, buildBlogIndexJsonLd } from './content/seo';
 import { useConferenceSearch, ConferenceResult } from './services/conferenceService';
 import { parseScannedData, parseBusinessCard, generateLeadReport, QuotaError, QUOTA_ERROR_MESSAGE, isQuotaError } from './services/geminiService';
-import { signInWithGoogle, signInWithLinkedIn, signUpWithEmail, signInWithEmail, firebaseSignOut, auth, logLoginEvent, getUserPaidStatus, logCancellationRequest, exportLeadsToGoogleSheet, ensureSubscription, getSubscription, watchSubscription, regenerateInviteToken, removeSeatMember, claimSeat, getSeatClaim, getUserLeads, saveUserLeads, watchUserLeads, logConferenceName, buildHubspotAuthUrl, watchHubspotConnection, syncLeadsToHubspot, SubscriptionDoc } from './firebase';
+import { signInWithGoogle, signInWithLinkedIn, signUpWithEmail, signInWithEmail, firebaseSignOut, auth, logLoginEvent, getUserPaidStatus, logCancellationRequest, exportLeadsToGoogleSheet, ensureSubscription, getSubscription, watchSubscription, regenerateInviteToken, removeSeatMember, claimSeat, getSeatClaim, getUserLeads, saveUserLeads, watchUserLeads, logConferenceName, buildHubspotAuthUrl, watchHubspotConnection, syncLeadsToHubspot, touchLastActive, SubscriptionDoc } from './firebase';
 
 // Constants for retention and session
 const RETENTION_DAYS = 30;
@@ -446,6 +446,10 @@ const App: React.FC = () => {
   const [tourStep, setTourStep] = useState(0);
   const [selectedLeadIds, setSelectedLeadIds] = useState<Set<string>>(new Set());
   const [expandedLeadId, setExpandedLeadId] = useState<string | null>(null);
+  // Pipeline filtering: free-text search over name/company plus a set of tags
+  // to narrow by. A lead matches when it carries ANY of the selected tags.
+  const [leadSearch, setLeadSearch] = useState('');
+  const [tagFilter, setTagFilter] = useState<Set<string>>(new Set());
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [scrollProgress, setScrollProgress] = useState(0);
   
@@ -471,7 +475,12 @@ const App: React.FC = () => {
   const [notes, setNotes] = useState('');
   const [commMethods, setCommMethods] = useState<CommMethod[]>([]);
   const [contactValues, setContactValues] = useState<Partial<Record<CommMethod, string>>>({});
-  
+  // Optional freeform tags for the lead being captured. Not required to save.
+  const [tags, setTags] = useState<string[]>([]);
+  const [tagInput, setTagInput] = useState('');
+  // Tag input for the edit-lead modal (separate from the capture form's box).
+  const [editTagInput, setEditTagInput] = useState('');
+
   const [isScanning, setIsScanning] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   // Brief confirmation popup shown for 2 seconds after a contact is saved.
@@ -603,6 +612,13 @@ const App: React.FC = () => {
   // The account id is the stable Firebase uid, so these Firestore records are
   // the same on every device the user signs in from — we re-hydrate the local
   // capability flags from them so all devices share the same capabilities.
+  // Activity heartbeat: record that this account is actively using the app so
+  // the inactivity-reminder email only ever reaches people who've gone quiet.
+  useEffect(() => {
+    if (!accountId || !isLoggedIn) return;
+    touchLastActive(accountId);
+  }, [accountId, isLoggedIn, view]);
+
   useEffect(() => {
     if (!accountId || !isLoggedIn) return;
     let active = true;
@@ -875,15 +891,19 @@ const App: React.FC = () => {
     { key: 'phone', label: 'Phone' },
     { key: 'website', label: 'Website' },
     { key: 'conferenceName', label: 'Conference' },
+    { key: 'tags', label: 'Tags' },
     { key: 'notes', label: 'Notes' },
     { key: 'aiSummary', label: 'Suggested Email' },
   ];
 
   // Header row + one row per lead, as plain strings (used for both CSV and the
-  // Google Sheets values payload).
+  // Google Sheets values payload). Array-valued fields (like tags) are joined.
   const leadsToRows = (list: Lead[]): string[][] => [
     CSV_COLUMNS.map(c => c.label),
-    ...list.map(l => CSV_COLUMNS.map(c => String(l[c.key] ?? ''))),
+    ...list.map(l => CSV_COLUMNS.map(c => {
+      const v = l[c.key];
+      return Array.isArray(v) ? v.join(', ') : String(v ?? '');
+    })),
   ];
 
   const handleExportSheets = async () => {
@@ -921,6 +941,7 @@ const App: React.FC = () => {
         l.phone && `Phone: ${l.phone}`,
         l.website && `Website: ${l.website}`,
         l.conferenceName && `Conference: ${l.conferenceName}`,
+        l.tags?.length && `Tags: ${l.tags.join(', ')}`,
         l.notes && `Notes: ${l.notes}`,
         l.aiSummary && `Suggested Email: ${l.aiSummary}`,
       ].filter(Boolean);
@@ -1289,6 +1310,43 @@ const App: React.FC = () => {
     setContactValues(prev => ({ ...prev, [method]: value }));
   };
 
+  // Commit whatever is currently typed in the tag box as a new tag. Tags are
+  // de-duplicated (case-insensitive) and trimmed; blanks are ignored.
+  const commitTagInput = () => {
+    const raw = tagInput.trim();
+    if (!raw) return;
+    setTags(prev =>
+      prev.some(t => t.toLowerCase() === raw.toLowerCase()) ? prev : [...prev, raw]
+    );
+    setTagInput('');
+  };
+
+  const removeTag = (tag: string) => {
+    setTags(prev => prev.filter(t => t !== tag));
+  };
+
+  // Toggle a tag in the pipeline filter set.
+  const toggleTagFilter = (tag: string) => {
+    setTagFilter(prev => {
+      const next = new Set(prev);
+      next.has(tag) ? next.delete(tag) : next.add(tag);
+      return next;
+    });
+  };
+
+  const handleTagKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    // Enter or comma commits the tag. Backspace on an empty box drops the last one.
+    if (e.key === 'Enter' || e.key === ',') {
+      e.preventDefault();
+      // Stop the form-level Enter handler from advancing focus to the next field.
+      e.stopPropagation();
+      commitTagInput();
+    } else if (e.key === 'Backspace' && !tagInput && tags.length) {
+      e.preventDefault();
+      setTags(prev => prev.slice(0, -1));
+    }
+  };
+
   const handleQRScan = async (decodedText: string) => {
     if (!hasAccess) return;
     setIsScanning(false);
@@ -1377,6 +1435,7 @@ const App: React.FC = () => {
     const updatedLeads = leads.map(l => l.id === updatedLead.id ? updatedLead : l);
     persistLeads(updatedLeads);
     setEditingLead(null);
+    setEditTagInput('');
     setStatusMsg({ type: 'success', text: 'Lead Intelligence Updated.' });
   };
 
@@ -1388,6 +1447,7 @@ const App: React.FC = () => {
       Lead Name: ${lead.firstName} ${lead.lastName}
       Company: ${lead.company || 'Unknown'}
       Conference: ${lead.conferenceName}
+      Tags: ${lead.tags?.length ? lead.tags.join(', ') : 'None'}
       Notes: ${lead.notes}
       
       The email should be concise, startup-style, and mention a specific follow-up action.
@@ -1441,8 +1501,13 @@ const App: React.FC = () => {
     const firstName = nameParts[0];
     const lastName = nameParts.slice(1).join(' ');
     setIsSubmitting(true);
+    // Fold in any tag still sitting in the input box that wasn't committed yet.
+    const pendingTag = tagInput.trim();
+    const finalTags = pendingTag && !tags.some(t => t.toLowerCase() === pendingTag.toLowerCase())
+      ? [...tags, pendingTag]
+      : tags;
     const newLead: Lead = {
-      id: crypto.randomUUID(), firstName, lastName, email, phone, company, jobTitle, website, conferenceName, commMethods, contactValues, notes, timestamp: Date.now(),
+      id: crypto.randomUUID(), firstName, lastName, email, phone, company, jobTitle, website, conferenceName, commMethods, contactValues, notes, tags: finalTags, timestamp: Date.now(),
     };
     newLead.aiSummary = await generateLeadReport(newLead);
     const updated = [newLead, ...leads];
@@ -1450,7 +1515,7 @@ const App: React.FC = () => {
     // Feed the conference name into the shared suggestions pool (names only) so
     // the monthly blog automation can prioritize conferences our users attend.
     if (conferenceName.trim()) logConferenceName(conferenceName).catch(() => {});
-    setFullName(''); setEmail(''); setPhone(''); setCompany(''); setJobTitle(''); setWebsite(''); setNotes(''); setCommMethods([]); setContactValues({});
+    setFullName(''); setEmail(''); setPhone(''); setCompany(''); setJobTitle(''); setWebsite(''); setNotes(''); setCommMethods([]); setContactValues({}); setTags([]); setTagInput('');
     setShowContactFields(false);
     setIsSubmitting(false);
     // Show a brief confirmation that the contact was saved.
@@ -2513,6 +2578,28 @@ const App: React.FC = () => {
                        )}
                     </div>
 
+                    {/* Row 5b: Tags — optional freeform labels */}
+                    <div className="flex-shrink-0">
+                       <label className="text-[8px] font-black uppercase text-slate-400 tracking-widest pl-1 mb-1 block">Tags <span className="text-slate-300 dark:text-slate-500 normal-case tracking-normal">(optional)</span></label>
+                       <div className="flex flex-wrap items-center gap-1.5 p-2 rounded-xl bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 focus-within:border-pear-500/50 transition-all">
+                          {tags.map(tag => (
+                            <span key={tag} className="flex items-center gap-1 pl-2 pr-1 py-0.5 bg-pear-600/10 text-pear-700 dark:text-pear-300 text-[10px] font-black uppercase rounded-lg border border-pear-600/20">
+                              {tag}
+                              <button type="button" onClick={() => removeTag(tag)} aria-label={`Remove ${tag}`} className="w-3.5 h-3.5 flex items-center justify-center rounded-full hover:bg-pear-600/20 transition-colors leading-none">×</button>
+                            </span>
+                          ))}
+                          <input
+                            type="text"
+                            value={tagInput}
+                            onChange={(e) => setTagInput(e.target.value)}
+                            onKeyDown={handleTagKeyDown}
+                            onBlur={commitTagInput}
+                            placeholder={tags.length ? 'Add another…' : 'e.g. hot lead, investor'}
+                            className="flex-1 min-w-[8rem] bg-transparent text-xs font-bold outline-none py-0.5"
+                          />
+                       </div>
+                    </div>
+
                     {/* Row 6: Notes — textarea fills the remaining space */}
                     <div className={`flex flex-col gap-2 flex-1 min-h-0 transition-all duration-500 ${showTour && tourStep === 5 ? 'ring-2 ring-pear-500 rounded-xl animate-pulse' : ''}`}>
                        <textarea
@@ -2532,7 +2619,31 @@ const App: React.FC = () => {
                  </form>
               )}
               
-              {view === 'history' && (
+              {view === 'history' && (() => {
+                // Unique tags across all leads, sorted, for the filter bar.
+                const allTags = Array.from(new Set(leads.flatMap(l => l.tags || []))).sort((a, b) => a.localeCompare(b));
+                const search = leadSearch.trim().toLowerCase();
+                // Apply text search (name/company) and tag filter (match ANY selected tag).
+                const visibleLeads = leads.filter(l => {
+                  const matchesSearch = !search || (
+                    `${l.firstName} ${l.lastName}`.toLowerCase().includes(search) ||
+                    (l.company || '').toLowerCase().includes(search)
+                  );
+                  const matchesTags = tagFilter.size === 0 || (l.tags || []).some(t => tagFilter.has(t));
+                  return matchesSearch && matchesTags;
+                });
+                const isFiltering = search !== '' || tagFilter.size > 0;
+                // "Select all" operates on the currently visible leads so it respects filters.
+                const allVisibleSelected = visibleLeads.length > 0 && visibleLeads.every(l => selectedLeadIds.has(l.id));
+                const toggleSelectAllVisible = () => {
+                  setSelectedLeadIds(prev => {
+                    const next = new Set(prev);
+                    if (allVisibleSelected) visibleLeads.forEach(l => next.delete(l.id));
+                    else visibleLeads.forEach(l => next.add(l.id));
+                    return next;
+                  });
+                };
+                return (
                  <div className="space-y-12 animate-in slide-in-from-bottom-8 max-w-2xl mx-auto pt-10">
                     <div className={`sticky top-20 z-30 glass p-5 rounded-[2.5rem] border border-pear-600/20 shadow-2xl ${selectedLeadIds.size > 0 ? 'block' : 'hidden'} transition-all duration-500 ${showTour && tourStep === 7 ? 'ring-4 ring-pear-500 ring-offset-4 dark:ring-offset-[#020617] animate-pulse scale-105' : ''}`}>
                        <div className="flex items-center justify-between mb-4">
@@ -2549,15 +2660,54 @@ const App: React.FC = () => {
                     </div>
                     <div className="mb-8">
                        <h2 className="text-5xl font-black tracking-tighter mb-2">Your Contacts</h2>
-                        <div className="flex gap-2 mt-4">
+                        <div className="flex flex-wrap gap-2 mt-4">
+                           {leads.length > 0 && (
+                             <button onClick={toggleSelectAllVisible} className="px-4 py-2 bg-pear-600/10 text-pear-700 dark:text-pear-300 rounded-xl text-[9px] font-black uppercase border border-pear-600/20 active:scale-95 transition-all">{allVisibleSelected ? 'Deselect All' : 'Select All'}</button>
+                           )}
                            <button onClick={() => setStatusMsg({type:'success', text:'Google Spreadsheet Linked.'})} className="flex items-center gap-1.5 px-4 py-2 bg-slate-800 text-white rounded-xl text-[9px] font-black uppercase shadow-lg hover:bg-slate-900 transition-all"><img src="/google-sheets-logo.png" alt="" className="w-3.5 h-3.5" /> Link Sheets</button>
                            <button onClick={() => setShowRetentionNotice(true)} className="px-4 py-2 bg-blue-600/10 text-blue-600 rounded-xl text-[9px] font-black uppercase border border-blue-600/20 active:scale-95 transition-all">Retention Policy</button>
                            {leads.length > 0 && (
                              <button onClick={deleteAllLeads} className="px-4 py-2 bg-rose-600/10 text-rose-500 rounded-xl text-[9px] font-black uppercase border border-rose-600/20 active:scale-95 transition-all">Delete All</button>
                            )}
                         </div>
-                       <p className="text-slate-400 font-bold uppercase text-[10px] tracking-[0.2em]">{leads.length} {leads.length === 1 ? 'contact' : 'contacts'} saved</p>
+                       <p className="text-slate-400 font-bold uppercase text-[10px] tracking-[0.2em]">
+                         {isFiltering
+                           ? `${visibleLeads.length} of ${leads.length} ${leads.length === 1 ? 'contact' : 'contacts'}`
+                           : `${leads.length} ${leads.length === 1 ? 'contact' : 'contacts'} saved`}
+                       </p>
                     </div>
+
+                    {leads.length > 0 && (
+                      <div className="space-y-3 -mt-6">
+                         <input
+                           type="text"
+                           value={leadSearch}
+                           onChange={(e) => setLeadSearch(e.target.value)}
+                           placeholder="Search by name or company…"
+                           className="w-full px-5 py-3 rounded-2xl bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 text-xs font-bold outline-none focus:border-pear-500/50 transition-all"
+                         />
+                         {allTags.length > 0 && (
+                           <div className="flex flex-wrap items-center gap-1.5">
+                              <span className="text-[9px] font-black uppercase text-slate-400 tracking-widest pr-1">Tags:</span>
+                              {allTags.map(tag => {
+                                const active = tagFilter.has(tag);
+                                return (
+                                  <button
+                                    key={tag}
+                                    onClick={() => toggleTagFilter(tag)}
+                                    className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase border transition-all ${active ? 'bg-pear-600 text-white border-pear-600 shadow-md' : 'bg-pear-600/10 text-pear-700 dark:text-pear-300 border-pear-600/20 hover:border-pear-500/50'}`}
+                                  >
+                                    {tag}
+                                  </button>
+                                );
+                              })}
+                              {isFiltering && (
+                                <button onClick={() => { setTagFilter(new Set()); setLeadSearch(''); }} className="px-3 py-1 rounded-lg text-[9px] font-black uppercase text-slate-400 hover:text-rose-500 transition-colors">Clear</button>
+                              )}
+                           </div>
+                         )}
+                      </div>
+                    )}
                     <div className="space-y-6">
                        {leads.length === 0 ? (
                          <div className="py-24 text-center glass rounded-[4rem] border-dashed border-slate-300 dark:border-white/10 flex flex-col items-center">
@@ -2565,7 +2715,13 @@ const App: React.FC = () => {
                             <p className="text-slate-400 font-black uppercase text-[10px] tracking-[0.2em]">No contacts yet</p>
                             <button onClick={() => navigateTo('form')} className="mt-8 text-blue-600 font-black uppercase text-xs tracking-widest">Add Your First Contact</button>
                          </div>
-                       ) : leads.map(lead => (
+                       ) : visibleLeads.length === 0 ? (
+                         <div className="py-20 text-center glass rounded-[4rem] border-dashed border-slate-300 dark:border-white/10 flex flex-col items-center">
+                            <div className="w-16 h-16 bg-slate-100 dark:bg-white/5 rounded-full flex items-center justify-center text-3xl mb-4 grayscale">🔍</div>
+                            <p className="text-slate-400 font-black uppercase text-[10px] tracking-[0.2em]">No contacts match your filters</p>
+                            <button onClick={() => { setTagFilter(new Set()); setLeadSearch(''); }} className="mt-6 text-blue-600 font-black uppercase text-xs tracking-widest">Clear Filters</button>
+                         </div>
+                       ) : visibleLeads.map(lead => (
                           <div key={lead.id} onClick={() => setExpandedLeadId(expandedLeadId === lead.id ? null : lead.id)} className={`glass p-4 md:p-8 rounded-2xl md:rounded-[3rem] border relative cursor-pointer shadow-md transition-all duration-300 ${selectedLeadIds.has(lead.id) ? 'border-pear-500 bg-pear-500/5 ring-1 ring-pear-500' : 'border-slate-200 dark:border-white/5 hover:border-pear-500/30'}`}>
                              <button onClick={(e) => { e.stopPropagation(); toggleLeadSelection(lead.id, e); }} className={`absolute top-4 md:top-8 left-4 md:left-6 w-6 h-6 md:w-8 md:h-8 rounded-lg md:rounded-xl border-2 flex items-center justify-center transition-all ${selectedLeadIds.has(lead.id) ? 'bg-blue-600 border-blue-600 text-white' : 'border-slate-300 dark:border-white/10 hover:border-blue-400'}`}>{selectedLeadIds.has(lead.id) && <span className="text-xs md:text-sm">✓</span>}</button>
                              <div className="pl-8 md:pl-12">
@@ -2607,6 +2763,14 @@ const App: React.FC = () => {
                                    </div>
                                 )}
 
+                                {(lead.tags?.length ?? 0) > 0 && (
+                                   <div className="flex flex-wrap gap-1 md:gap-2 mt-2 md:mt-3">
+                                      {lead.tags.map(tag => (
+                                        <span key={tag} className="px-2 py-0.5 md:px-3 md:py-1 bg-pear-600/10 text-pear-700 dark:text-pear-300 text-[7px] md:text-[8px] font-black uppercase rounded-md md:rounded-lg border border-pear-600/20">{tag}</span>
+                                      ))}
+                                   </div>
+                                )}
+
                                 {expandedLeadId === lead.id && lead.aiSummary && (
                                    <div className="mt-4 md:mt-8 pt-4 md:pt-8 border-t border-slate-200 dark:border-white/5 animate-in fade-in slide-in-from-top-4">
                                       <div className="p-4 md:p-6 bg-blue-600/5 dark:bg-blue-600/10 rounded-2xl md:rounded-[2.5rem] text-[9px] md:text-[11px] font-medium leading-relaxed italic border border-blue-600/10 whitespace-pre-wrap">
@@ -2619,7 +2783,8 @@ const App: React.FC = () => {
                        ))}
                     </div>
                  </div>
-              )}
+                );
+              })()}
            </div>
         )}
         {view === 'team' && isLoggedIn && (() => {
@@ -2817,7 +2982,7 @@ const App: React.FC = () => {
            <div className="max-w-2xl w-full glass p-6 md:p-10 rounded-[2rem] md:rounded-[3rem] shadow-2xl border border-blue-600/20 max-h-[90vh] overflow-y-auto no-scrollbar">
               <div className="flex justify-between items-center mb-6 md:mb-8">
                 <h2 className="text-xl md:text-2xl font-black tracking-tight">Edit Intelligence</h2>
-                <button onClick={() => setEditingLead(null)} className="p-2 hover:bg-slate-100 dark:hover:bg-white/5 rounded-full transition-colors">
+                <button onClick={() => { setEditingLead(null); setEditTagInput(''); }} className="p-2 hover:bg-slate-100 dark:hover:bg-white/5 rounded-full transition-colors">
                   <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
                 </button>
               </div>
@@ -2842,6 +3007,45 @@ const App: React.FC = () => {
                 <div className="space-y-1">
                   <label className="text-[8px] md:text-[10px] font-black uppercase text-slate-400 tracking-widest pl-2">Notes</label>
                   <textarea value={editingLead.notes} onChange={(e) => setEditingLead({...editingLead, notes: e.target.value})} rows={4} className="w-full p-4 rounded-xl bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 text-xs font-bold outline-none resize-none" />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[8px] md:text-[10px] font-black uppercase text-slate-400 tracking-widest pl-2">Tags <span className="text-slate-300 dark:text-slate-500 normal-case tracking-normal">(optional)</span></label>
+                  <div className="flex flex-wrap items-center gap-1.5 p-2 rounded-xl bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 focus-within:border-blue-500 transition-all">
+                     {(editingLead.tags || []).map(tag => (
+                       <span key={tag} className="flex items-center gap-1 pl-2 pr-1 py-0.5 bg-pear-600/10 text-pear-700 dark:text-pear-300 text-[10px] font-black uppercase rounded-lg border border-pear-600/20">
+                         {tag}
+                         <button type="button" onClick={() => setEditingLead({ ...editingLead, tags: (editingLead.tags || []).filter(t => t !== tag) })} aria-label={`Remove ${tag}`} className="w-3.5 h-3.5 flex items-center justify-center rounded-full hover:bg-pear-600/20 transition-colors leading-none">×</button>
+                       </span>
+                     ))}
+                     <input
+                       type="text"
+                       value={editTagInput}
+                       onChange={(e) => setEditTagInput(e.target.value)}
+                       onKeyDown={(e) => {
+                         if (e.key === 'Enter' || e.key === ',') {
+                           e.preventDefault();
+                           const raw = editTagInput.trim();
+                           if (raw && !(editingLead.tags || []).some(t => t.toLowerCase() === raw.toLowerCase())) {
+                             setEditingLead({ ...editingLead, tags: [...(editingLead.tags || []), raw] });
+                           }
+                           setEditTagInput('');
+                         } else if (e.key === 'Backspace' && !editTagInput && (editingLead.tags || []).length) {
+                           e.preventDefault();
+                           setEditingLead({ ...editingLead, tags: (editingLead.tags || []).slice(0, -1) });
+                         }
+                       }}
+                       onBlur={() => {
+                         const raw = editTagInput.trim();
+                         if (raw && !(editingLead.tags || []).some(t => t.toLowerCase() === raw.toLowerCase())) {
+                           setEditingLead({ ...editingLead, tags: [...(editingLead.tags || []), raw] });
+                         }
+                         setEditTagInput('');
+                       }}
+                       placeholder={(editingLead.tags || []).length ? 'Add another…' : 'e.g. hot lead, investor'}
+                       className="flex-1 min-w-[8rem] bg-transparent text-xs font-bold outline-none py-0.5"
+                     />
+                  </div>
                 </div>
 
                 <button onClick={() => handleUpdateLead(editingLead)} className="w-full py-4 bg-blue-600 text-white font-black rounded-2xl shadow-xl hover:scale-[1.02] active:scale-95 transition-all text-xs uppercase tracking-widest">Commit Changes</button>
