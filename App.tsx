@@ -471,7 +471,12 @@ const App: React.FC = () => {
   const [notes, setNotes] = useState('');
   const [commMethods, setCommMethods] = useState<CommMethod[]>([]);
   const [contactValues, setContactValues] = useState<Partial<Record<CommMethod, string>>>({});
-  
+  // Optional freeform tags for the lead being captured. Not required to save.
+  const [tags, setTags] = useState<string[]>([]);
+  const [tagInput, setTagInput] = useState('');
+  // Tag input for the edit-lead modal (separate from the capture form's box).
+  const [editTagInput, setEditTagInput] = useState('');
+
   const [isScanning, setIsScanning] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   // Brief confirmation popup shown for 2 seconds after a contact is saved.
@@ -875,15 +880,19 @@ const App: React.FC = () => {
     { key: 'phone', label: 'Phone' },
     { key: 'website', label: 'Website' },
     { key: 'conferenceName', label: 'Conference' },
+    { key: 'tags', label: 'Tags' },
     { key: 'notes', label: 'Notes' },
     { key: 'aiSummary', label: 'Suggested Email' },
   ];
 
   // Header row + one row per lead, as plain strings (used for both CSV and the
-  // Google Sheets values payload).
+  // Google Sheets values payload). Array-valued fields (like tags) are joined.
   const leadsToRows = (list: Lead[]): string[][] => [
     CSV_COLUMNS.map(c => c.label),
-    ...list.map(l => CSV_COLUMNS.map(c => String(l[c.key] ?? ''))),
+    ...list.map(l => CSV_COLUMNS.map(c => {
+      const v = l[c.key];
+      return Array.isArray(v) ? v.join(', ') : String(v ?? '');
+    })),
   ];
 
   const handleExportSheets = async () => {
@@ -921,6 +930,7 @@ const App: React.FC = () => {
         l.phone && `Phone: ${l.phone}`,
         l.website && `Website: ${l.website}`,
         l.conferenceName && `Conference: ${l.conferenceName}`,
+        l.tags?.length && `Tags: ${l.tags.join(', ')}`,
         l.notes && `Notes: ${l.notes}`,
         l.aiSummary && `Suggested Email: ${l.aiSummary}`,
       ].filter(Boolean);
@@ -1289,6 +1299,34 @@ const App: React.FC = () => {
     setContactValues(prev => ({ ...prev, [method]: value }));
   };
 
+  // Commit whatever is currently typed in the tag box as a new tag. Tags are
+  // de-duplicated (case-insensitive) and trimmed; blanks are ignored.
+  const commitTagInput = () => {
+    const raw = tagInput.trim();
+    if (!raw) return;
+    setTags(prev =>
+      prev.some(t => t.toLowerCase() === raw.toLowerCase()) ? prev : [...prev, raw]
+    );
+    setTagInput('');
+  };
+
+  const removeTag = (tag: string) => {
+    setTags(prev => prev.filter(t => t !== tag));
+  };
+
+  const handleTagKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    // Enter or comma commits the tag. Backspace on an empty box drops the last one.
+    if (e.key === 'Enter' || e.key === ',') {
+      e.preventDefault();
+      // Stop the form-level Enter handler from advancing focus to the next field.
+      e.stopPropagation();
+      commitTagInput();
+    } else if (e.key === 'Backspace' && !tagInput && tags.length) {
+      e.preventDefault();
+      setTags(prev => prev.slice(0, -1));
+    }
+  };
+
   const handleQRScan = async (decodedText: string) => {
     if (!hasAccess) return;
     setIsScanning(false);
@@ -1377,6 +1415,7 @@ const App: React.FC = () => {
     const updatedLeads = leads.map(l => l.id === updatedLead.id ? updatedLead : l);
     persistLeads(updatedLeads);
     setEditingLead(null);
+    setEditTagInput('');
     setStatusMsg({ type: 'success', text: 'Lead Intelligence Updated.' });
   };
 
@@ -1388,6 +1427,7 @@ const App: React.FC = () => {
       Lead Name: ${lead.firstName} ${lead.lastName}
       Company: ${lead.company || 'Unknown'}
       Conference: ${lead.conferenceName}
+      Tags: ${lead.tags?.length ? lead.tags.join(', ') : 'None'}
       Notes: ${lead.notes}
       
       The email should be concise, startup-style, and mention a specific follow-up action.
@@ -1441,8 +1481,13 @@ const App: React.FC = () => {
     const firstName = nameParts[0];
     const lastName = nameParts.slice(1).join(' ');
     setIsSubmitting(true);
+    // Fold in any tag still sitting in the input box that wasn't committed yet.
+    const pendingTag = tagInput.trim();
+    const finalTags = pendingTag && !tags.some(t => t.toLowerCase() === pendingTag.toLowerCase())
+      ? [...tags, pendingTag]
+      : tags;
     const newLead: Lead = {
-      id: crypto.randomUUID(), firstName, lastName, email, phone, company, jobTitle, website, conferenceName, commMethods, contactValues, notes, timestamp: Date.now(),
+      id: crypto.randomUUID(), firstName, lastName, email, phone, company, jobTitle, website, conferenceName, commMethods, contactValues, notes, tags: finalTags, timestamp: Date.now(),
     };
     newLead.aiSummary = await generateLeadReport(newLead);
     const updated = [newLead, ...leads];
@@ -1450,7 +1495,7 @@ const App: React.FC = () => {
     // Feed the conference name into the shared suggestions pool (names only) so
     // the monthly blog automation can prioritize conferences our users attend.
     if (conferenceName.trim()) logConferenceName(conferenceName).catch(() => {});
-    setFullName(''); setEmail(''); setPhone(''); setCompany(''); setJobTitle(''); setWebsite(''); setNotes(''); setCommMethods([]); setContactValues({});
+    setFullName(''); setEmail(''); setPhone(''); setCompany(''); setJobTitle(''); setWebsite(''); setNotes(''); setCommMethods([]); setContactValues({}); setTags([]); setTagInput('');
     setShowContactFields(false);
     setIsSubmitting(false);
     // Show a brief confirmation that the contact was saved.
@@ -2513,6 +2558,28 @@ const App: React.FC = () => {
                        )}
                     </div>
 
+                    {/* Row 5b: Tags — optional freeform labels */}
+                    <div className="flex-shrink-0">
+                       <label className="text-[8px] font-black uppercase text-slate-400 tracking-widest pl-1 mb-1 block">Tags <span className="text-slate-300 dark:text-slate-500 normal-case tracking-normal">(optional)</span></label>
+                       <div className="flex flex-wrap items-center gap-1.5 p-2 rounded-xl bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 focus-within:border-pear-500/50 transition-all">
+                          {tags.map(tag => (
+                            <span key={tag} className="flex items-center gap-1 pl-2 pr-1 py-0.5 bg-pear-600/10 text-pear-700 dark:text-pear-300 text-[10px] font-black uppercase rounded-lg border border-pear-600/20">
+                              {tag}
+                              <button type="button" onClick={() => removeTag(tag)} aria-label={`Remove ${tag}`} className="w-3.5 h-3.5 flex items-center justify-center rounded-full hover:bg-pear-600/20 transition-colors leading-none">×</button>
+                            </span>
+                          ))}
+                          <input
+                            type="text"
+                            value={tagInput}
+                            onChange={(e) => setTagInput(e.target.value)}
+                            onKeyDown={handleTagKeyDown}
+                            onBlur={commitTagInput}
+                            placeholder={tags.length ? 'Add another…' : 'e.g. hot lead, investor'}
+                            className="flex-1 min-w-[8rem] bg-transparent text-xs font-bold outline-none py-0.5"
+                          />
+                       </div>
+                    </div>
+
                     {/* Row 6: Notes — textarea fills the remaining space */}
                     <div className={`flex flex-col gap-2 flex-1 min-h-0 transition-all duration-500 ${showTour && tourStep === 5 ? 'ring-2 ring-pear-500 rounded-xl animate-pulse' : ''}`}>
                        <textarea
@@ -2603,6 +2670,14 @@ const App: React.FC = () => {
                                    <div className="flex flex-wrap gap-1 md:gap-2 mt-2 md:mt-4">
                                       {lead.commMethods.map(m => (
                                         <span key={m} className="px-2 py-0.5 md:px-3 md:py-1 bg-blue-600/10 text-blue-600 text-[7px] md:text-[8px] font-black uppercase rounded-md md:rounded-lg border border-blue-600/10">{m}</span>
+                                      ))}
+                                   </div>
+                                )}
+
+                                {(lead.tags?.length ?? 0) > 0 && (
+                                   <div className="flex flex-wrap gap-1 md:gap-2 mt-2 md:mt-3">
+                                      {lead.tags.map(tag => (
+                                        <span key={tag} className="px-2 py-0.5 md:px-3 md:py-1 bg-pear-600/10 text-pear-700 dark:text-pear-300 text-[7px] md:text-[8px] font-black uppercase rounded-md md:rounded-lg border border-pear-600/20">{tag}</span>
                                       ))}
                                    </div>
                                 )}
@@ -2817,7 +2892,7 @@ const App: React.FC = () => {
            <div className="max-w-2xl w-full glass p-6 md:p-10 rounded-[2rem] md:rounded-[3rem] shadow-2xl border border-blue-600/20 max-h-[90vh] overflow-y-auto no-scrollbar">
               <div className="flex justify-between items-center mb-6 md:mb-8">
                 <h2 className="text-xl md:text-2xl font-black tracking-tight">Edit Intelligence</h2>
-                <button onClick={() => setEditingLead(null)} className="p-2 hover:bg-slate-100 dark:hover:bg-white/5 rounded-full transition-colors">
+                <button onClick={() => { setEditingLead(null); setEditTagInput(''); }} className="p-2 hover:bg-slate-100 dark:hover:bg-white/5 rounded-full transition-colors">
                   <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
                 </button>
               </div>
@@ -2842,6 +2917,45 @@ const App: React.FC = () => {
                 <div className="space-y-1">
                   <label className="text-[8px] md:text-[10px] font-black uppercase text-slate-400 tracking-widest pl-2">Notes</label>
                   <textarea value={editingLead.notes} onChange={(e) => setEditingLead({...editingLead, notes: e.target.value})} rows={4} className="w-full p-4 rounded-xl bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 text-xs font-bold outline-none resize-none" />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[8px] md:text-[10px] font-black uppercase text-slate-400 tracking-widest pl-2">Tags <span className="text-slate-300 dark:text-slate-500 normal-case tracking-normal">(optional)</span></label>
+                  <div className="flex flex-wrap items-center gap-1.5 p-2 rounded-xl bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 focus-within:border-blue-500 transition-all">
+                     {(editingLead.tags || []).map(tag => (
+                       <span key={tag} className="flex items-center gap-1 pl-2 pr-1 py-0.5 bg-pear-600/10 text-pear-700 dark:text-pear-300 text-[10px] font-black uppercase rounded-lg border border-pear-600/20">
+                         {tag}
+                         <button type="button" onClick={() => setEditingLead({ ...editingLead, tags: (editingLead.tags || []).filter(t => t !== tag) })} aria-label={`Remove ${tag}`} className="w-3.5 h-3.5 flex items-center justify-center rounded-full hover:bg-pear-600/20 transition-colors leading-none">×</button>
+                       </span>
+                     ))}
+                     <input
+                       type="text"
+                       value={editTagInput}
+                       onChange={(e) => setEditTagInput(e.target.value)}
+                       onKeyDown={(e) => {
+                         if (e.key === 'Enter' || e.key === ',') {
+                           e.preventDefault();
+                           const raw = editTagInput.trim();
+                           if (raw && !(editingLead.tags || []).some(t => t.toLowerCase() === raw.toLowerCase())) {
+                             setEditingLead({ ...editingLead, tags: [...(editingLead.tags || []), raw] });
+                           }
+                           setEditTagInput('');
+                         } else if (e.key === 'Backspace' && !editTagInput && (editingLead.tags || []).length) {
+                           e.preventDefault();
+                           setEditingLead({ ...editingLead, tags: (editingLead.tags || []).slice(0, -1) });
+                         }
+                       }}
+                       onBlur={() => {
+                         const raw = editTagInput.trim();
+                         if (raw && !(editingLead.tags || []).some(t => t.toLowerCase() === raw.toLowerCase())) {
+                           setEditingLead({ ...editingLead, tags: [...(editingLead.tags || []), raw] });
+                         }
+                         setEditTagInput('');
+                       }}
+                       placeholder={(editingLead.tags || []).length ? 'Add another…' : 'e.g. hot lead, investor'}
+                       className="flex-1 min-w-[8rem] bg-transparent text-xs font-bold outline-none py-0.5"
+                     />
+                  </div>
                 </div>
 
                 <button onClick={() => handleUpdateLead(editingLead)} className="w-full py-4 bg-blue-600 text-white font-black rounded-2xl shadow-xl hover:scale-[1.02] active:scale-95 transition-all text-xs uppercase tracking-widest">Commit Changes</button>

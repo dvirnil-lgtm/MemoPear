@@ -139,6 +139,7 @@ export const generateLeadReport = async (lead: Lead): Promise<string> => {
       Email: ${lead.email || 'Not provided'}
       Phone: ${lead.phone || 'Not provided'}
       Preferred Contact Methods: ${lead.commMethods.join(', ')}
+      Tags: ${lead.tags?.length ? lead.tags.join(', ') : 'None'}
       Notes from meeting: ${lead.notes}
       
       The output should be a concise summary followed by a polite follow-up email ready to be sent. Use the company name and contact details to personalize the draft.`,

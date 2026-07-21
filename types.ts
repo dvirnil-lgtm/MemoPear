@@ -31,6 +31,8 @@ export interface Lead {
   commMethods: CommMethod[];
   contactValues: Partial<Record<CommMethod, string>>;
   notes: string;
+  /** Optional freeform tags/labels for organizing leads (e.g. "hot", "investor"). */
+  tags: string[];
   timestamp: number;
   aiSummary?: string;
 }
