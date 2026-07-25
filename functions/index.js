@@ -91,7 +91,7 @@ const inactivityDaysParam = defineInt('INACTIVITY_DAYS', { default: 3 });
 // Cloud Run naming convention (same host pattern as hubspotOAuthCallback);
 // override with the UNSUBSCRIBE_BASE_URL param if the deployed URL differs.
 const unsubscribeBaseUrlParam = defineString('UNSUBSCRIBE_BASE_URL', {
-  default: 'https://unsubscribeemails-yxfmpirqaa-uc.a.run.app',
+  default: 'https://us-central1-my-new-memopear.cloudfunctions.net/unsubscribeEmails',
 });
 
 // Reusable unsubscribe footer for reminder emails.
