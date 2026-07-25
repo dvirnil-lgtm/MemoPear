@@ -121,6 +121,11 @@ const TOUR_STEPS = [
     icon: "🔗"
   },
   {
+    title: "Tag your leads",
+    description: "Add free-style tags — type anything you like, such as \"hot lead\", \"partnership\" or a product name. They're completely optional, but they give you far better filtering when you're reviewing leads after the conference — and make it easy to flag contacts worth passing to other departments for potential collaboration.",
+    icon: "🏷️"
+  },
+  {
     title: "Jot down your notes",
     description: "Type what you talked about and any next steps in the notes box, so you remember the context when it's time to follow up.",
     icon: "📝"
@@ -739,8 +744,8 @@ const App: React.FC = () => {
   // explained in view, so the highlighted control is actually on-screen.
   useEffect(() => {
     if (!showTour) return;
-    if (tourStep >= 1 && tourStep <= 6) { if (view !== 'form') setView('form'); }
-    else if (tourStep === 7) { if (view !== 'history') setView('history'); }
+    if (tourStep >= 1 && tourStep <= 7) { if (view !== 'form') setView('form'); }
+    else if (tourStep === 8) { if (view !== 'history') setView('history'); }
   }, [showTour, tourStep]);
 
   // Keep a ref copy of leads so async sync callbacks always read the latest set.
@@ -2579,9 +2584,9 @@ const App: React.FC = () => {
                     </div>
 
                     {/* Row 5b: Tags — optional freeform labels */}
-                    <div className="flex-shrink-0">
+                    <div className={`flex-shrink-0 transition-all duration-500 ${showTour && tourStep === 5 ? 'ring-2 ring-pear-500 rounded-xl animate-pulse p-1' : ''}`}>
                        <label className="text-[8px] font-black uppercase text-slate-400 tracking-widest pl-1 mb-1 block">Tags <span className="text-slate-300 dark:text-slate-500 normal-case tracking-normal">(optional)</span></label>
-                       <div className="flex flex-wrap items-center gap-1.5 p-2 rounded-xl bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 focus-within:border-pear-500/50 transition-all">
+                       <div className={`flex flex-wrap items-center gap-1.5 p-2 rounded-xl bg-white dark:bg-white/5 border transition-all ${showTour && tourStep === 5 ? 'border-pear-500' : 'border-slate-200 dark:border-white/10 focus-within:border-pear-500/50'}`}>
                           {tags.map(tag => (
                             <span key={tag} className="flex items-center gap-1 pl-2 pr-1 py-0.5 bg-pear-600/10 text-pear-700 dark:text-pear-300 text-[10px] font-black uppercase rounded-lg border border-pear-600/20">
                               {tag}
@@ -2601,17 +2606,17 @@ const App: React.FC = () => {
                     </div>
 
                     {/* Row 6: Notes — textarea fills the remaining space */}
-                    <div className={`flex flex-col gap-2 flex-1 min-h-0 transition-all duration-500 ${showTour && tourStep === 5 ? 'ring-2 ring-pear-500 rounded-xl animate-pulse' : ''}`}>
+                    <div className={`flex flex-col gap-2 flex-1 min-h-0 transition-all duration-500 ${showTour && tourStep === 6 ? 'ring-2 ring-pear-500 rounded-xl animate-pulse' : ''}`}>
                        <textarea
                          value={notes}
                          onChange={(e) => setNotes(e.target.value)}
                          placeholder="What did you talk about? Any next steps?"
-                         className={`flex-1 min-h-0 p-3 rounded-xl bg-white dark:bg-white/5 border outline-none text-xs leading-relaxed resize-none transition-all ${showTour && tourStep === 5 ? 'border-pear-500' : 'border-slate-200 dark:border-white/10 focus:border-pear-500/50'}`}
+                         className={`flex-1 min-h-0 p-3 rounded-xl bg-white dark:bg-white/5 border outline-none text-xs leading-relaxed resize-none transition-all ${showTour && tourStep === 6 ? 'border-pear-500' : 'border-slate-200 dark:border-white/10 focus:border-pear-500/50'}`}
                        />
                     </div>
 
                     {/* Row 7: Submit */}
-                    <div className={`flex-shrink-0 pb-1 rounded-xl transition-all duration-500 ${showTour && tourStep === 6 ? 'ring-2 ring-pear-500 animate-pulse' : ''}`}>
+                    <div className={`flex-shrink-0 pb-1 rounded-xl transition-all duration-500 ${showTour && tourStep === 7 ? 'ring-2 ring-pear-500 animate-pulse' : ''}`}>
                        <button type="submit" disabled={isSubmitting} className="w-full py-3 bg-pear-600 text-white font-black rounded-xl text-sm shadow-xl active:scale-95 transition-all disabled:opacity-50 uppercase tracking-widest">
                          {isSubmitting ? 'Saving...' : 'Save Contact'}
                        </button>
@@ -2645,7 +2650,7 @@ const App: React.FC = () => {
                 };
                 return (
                  <div className="space-y-12 animate-in slide-in-from-bottom-8 max-w-2xl mx-auto pt-10">
-                    <div className={`sticky top-20 z-30 glass p-5 rounded-[2.5rem] border border-pear-600/20 shadow-2xl ${selectedLeadIds.size > 0 ? 'block' : 'hidden'} transition-all duration-500 ${showTour && tourStep === 7 ? 'ring-4 ring-pear-500 ring-offset-4 dark:ring-offset-[#020617] animate-pulse scale-105' : ''}`}>
+                    <div className={`sticky top-20 z-30 glass p-5 rounded-[2.5rem] border border-pear-600/20 shadow-2xl ${selectedLeadIds.size > 0 ? 'block' : 'hidden'} transition-all duration-500 ${showTour && tourStep === 8 ? 'ring-4 ring-pear-500 ring-offset-4 dark:ring-offset-[#020617] animate-pulse scale-105' : ''}`}>
                        <div className="flex items-center justify-between mb-4">
                           <div className="flex items-center gap-4">
                              <div className="w-10 h-10 bg-blue-600 text-white rounded-2xl flex items-center justify-center font-black text-sm">{selectedLeadIds.size}</div>
@@ -3115,7 +3120,7 @@ const App: React.FC = () => {
           save) and to the bottom otherwise, so the card never hides the button
           being explained. */}
       {showTour && (() => {
-         const anchorTop = tourStep === 5 || tourStep === 6;
+         const anchorTop = tourStep === 5 || tourStep === 6 || tourStep === 7;
          return (
          <div className={`fixed inset-0 z-[300] flex flex-col p-4 md:p-6 pointer-events-none ${anchorTop ? 'justify-start' : 'justify-end'}`}>
             <div className={`max-w-md w-full md:mx-auto glass p-6 md:p-7 rounded-[2rem] md:rounded-[2.5rem] shadow-[0_0_60px_rgba(37,99,235,0.25)] border border-blue-600/30 pointer-events-auto duration-300 ${anchorTop ? 'animate-in slide-in-from-top-6' : 'animate-in slide-in-from-bottom-6'}`}>
