@@ -46,6 +46,11 @@
 </head>
 <body class="min-h-screen bg-cream-50 text-ink-800 dark:bg-ink-900 dark:text-[#f1ece0]">
     <div id="root"></div>
+    <!-- LinkedIn Insight Tag no-JS fallback. The tag itself is loaded from
+         services/linkedinTracking.ts; this pixel covers script-disabled clients. -->
+    <noscript>
+      <img height="1" width="1" style="display:none;" alt="" src="https://px.ads.linkedin.com/collect/?pid=10575465&fmt=gif" />
+    </noscript>
     <script type="module" src="/index.tsx"></script>
 </body>
 </html>
