@@ -12,6 +12,7 @@ import { buildBlogPostJsonLd, buildBlogIndexJsonLd } from './content/seo';
 import { useConferenceSearch, ConferenceResult } from './services/conferenceService';
 import { parseScannedData, parseBusinessCard, generateLeadReport, QuotaError, QUOTA_ERROR_MESSAGE, isQuotaError } from './services/geminiService';
 import { signInWithGoogle, signInWithLinkedIn, signUpWithEmail, signInWithEmail, firebaseSignOut, auth, logLoginEvent, getUserPaidStatus, logCancellationRequest, exportLeadsToGoogleSheet, ensureSubscription, getSubscription, watchSubscription, regenerateInviteToken, removeSeatMember, claimSeat, getSeatClaim, getUserLeads, saveUserLeads, watchUserLeads, logConferenceName, buildHubspotAuthUrl, watchHubspotConnection, syncLeadsToHubspot, touchLastActive, SubscriptionDoc } from './firebase';
+import { trackLinkedInConversion, LINKEDIN_CONVERSIONS } from './services/linkedinTracking';
 
 // Constants for retention and session
 const RETENTION_DAYS = 30;
@@ -27,6 +28,8 @@ const STORAGE_KEY_TEAM = 'lcp_team_v1';
 const STORAGE_KEY_RECEIPTS = 'lcp_receipts_v1';
 const STORAGE_KEY_TRIAL_START = 'lcp_trial_start_v1';
 const STORAGE_KEY_ACCOUNT = 'lcp_account_id_v1';
+// Guards the "first payment" LinkedIn conversion so it fires only once per account.
+const STORAGE_KEY_LI_PAID_TRACKED = 'lcp_li_first_payment_tracked_v1';
 const STORAGE_KEY_MEMBERSHIP = 'lcp_member_owner_v1';
 // Records that the user accepted the Terms and opted in to marketing emails at
 // sign-up. Stored with a timestamp so consent is auditable.
@@ -1061,6 +1064,8 @@ const App: React.FC = () => {
     }
     logLoginEvent(user, 'password').catch(() => {});
     if (authMode === 'signup') {
+      // Report the registration to LinkedIn (new account created).
+      trackLinkedInConversion(LINKEDIN_CONVERSIONS.registration);
       // A brand-new account can never legitimately already be paid, so this
       // branch never looks at localStorage — a stale `hasPaid: true` left
       // over from a *different* account that previously used this same
@@ -1141,6 +1146,8 @@ const App: React.FC = () => {
       // account's paid flag onto this brand-new signup).
       const isBrandNewAccount = user.metadata.creationTime === user.metadata.lastSignInTime;
       if (isBrandNewAccount) {
+        // Report the registration to LinkedIn (new account created).
+        trackLinkedInConversion(LINKEDIN_CONVERSIONS.registration);
         // Every trial now requires a card: send new signups to Stripe
         // Checkout (which has a free trial period configured on the Price
         // there) instead of granting free access.
@@ -1263,6 +1270,16 @@ const App: React.FC = () => {
     localStorage.setItem(STORAGE_KEY_RECEIPTS, JSON.stringify(updated));
     setHasPaid(true);
     localStorage.setItem(STORAGE_KEY_PAID, 'true');
+    // Report the first successful payment to LinkedIn. Keyed by account so a
+    // returning payment / re-activation doesn't fire the conversion again.
+    const paidAcct = auth.currentUser?.uid || accountId || (userProfile.email ? `local:${userProfile.email.toLowerCase()}` : '');
+    let paidTracked: Record<string, boolean> = {};
+    try { paidTracked = JSON.parse(localStorage.getItem(STORAGE_KEY_LI_PAID_TRACKED) || '{}'); } catch { paidTracked = {}; }
+    if (paidAcct && !paidTracked[paidAcct]) {
+      trackLinkedInConversion(LINKEDIN_CONVERSIONS.firstPayment);
+      paidTracked[paidAcct] = true;
+      localStorage.setItem(STORAGE_KEY_LI_PAID_TRACKED, JSON.stringify(paidTracked));
+    }
     // Owners of multi-seat plans get a Firestore subscription doc + invite token.
     if (seatCount > 1) {
       const acct = auth.currentUser?.uid || accountId || (userProfile.email ? `local:${userProfile.email.toLowerCase()}` : '');
