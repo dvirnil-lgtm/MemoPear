@@ -13,6 +13,8 @@ import { useConferenceSearch, ConferenceResult } from './services/conferenceServ
 import { parseScannedData, parseBusinessCard, generateLeadReport, QuotaError, QUOTA_ERROR_MESSAGE, isQuotaError } from './services/geminiService';
 import { signInWithGoogle, signInWithLinkedIn, signUpWithEmail, signInWithEmail, firebaseSignOut, auth, logLoginEvent, getUserPaidStatus, logCancellationRequest, exportLeadsToGoogleSheet, ensureSubscription, getSubscription, watchSubscription, regenerateInviteToken, removeSeatMember, claimSeat, getSeatClaim, getUserLeads, saveUserLeads, watchUserLeads, logConferenceName, buildHubspotAuthUrl, watchHubspotConnection, syncLeadsToHubspot, touchLastActive, SubscriptionDoc } from './firebase';
 import { trackLinkedInConversion, LINKEDIN_CONVERSIONS } from './services/linkedinTracking';
+import ConsentBanner, { openConsentPreferences } from './components/ConsentBanner';
+import AccessibilityMenu from './components/AccessibilityMenu';
 
 // Constants for retention and session
 const RETENTION_DAYS = 30;
@@ -2993,6 +2995,7 @@ const App: React.FC = () => {
               <button onClick={() => navigateTo('privacy')} className="text-[9px] font-black uppercase text-slate-400 hover:text-blue-600 transition-colors tracking-widest">Privacy</button>
               <button onClick={() => navigateTo('terms')} className="text-[9px] font-black uppercase text-slate-400 hover:text-blue-600 transition-colors tracking-widest">Terms</button>
               <button onClick={() => navigateTo('contact')} className="text-[9px] font-black uppercase text-slate-400 hover:text-blue-600 transition-colors tracking-widest">Contact</button>
+              <button onClick={() => openConsentPreferences()} className="text-[9px] font-black uppercase text-slate-400 hover:text-blue-600 transition-colors tracking-widest">Cookie Preferences</button>
             </div>
           </div>
         </footer>
@@ -3229,6 +3232,13 @@ const App: React.FC = () => {
            </div>
         </div>
       )}
+
+      {/* Accessibility quick-settings (reduce motion, larger text, high contrast). */}
+      <AccessibilityMenu />
+
+      {/* Cookie / tracking consent — gates the LinkedIn Insight Tag. Reopenable
+          from the footer's "Cookie Preferences" link. */}
+      <ConsentBanner onNavigatePrivacy={() => navigateTo('privacy')} />
 
     </div>
   );
