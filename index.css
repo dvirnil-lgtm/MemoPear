@@ -271,3 +271,68 @@ select:focus {
 .dark .gather-form select:focus {
   background-color: rgba(215, 177, 105, 0.12);
 }
+
+/* ============================================================
+   Accessibility preferences
+   Toggled via classes on <html> from services/accessibility.ts.
+   ============================================================ */
+
+/* Reduced motion — honour the user's explicit opt-in as well as the OS
+   `prefers-reduced-motion` setting. Near-instant transitions keep the UI
+   functional (state still changes) without vestibular-triggering movement. */
+html.a11y-reduce-motion *,
+html.a11y-reduce-motion *::before,
+html.a11y-reduce-motion *::after {
+  animation-duration: 0.001ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.001ms !important;
+  scroll-behavior: auto !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Larger text — scales the root font size so rem-based type grows site-wide.
+   Tailwind's px-based utilities are unaffected, but body copy, headings and
+   form text all read larger. */
+html.a11y-large-text {
+  font-size: 118.75%; /* 19px base instead of 16px */
+}
+
+/* High contrast — strengthen text, borders and focus rings for low-vision
+   users and bright-sunlight (trade-show floor) readability. */
+html.a11y-high-contrast body {
+  color: #000;
+}
+html.a11y-high-contrast.dark body,
+html.a11y-high-contrast .dark body {
+  color: #fff;
+}
+html.a11y-high-contrast :focus-visible {
+  outline: 3px solid var(--brand-teal-600, #246b6b) !important;
+  outline-offset: 2px !important;
+}
+/* Firm up hairline borders that can wash out at low contrast. */
+html.a11y-high-contrast .border-slate-100,
+html.a11y-high-contrast .border-slate-200 {
+  border-color: #334155 !important;
+}
+html.a11y-high-contrast.dark .border-white\/5,
+html.a11y-high-contrast.dark .border-white\/10 {
+  border-color: rgba(255, 255, 255, 0.45) !important;
+}
+/* Lift muted helper text to a legible contrast ratio. */
+html.a11y-high-contrast .text-slate-400 {
+  color: #475569 !important;
+}
+html.a11y-high-contrast.dark .text-slate-400 {
+  color: #cbd5e1 !important;
+}

@@ -50,7 +50,12 @@ export const PrivacyPolicy: React.FC<{ onBack: () => void }> = ({ onBack }) => {
         </section>
 
         <section>
-          <h2 className="text-xl font-black text-slate-900 dark:text-white mb-2 uppercase tracking-tight">6. Changes to This Policy</h2>
+          <h2 className="text-xl font-black text-slate-900 dark:text-white mb-2 uppercase tracking-tight">6. Cookies &amp; Tracking</h2>
+          <p>We use strictly necessary cookies and local storage to keep you signed in, remember your preferences, and secure the service — these are always active. With your permission, we also use optional analytics cookies to measure how the site is used, and marketing cookies (the LinkedIn Insight Tag) to measure the performance of our advertising. No optional cookies or trackers load until you consent, and you can review or change your choice at any time via the “Cookie Preferences” link in the footer.</p>
+        </section>
+
+        <section>
+          <h2 className="text-xl font-black text-slate-900 dark:text-white mb-2 uppercase tracking-tight">7. Changes to This Policy</h2>
           <p>We may update this Privacy Policy from time to time. We will notify you of any significant changes by posting the new policy within the app or via email.</p>
         </section>
 
