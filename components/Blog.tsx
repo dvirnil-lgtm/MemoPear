@@ -51,6 +51,77 @@ const SUBSCRIBE_BANNER: BlogBlock = { type: 'banner' };
 
 export const BLOG_POSTS: BlogPost[] = [
   {
+    slug: 'hubspot-unbound-2026-boston-lead-capture-guide',
+    title: 'HubSpot UNBOUND 2026 (Formerly INBOUND): Lead-Capture Guide',
+    description:
+      "HubSpot's flagship event returns to Boston as UNBOUND 2026, Sept 16–18, drawing thousands of marketing, sales, and ops leaders. Here's how to capture every lead that matters.",
+    date: '2026-08-01',
+    author: 'The MemoPear Team',
+    readTime: '7 min read',
+    conference: 'HubSpot UNBOUND 2026',
+    location: 'Boston, USA',
+    tags: ['Marketing', 'Sales', 'B2B SaaS', 'Lead Capture'],
+    excerpt:
+      "After fifteen years as INBOUND, HubSpot's signature conference returns to Boston under a new name — UNBOUND. Here is how to leave with real pipeline instead of a badge full of names you can no longer place.",
+    blocks: [
+      {
+        type: 'p',
+        text: "For fifteen years, HubSpot's annual conference was called INBOUND — the event that turned a marketing methodology into a movement. In 2026 it returns to where it started, the Boston Convention & Exhibition Center, under a new name: UNBOUND. HubSpot says the rebrand reflects how much the job has changed — growth today spans marketing, sales, service, and operations, in a world where buyers increasingly ask an AI assistant instead of typing a search query. Same week in September, same Boston hall, a noticeably broader agenda.",
+      },
+      {
+        type: 'p',
+        text: "The scale is still what makes it worth the flight. Recent editions have drawn well over 12,000 attendees on-site — marketers, sales leaders, RevOps and customer-success professionals, agency owners, and HubSpot Solutions Partners — packed into three days of keynotes, product announcements, and a sprawling expo hall. For anyone selling martech, sales tools, or agency services, UNBOUND concentrates more qualified growth-team buyers into one building than almost any other week on the calendar.",
+      },
+      { type: 'h2', text: 'Why lead capture breaks down at UNBOUND' },
+      {
+        type: 'ul',
+        items: [
+          "The audience is broad by design now — marketing, sales, service, and RevOps all in the same hall — so a badge scan alone tells you almost nothing about which team or budget a person actually represents.",
+          'Three days of back-to-back sessions and booth traffic means dozens of short conversations blur together fast, especially for a small booth team covering the floor solo.',
+          'Everyone at UNBOUND already gets pitched constantly — HubSpot Solutions Partners and agency owners in particular are used to being sold to, so a forgettable, generic follow-up gets deleted on sight.',
+          'The people worth remembering most — a partner ready to co-sell, a RevOps lead mid-evaluation — are exactly the ones a rushed, handwritten note after the show tends to lose.',
+        ],
+      },
+      { type: 'banner' },
+      { type: 'h2', text: 'Capturing context, not just contacts' },
+      {
+        type: 'p',
+        text: "MemoPear was built for exactly this kind of floor. Scan a badge or snap a business card and the AI fills in the name, title, and company instantly. Right after the conversation ends, record a ten-second voice note — which team they're on, what problem they're solving, whether they're a partner, a buyer, or just kicking tires — while it is still fresh. Every contact gets tagged to UNBOUND and synced across your booth team in real time, so the person who worked the morning shift and the person who worked the afternoon are looking at the same pipeline, not two separate stacks of cards.",
+      },
+      {
+        type: 'quote',
+        text: 'A badge scan tells you who stopped by. A ten-second voice note tells you whether they were ready to buy.',
+      },
+      { type: 'h2', text: 'Following up before the inbox forgets you' },
+      {
+        type: 'p',
+        text: "An audience this fluent in marketing knows exactly what a mass follow-up email looks like — and ignores it. Because MemoPear captures the actual detail from each conversation, it can draft a personalized follow-up per contact that references the real thing discussed, ready to send within 24 to 48 hours. That is the difference between landing in the inbox of a RevOps lead as the vendor who remembered their specific integration question, and landing as message number nine in a Monday morning cleanup.",
+      },
+      {
+        type: 'faq',
+        items: [
+          {
+            q: 'Is UNBOUND the same event as HubSpot INBOUND?',
+            a: "Yes. HubSpot rebranded its flagship conference from INBOUND to UNBOUND for 2026 to reflect a broader scope — marketing, sales, service, and operations across the full customer journey — rather than marketing alone. It runs the same week in September and returns to the Boston Convention & Exhibition Center, where the event began in 2011.",
+          },
+          {
+            q: 'How many people attend HubSpot UNBOUND?',
+            a: 'Recent Boston and San Francisco editions have each drawn well over 12,000 attendees on-site, spanning marketers, sales and RevOps leaders, customer-success teams, agency owners, and HubSpot Solutions Partners.',
+          },
+          {
+            q: 'What is the best way to capture leads at a conference like UNBOUND?',
+            a: "Capture the contact and the context together, in the moment. Scan the badge or business card with a tool like MemoPear, then add a short voice note on who the person is and why the conversation mattered before moving to the next one. That combination is what turns a stack of cards into pipeline you can actually act on.",
+          },
+        ],
+      },
+      {
+        type: 'p',
+        text: "New name, same crowded, high-intent floor. Whether the badge says INBOUND out of habit or UNBOUND for real, the show only pays off if you can remember, weeks later, why each conversation mattered — and that still isn't a memory problem worth leaving to chance.",
+      },
+    ],
+  },
+ 
+  {
     slug: 'fall-2026-european-conference-circuit-guide',
     title: "Europe's Fall 2026 Conference Circuit: 5 Shows, One Lead-Capture Fix",
     description:

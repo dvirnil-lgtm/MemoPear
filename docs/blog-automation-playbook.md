@@ -158,7 +158,6 @@ Pick from the top; remove when used. (Month is the typical real-world month.)
 - Gamescom — Cologne, Germany (August) — gaming.
 - NVIDIA GTC — San Jose, USA (March) — AI & accelerated computing.
 - Adobe Summit — Las Vegas, USA (March) — digital experience/marketing.
-- HubSpot INBOUND — Boston, USA (September) — marketing & sales.
 - RSA Conference — San Francisco, USA (May) — cybersecurity.
 - Black Hat USA — Las Vegas, USA (August) — cybersecurity.
 - Snowflake Summit — San Francisco, USA (June) — data/AI.
@@ -176,4 +175,4 @@ Pick from the top; remove when used. (Month is the typical real-world month.)
 ## Already covered (do NOT repeat)
 
 VivaTech, SaaStr Annual, Dreamforce, Web Summit, AWS re:Invent, CES,
-Mobile World Congress (MWC).
+Mobile World Congress (MWC), HubSpot INBOUND/UNBOUND.
