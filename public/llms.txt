@@ -24,6 +24,7 @@
 
 The MemoPear blog publishes tactical lead-capture playbooks for the biggest conferences in high tech. Each article covers a specific event and how field marketers, field sales reps, founders, and exhibitors can capture, organize, and follow up on leads at it.
 
+- HubSpot UNBOUND 2026 (Formerly INBOUND): Lead-Capture Guide (2026-08-01): https://go.memopear.com/blog/hubspot-unbound-2026-boston-lead-capture-guide — Capturing marketing, sales, and RevOps leads at HubSpot's rebranded flagship event, back in Boston Sept 16–18.
 - Europe's Fall 2026 Conference Circuit: 5 Shows, One Lead-Capture Fix (2026-07-20): https://go.memopear.com/blog/fall-2026-european-conference-circuit-guide — A field guide to Gamescom, IFA Berlin, IBC2026, it-sa Expo&Congress, and Slush, and the shared lead-capture fix for all five.
 - The August 2026 Conference Circuit: 5 Shows, One Lead-Capture Fix (2026-07-19): https://go.memopear.com/blog/august-2026-conference-circuit-guide — A field guide to GBTA Convention, NY NOW, SuperZoo, Black Hat USA, and Step San Francisco, and the shared lead-capture fix for all five.
 - Why the Rep With the Most Business Cards Has the Worst Follow-Up (2026-07-16): https://go.memopear.com/blog/why-more-business-cards-means-worse-follow-up — Why lead volume without in-the-moment context capture kills conference follow-up, and why speed and depth are not actually a tradeoff.
