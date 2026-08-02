@@ -16,6 +16,13 @@ secrets, API keys, or client/customer data.
    assigned to a long literal instead of being read from env or Firebase secrets.
 5. **Committed client/customer data** — CSV/JSON/SQL exports, dumps, or backups
    whose names suggest leads, contacts, subscribers, or user data.
+6. **Firestore / Storage security rules** — flags rules that grant access with
+   no real condition (`allow read, write: if true;` or an unconditional
+   `allow read, write;`). These are the runtime gate on client data: a wide-open
+   rule exposes every user's records even when no secret is in the repo. If no
+   `*.rules` file is version-controlled, the scan prints an informational note
+   (it does not fail, so it won't repeatedly notify) reminding you to keep rules
+   in git and to verify the deployed rules.
 
 Run it locally any time:
 
@@ -49,3 +56,24 @@ A scheduled routine runs **every 12 hours** and, in a fresh session:
 
 To change the cadence or pause it, update or disable the routine (it is a
 scheduled trigger owned by the account that created it).
+
+## Verifying the DEPLOYED Firestore rules
+
+The scanner can only see rules committed to this repo. Runtime rules live in
+Firebase and should be checked directly (and, ideally, committed here so the
+scan covers them):
+
+```bash
+firebase firestore:rules get          # prints the currently deployed ruleset
+```
+
+Or in the console: **Firebase Console → Firestore Database → Rules**. A safe
+baseline scopes every document to its owner, e.g.:
+
+```
+match /users/{uid}/{doc=**} {
+  allow read, write: if request.auth != null && request.auth.uid == uid;
+}
+```
+
+Never ship `allow read, write: if true;` to production.

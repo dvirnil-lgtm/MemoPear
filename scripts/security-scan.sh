@@ -34,8 +34,10 @@ report() {
 
 # Collect git-tracked files, excluding this scanner and binary/lock/example files
 # that are expected to contain placeholder-shaped strings.
+# Exclude lock files and this scanner + its own doc (they intentionally contain
+# the placeholder/example patterns being searched for), plus binary assets.
 mapfile -t FILES < <(git ls-files \
-  | grep -vE '(^|/)(package-lock\.json|scripts/security-scan\.sh|\.env\.example)$' \
+  | grep -vE '(^|/)(package-lock\.json|scripts/security-scan\.sh|docs/security-monitoring\.md|\.env\.example)$' \
   | grep -vE '\.(png|jpg|jpeg|gif|ico|webp|woff2?|ttf|otf|pdf)$')
 
 grep_tracked() { # $1 = extended regex; prints "file:line: match"
@@ -65,6 +67,24 @@ DATA_HITS="$(git ls-files \
   | grep -iE '(customer|client|lead|contact|subscriber|user|email)s?[-_.].*\.(csv|json|xlsx|sql)$|(export|dump|backup)[-_.].*\.(csv|json|sql)$' \
   | grep -vE '(package(-lock)?|tsconfig|firebase|firestore|metadata|components|manifest)\.json$')"
 report "Committed file that may contain client/customer data (CSV/SQL/export dump)" "$DATA_HITS"
+
+# 6. Firestore / Storage security rules. Rules are the runtime gate on client
+#    data — a wide-open rule exposes every user's data even when no secret is in
+#    the repo. Flag dangerous rules as a finding; treat missing rules as an
+#    informational warning (it recurs, so it must not spam notifications).
+mapfile -t RULES_FILES < <(git ls-files | grep -iE '(^|/)(firestore|storage)\.rules$|\.rules$')
+if [ "${#RULES_FILES[@]}" -eq 0 ]; then
+  echo "ℹ security-scan: no Firestore/Storage .rules file is version-controlled in this repo."
+  echo "    Rules are the runtime gate on client data; keeping them in git lets this scan"
+  echo "    verify them. Confirm the DEPLOYED rules are locked down:"
+  echo "        firebase firestore:rules get      # or Firebase Console → Firestore → Rules"
+  echo
+else
+  # Flag rules that grant access unconditionally (if true) or with no condition.
+  DANGER_RULES="$(git grep -nIE 'allow[[:space:]]+(read|write|create|update|delete|list|get)([[:space:]]*,[[:space:]]*(read|write|create|update|delete|list|get))*[[:space:]]*:[[:space:]]*if[[:space:]]+true' -- "${RULES_FILES[@]}" 2>/dev/null)"
+  DANGER_RULES="$DANGER_RULES$(git grep -nIE 'allow[[:space:]]+(read|write)([[:space:]]*,[[:space:]]*(read|write))*[[:space:]]*;' -- "${RULES_FILES[@]}" 2>/dev/null)"
+  report "Firestore/Storage rule grants access with no real condition (allow … if true / unconditional)" "$DANGER_RULES"
+fi
 
 if [ "$FINDINGS" -eq 0 ]; then
   echo "✓ security-scan: clean — no exposed secrets or client data detected in tracked files."
