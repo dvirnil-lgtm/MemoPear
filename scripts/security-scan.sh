@@ -80,9 +80,12 @@ if [ "${#RULES_FILES[@]}" -eq 0 ]; then
   echo "        firebase firestore:rules get      # or Firebase Console → Firestore → Rules"
   echo
 else
-  # Flag rules that grant access unconditionally (if true) or with no condition.
-  DANGER_RULES="$(git grep -nIE 'allow[[:space:]]+(read|write|create|update|delete|list|get)([[:space:]]*,[[:space:]]*(read|write|create|update|delete|list|get))*[[:space:]]*:[[:space:]]*if[[:space:]]+true' -- "${RULES_FILES[@]}" 2>/dev/null)"
-  DANGER_RULES="$DANGER_RULES$(git grep -nIE 'allow[[:space:]]+(read|write)([[:space:]]*,[[:space:]]*(read|write))*[[:space:]]*;' -- "${RULES_FILES[@]}" 2>/dev/null)"
+  # Flag rules that grant access unconditionally (`if true`) or with no
+  # condition at all. A line carrying a `scan-ok:` comment is treated as
+  # reviewed-and-accepted (e.g. an intentional public read of non-personal data)
+  # and skipped — use it sparingly and only with a written justification.
+  DANGER_RULES="$(git grep -nIE 'allow[[:space:]]+(read|write|create|update|delete|list|get)([[:space:]]*,[[:space:]]*(read|write|create|update|delete|list|get))*[[:space:]]*:[[:space:]]*if[[:space:]]+true' -- "${RULES_FILES[@]}" 2>/dev/null | grep -v 'scan-ok')"
+  DANGER_RULES="$DANGER_RULES$(git grep -nIE 'allow[[:space:]]+(read|write)([[:space:]]*,[[:space:]]*(read|write))*[[:space:]]*;' -- "${RULES_FILES[@]}" 2>/dev/null | grep -v 'scan-ok')"
   report "Firestore/Storage rule grants access with no real condition (allow … if true / unconditional)" "$DANGER_RULES"
 fi
 

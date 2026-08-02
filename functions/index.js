@@ -570,3 +570,82 @@ exports.syncLeadsToHubspot = onCall(
     return { synced: inputs.length, skipped, errors: [] };
   },
 );
+
+// ---------------------------------------------------------------------------
+// Team seats — server-side seat management.
+//
+// Seat claiming and removal run here (admin SDK) rather than in the browser so
+// that Firestore rules can lock `subscriptions/{ownerUid}` to owner-only writes
+// and `seatClaims/{uid}` to no client writes at all. That closes two holes that
+// a client-side implementation forces open:
+//   1. A `seatClaims/{uid}` doc existing is what grants a teammate Pro access
+//      (see getSeatClaim in firebase.ts / App.tsx). If any signed-in user could
+//      write their own seatClaim, they'd self-grant Pro for free, bypassing both
+//      payment and the seat cap. Now only this function writes seatClaims.
+//   2. Claiming a seat means writing the *owner's* subscription doc from a
+//      non-owner account. Doing that from the client requires opening
+//      `subscriptions` writes to everyone, letting anyone tamper with any
+//      owner's seats/token/members. Now the owner's doc is only ever written by
+//      the owner (own client) or by this trusted function.
+// ---------------------------------------------------------------------------
+
+// Teammate: claim a seat on the owner's subscription via the invite link.
+// The seat cap is enforced atomically so the link stops working once full.
+exports.claimSeat = onCall(async (request) => {
+  if (!request.auth) throw new HttpsError('unauthenticated', 'Sign in required.');
+  const uid = request.auth.uid;
+  const email = request.auth.token?.email || request.data?.email || '';
+  const ownerUid = String(request.data?.ownerUid || '');
+  const token = String(request.data?.token || '');
+  if (!ownerUid || !token) throw new HttpsError('invalid-argument', 'Missing invite details.');
+
+  return await db.runTransaction(async (tx) => {
+    const subRef = db.collection('subscriptions').doc(ownerUid);
+    const snap = await tx.get(subRef);
+    if (!snap.exists) return { result: 'invalid' };
+    const data = snap.data() || {};
+    if (!token || data.inviteToken !== token) return { result: 'invalid' };
+
+    const members = Array.isArray(data.members) ? data.members : [];
+    const claimRef = db.collection('seatClaims').doc(uid);
+    // Already on this team — just (re)issue the access pointer.
+    if (members.some((m) => m.uid === uid || m.email === email)) {
+      tx.set(claimRef, { ownerUid, email, joinedAt: Date.now() }, { merge: true });
+      return { result: 'already' };
+    }
+    // Owner occupies one seat; reject once every remaining seat is filled.
+    if (members.length + 1 >= Number(data.seats || 0)) return { result: 'full' };
+    tx.set(
+      subRef,
+      { members: [...members, { email, uid, joinedAt: Date.now() }], updatedAt: FieldValue.serverTimestamp() },
+      { merge: true },
+    );
+    tx.set(claimRef, { ownerUid, email, joinedAt: Date.now() });
+    return { result: 'ok' };
+  });
+});
+
+// Owner: remove a teammate, freeing their seat and revoking their access
+// pointer. Only the owner of the subscription may call this for their own doc.
+exports.removeSeatMember = onCall(async (request) => {
+  if (!request.auth) throw new HttpsError('unauthenticated', 'Sign in required.');
+  const ownerUid = request.auth.uid;
+  const email = String(request.data?.email || '');
+  if (!email) throw new HttpsError('invalid-argument', 'Missing member email.');
+
+  await db.runTransaction(async (tx) => {
+    const subRef = db.collection('subscriptions').doc(ownerUid);
+    const snap = await tx.get(subRef);
+    if (!snap.exists) return;
+    const data = snap.data() || {};
+    const members = Array.isArray(data.members) ? data.members : [];
+    const removed = members.find((m) => m.email === email);
+    tx.set(
+      subRef,
+      { members: members.filter((m) => m.email !== email), updatedAt: FieldValue.serverTimestamp() },
+      { merge: true },
+    );
+    if (removed?.uid) tx.delete(db.collection('seatClaims').doc(removed.uid));
+  });
+  return { result: 'ok' };
+});

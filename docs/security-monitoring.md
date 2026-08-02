@@ -67,8 +67,10 @@ scan covers them):
 firebase firestore:rules get          # prints the currently deployed ruleset
 ```
 
-Or in the console: **Firebase Console → Firestore Database → Rules**. A safe
-baseline scopes every document to its owner, e.g.:
+Or in the console: **Firebase Console → Firestore Database → Rules**. The
+version-controlled rules live in `firestore.rules` (wired via `firebase.json`)
+and are what `firebase deploy --only firestore:rules` ships. A safe baseline
+scopes every document to its owner, e.g.:
 
 ```
 match /users/{uid}/{doc=**} {
@@ -77,3 +79,25 @@ match /users/{uid}/{doc=**} {
 ```
 
 Never ship `allow read, write: if true;` to production.
+
+### `scan-ok` suppressions
+
+An intentional, reviewed exception (e.g. a genuinely public, non-personal read)
+can be annotated with a trailing `// scan-ok: <reason>` comment on the same
+line as the `allow`. The scanner skips lines carrying `scan-ok`. Use it rarely
+and always with a written justification — it is an audit trail, not an off
+switch.
+
+## Team seats are managed server-side
+
+Seat claiming and removal run in the `claimSeat` / `removeSeatMember` Cloud
+Functions (admin SDK), never from the browser. This is deliberate:
+
+- A `seatClaims/{uid}` document existing is what grants a teammate Pro access.
+  If the client could write its own claim, any signed-in user could self-grant
+  Pro for free, bypassing payment and the seat cap. Rules therefore set
+  `seatClaims` to `read: own only`, `write: if false` — only the functions write it.
+- Claiming a seat writes the *owner's* subscription doc from a non-owner
+  account. Keeping that in a function lets `subscriptions` stay
+  `write: owner-only`, so no one can tamper with another owner's seats, invite
+  token, or member list.
