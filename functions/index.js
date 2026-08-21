@@ -12,12 +12,12 @@ const db = getFirestore();
 function trialEndedEmailHtml() {
   return `
     <div style="font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;max-width:480px;margin:0 auto;color:#1e293b;line-height:1.5;">
-      <img src="https://go.memopear.com/favicon-512.png" alt="MemoPear" width="48" height="48" style="display:block;margin-bottom:16px;border-radius:12px;">
+      <img src="https://memopear.com/favicon-512.png" alt="MemoPear" width="48" height="48" style="display:block;margin-bottom:16px;border-radius:12px;">
       <h1 style="color:#65a30d;font-size:22px;margin-bottom:4px;">Your free trial has ended</h1>
       <p>Your 2-day MemoPear trial just wrapped up. We hope you got a taste of how much faster lead capture can be.</p>
       <p>Subscribe to keep scanning badges, snapping business cards, and syncing every contact you've already saved.</p>
       <p style="margin:28px 0;">
-        <a href="https://go.memopear.com/pricing" style="background:#65a30d;color:#fff;padding:14px 28px;border-radius:12px;text-decoration:none;font-weight:700;display:inline-block;">Subscribe for $2.80/mo &rarr;</a>
+        <a href="https://memopear.com/pricing" style="background:#65a30d;color:#fff;padding:14px 28px;border-radius:12px;text-decoration:none;font-weight:700;display:inline-block;">Subscribe for $2.80/mo &rarr;</a>
       </p>
       <p style="color:#94a3b8;font-size:12px;margin-top:32px;">&mdash; The MemoPear Team</p>
     </div>
@@ -121,12 +121,12 @@ function retentionReminderEmailHtml(expiringCount, retentionDays, warningDays, u
     : `Some of your saved contacts will be removed from your account in the next ${warningDays} day${warningDays === 1 ? '' : 's'}.`;
   return `
     <div style="font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;max-width:480px;margin:0 auto;color:#1e293b;line-height:1.5;">
-      <img src="https://go.memopear.com/favicon-512.png" alt="MemoPear" width="48" height="48" style="display:block;margin-bottom:16px;border-radius:12px;">
+      <img src="https://memopear.com/favicon-512.png" alt="MemoPear" width="48" height="48" style="display:block;margin-bottom:16px;border-radius:12px;">
       <h1 style="color:#65a30d;font-size:22px;margin-bottom:4px;">Back up your leads before they're cleared</h1>
       <p>Heads up — for your security and privacy, MemoPear only keeps captured contacts for ${retentionDays} days. ${countLine}</p>
       <p>Take a moment to export them to your own spreadsheet so you keep a permanent copy:</p>
       <p style="margin:28px 0;">
-        <a href="https://go.memopear.com/pipeline" style="background:#65a30d;color:#fff;padding:14px 28px;border-radius:12px;text-decoration:none;font-weight:700;display:inline-block;">Download my leads &rarr;</a>
+        <a href="https://memopear.com/pipeline" style="background:#65a30d;color:#fff;padding:14px 28px;border-radius:12px;text-decoration:none;font-weight:700;display:inline-block;">Download my leads &rarr;</a>
       </p>
       <p style="color:#64748b;font-size:13px;">Open your Contacts, select the leads you want, and choose <em>Export to Sheets</em> — it drops everything, tags included, into a Google Spreadsheet you own.</p>
       <p style="color:#94a3b8;font-size:12px;margin-top:32px;">&mdash; The MemoPear Team</p>
@@ -138,12 +138,12 @@ function retentionReminderEmailHtml(expiringCount, retentionDays, warningDays, u
 function inactivityReminderEmailHtml(unsubUrl) {
   return `
     <div style="font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;max-width:480px;margin:0 auto;color:#1e293b;line-height:1.5;">
-      <img src="https://go.memopear.com/favicon-512.png" alt="MemoPear" width="48" height="48" style="display:block;margin-bottom:16px;border-radius:12px;">
+      <img src="https://memopear.com/favicon-512.png" alt="MemoPear" width="48" height="48" style="display:block;margin-bottom:16px;border-radius:12px;">
       <h1 style="color:#65a30d;font-size:22px;margin-bottom:4px;">How was the conference? 🍐</h1>
       <p>We noticed you've been away for a few days. Now's the perfect time to make those conversations count.</p>
       <p><strong>Did you follow up with all of your leads?</strong> The contacts you captured are ready and waiting — a quick, personal note while you're still fresh in their memory goes a long way.</p>
       <p style="margin:28px 0;">
-        <a href="https://go.memopear.com/pipeline" style="background:#65a30d;color:#fff;padding:14px 28px;border-radius:12px;text-decoration:none;font-weight:700;display:inline-block;">Review my leads &rarr;</a>
+        <a href="https://memopear.com/pipeline" style="background:#65a30d;color:#fff;padding:14px 28px;border-radius:12px;text-decoration:none;font-weight:700;display:inline-block;">Review my leads &rarr;</a>
       </p>
       <p style="color:#64748b;font-size:13px;">MemoPear can even draft a follow-up email for each contact — open a lead and tap <em>Email Suggestion</em>.</p>
       <p style="color:#94a3b8;font-size:12px;margin-top:32px;">&mdash; The MemoPear Team</p>
@@ -157,9 +157,9 @@ function unsubscribeResultHtml(message) {
   return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>MemoPear</title></head>
     <body style="font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;background:#f8fafc;margin:0;padding:48px 20px;color:#1e293b;">
       <div style="max-width:420px;margin:0 auto;text-align:center;">
-        <img src="https://go.memopear.com/favicon-512.png" alt="MemoPear" width="56" height="56" style="border-radius:14px;margin-bottom:20px;">
+        <img src="https://memopear.com/favicon-512.png" alt="MemoPear" width="56" height="56" style="border-radius:14px;margin-bottom:20px;">
         <p style="font-size:16px;line-height:1.6;">${message}</p>
-        <p style="margin-top:28px;"><a href="https://go.memopear.com" style="color:#65a30d;font-weight:700;text-decoration:none;">Back to MemoPear &rarr;</a></p>
+        <p style="margin-top:28px;"><a href="https://memopear.com" style="color:#65a30d;font-weight:700;text-decoration:none;">Back to MemoPear &rarr;</a></p>
       </div>
     </body></html>`;
 }
@@ -462,7 +462,7 @@ exports.hubspotOAuthCallback = onRequest(
   async (req, res) => {
     const uid = String(req.query.state || '');
     if (req.query.error || !req.query.code || !uid) {
-      res.redirect('https://go.memopear.com/profile?hubspot=error');
+      res.redirect('https://memopear.com/profile?hubspot=error');
       return;
     }
     try {
@@ -480,7 +480,7 @@ exports.hubspotOAuthCallback = onRequest(
       const tokens = await tokenRes.json();
       if (!tokenRes.ok || !tokens.access_token) {
         console.error('[hubspotOAuthCallback] token exchange failed', tokens);
-        res.redirect('https://go.memopear.com/profile?hubspot=error');
+        res.redirect('https://memopear.com/profile?hubspot=error');
         return;
       }
       await db.collection('crmConnections').doc(uid).set({
@@ -492,10 +492,10 @@ exports.hubspotOAuthCallback = onRequest(
         },
       }, { merge: true });
       await db.collection('users').doc(uid).set({ hubspotConnected: true }, { merge: true });
-      res.redirect('https://go.memopear.com/profile?hubspot=connected');
+      res.redirect('https://memopear.com/profile?hubspot=connected');
     } catch (err) {
       console.error('[hubspotOAuthCallback] error', err);
-      res.redirect('https://go.memopear.com/profile?hubspot=error');
+      res.redirect('https://memopear.com/profile?hubspot=error');
     }
   },
 );

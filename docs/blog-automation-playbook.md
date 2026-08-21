@@ -94,7 +94,7 @@ URL, and Open Graph tags from this data, so no extra SEO wiring is needed.
 ## Step 4 — Register in sitemap + llms.txt
 
 - `public/sitemap.xml`: add a `<url>` entry for
-  `https://go.memopear.com/blog/<slug>` with `<lastmod>` = the post date,
+  `https://memopear.com/blog/<slug>` with `<lastmod>` = the post date,
   `<changefreq>monthly</changefreq>`, `<priority>0.7</priority>`. Place it among
   the other blog-post entries.
 - `public/llms.txt`: add a bullet under the `## Blog` section in the same format

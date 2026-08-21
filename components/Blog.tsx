@@ -13,7 +13,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 // public/llms.txt so search engines and AI crawlers can discover it.
 // ---------------------------------------------------------------------------
 
-export const SITE_URL = 'https://go.memopear.com';
+export const SITE_URL = 'https://memopear.com';
 
 export type BlogBlock =
   | { type: 'p'; text: string }

@@ -12,37 +12,37 @@
 
 ## Public pages
 
-- Home: https://go.memopear.com/
-- Pricing: https://go.memopear.com/pricing
-- Blog: https://go.memopear.com/blog
-- Company: https://go.memopear.com/company
-- Contact: https://go.memopear.com/contact
-- Privacy Policy: https://go.memopear.com/privacy
-- Terms of Service: https://go.memopear.com/terms
+- Home: https://memopear.com/
+- Pricing: https://memopear.com/pricing
+- Blog: https://memopear.com/blog
+- Company: https://memopear.com/company
+- Contact: https://memopear.com/contact
+- Privacy Policy: https://memopear.com/privacy
+- Terms of Service: https://memopear.com/terms
 
 ## Blog
 
 The MemoPear blog publishes tactical lead-capture playbooks for the biggest conferences in high tech. Each article covers a specific event and how field marketers, field sales reps, founders, and exhibitors can capture, organize, and follow up on leads at it.
 
-- HubSpot UNBOUND 2026 (Formerly INBOUND): Lead-Capture Guide (2026-08-01): https://go.memopear.com/blog/hubspot-unbound-2026-boston-lead-capture-guide — Capturing marketing, sales, and RevOps leads at HubSpot's rebranded flagship event, back in Boston Sept 16–18.
-- Europe's Fall 2026 Conference Circuit: 5 Shows, One Lead-Capture Fix (2026-07-20): https://go.memopear.com/blog/fall-2026-european-conference-circuit-guide — A field guide to Gamescom, IFA Berlin, IBC2026, it-sa Expo&Congress, and Slush, and the shared lead-capture fix for all five.
-- The August 2026 Conference Circuit: 5 Shows, One Lead-Capture Fix (2026-07-19): https://go.memopear.com/blog/august-2026-conference-circuit-guide — A field guide to GBTA Convention, NY NOW, SuperZoo, Black Hat USA, and Step San Francisco, and the shared lead-capture fix for all five.
-- Why the Rep With the Most Business Cards Has the Worst Follow-Up (2026-07-16): https://go.memopear.com/blog/why-more-business-cards-means-worse-follow-up — Why lead volume without in-the-moment context capture kills conference follow-up, and why speed and depth are not actually a tradeoff.
-- VivaTech 2026 Paris: A Lead-Capture Guide for Startups & Scale-ups (2026-06-30): https://go.memopear.com/blog/vivatech-2026-paris-lead-capture-guide — Capturing investor, partner, and customer leads among 165,000+ attendees at Europe's biggest tech event in Paris.
-- SaaStr Annual 2025: The Field Sales Lead-Capture Playbook (2025-09-09): https://go.memopear.com/blog/saastr-annual-2025-lead-capture-playbook — Turning 12,500+ B2B SaaS attendees in San Mateo into clean pipeline.
-- Dreamforce 2025: Turning 40,000 Conversations Into Pipeline (2025-09-16): https://go.memopear.com/blog/dreamforce-2025-turn-conversations-into-pipeline — Capturing and following up on leads at Salesforce's flagship San Francisco event.
-- Web Summit 2025 Lisbon: A Lead-Capture Guide for Startups (2025-11-10): https://go.memopear.com/blog/web-summit-2025-lisbon-lead-capture-guide — How founders capture investor and customer leads among 70,000+ attendees in Lisbon.
-- AWS re:Invent 2025: Capturing Every Lead in the Vegas Chaos (2025-12-01): https://go.memopear.com/blog/aws-reinvent-2025-lead-capture-in-the-vegas-chaos — A field guide to capturing technical cloud leads across the spread-out Las Vegas venues.
-- CES 2026 Lead-Capture Playbook (2026-01-09): https://go.memopear.com/blog/ces-2026-lead-capture-playbook — Qualifying the right leads from the 140,000+ attendee show floor in Las Vegas.
-- MWC 2026 Barcelona: Capturing Global Telecom & Mobile Leads (2026-03-02): https://go.memopear.com/blog/mwc-2026-barcelona-lead-capture-guide — Accurately capturing international leads at Mobile World Congress.
+- HubSpot UNBOUND 2026 (Formerly INBOUND): Lead-Capture Guide (2026-08-01): https://memopear.com/blog/hubspot-unbound-2026-boston-lead-capture-guide — Capturing marketing, sales, and RevOps leads at HubSpot's rebranded flagship event, back in Boston Sept 16–18.
+- Europe's Fall 2026 Conference Circuit: 5 Shows, One Lead-Capture Fix (2026-07-20): https://memopear.com/blog/fall-2026-european-conference-circuit-guide — A field guide to Gamescom, IFA Berlin, IBC2026, it-sa Expo&Congress, and Slush, and the shared lead-capture fix for all five.
+- The August 2026 Conference Circuit: 5 Shows, One Lead-Capture Fix (2026-07-19): https://memopear.com/blog/august-2026-conference-circuit-guide — A field guide to GBTA Convention, NY NOW, SuperZoo, Black Hat USA, and Step San Francisco, and the shared lead-capture fix for all five.
+- Why the Rep With the Most Business Cards Has the Worst Follow-Up (2026-07-16): https://memopear.com/blog/why-more-business-cards-means-worse-follow-up — Why lead volume without in-the-moment context capture kills conference follow-up, and why speed and depth are not actually a tradeoff.
+- VivaTech 2026 Paris: A Lead-Capture Guide for Startups & Scale-ups (2026-06-30): https://memopear.com/blog/vivatech-2026-paris-lead-capture-guide — Capturing investor, partner, and customer leads among 165,000+ attendees at Europe's biggest tech event in Paris.
+- SaaStr Annual 2025: The Field Sales Lead-Capture Playbook (2025-09-09): https://memopear.com/blog/saastr-annual-2025-lead-capture-playbook — Turning 12,500+ B2B SaaS attendees in San Mateo into clean pipeline.
+- Dreamforce 2025: Turning 40,000 Conversations Into Pipeline (2025-09-16): https://memopear.com/blog/dreamforce-2025-turn-conversations-into-pipeline — Capturing and following up on leads at Salesforce's flagship San Francisco event.
+- Web Summit 2025 Lisbon: A Lead-Capture Guide for Startups (2025-11-10): https://memopear.com/blog/web-summit-2025-lisbon-lead-capture-guide — How founders capture investor and customer leads among 70,000+ attendees in Lisbon.
+- AWS re:Invent 2025: Capturing Every Lead in the Vegas Chaos (2025-12-01): https://memopear.com/blog/aws-reinvent-2025-lead-capture-in-the-vegas-chaos — A field guide to capturing technical cloud leads across the spread-out Las Vegas venues.
+- CES 2026 Lead-Capture Playbook (2026-01-09): https://memopear.com/blog/ces-2026-lead-capture-playbook — Qualifying the right leads from the 140,000+ attendee show floor in Las Vegas.
+- MWC 2026 Barcelona: Capturing Global Telecom & Mobile Leads (2026-03-02): https://memopear.com/blog/mwc-2026-barcelona-lead-capture-guide — Accurately capturing international leads at Mobile World Congress.
 
 ## App pages (require sign-in, not indexed)
 
-- Login / Sign up: https://go.memopear.com/login
-- Gather (lead capture): https://go.memopear.com/gather
-- Pipeline (saved leads): https://go.memopear.com/pipeline
-- Profile: https://go.memopear.com/profile
-- Team management: https://go.memopear.com/team
+- Login / Sign up: https://memopear.com/login
+- Gather (lead capture): https://memopear.com/gather
+- Pipeline (saved leads): https://memopear.com/pipeline
+- Profile: https://memopear.com/profile
+- Team management: https://memopear.com/team
 
 ## Technology
 
@@ -54,4 +54,4 @@ The MemoPear blog publishes tactical lead-capture playbooks for the biggest conf
 
 ## Contact
 
-For questions about data use or API access, visit https://go.memopear.com/contact
+For questions about data use or API access, visit https://memopear.com/contact
