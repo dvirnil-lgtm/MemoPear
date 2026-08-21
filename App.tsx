@@ -1807,7 +1807,7 @@ const App: React.FC = () => {
                 Never lose a contact at a conference again. Scan badges, snap business cards, and follow up in seconds — all with AI.
               </p>
               <div className="flex flex-col sm:flex-row gap-6 w-full max-w-md z-10">
-                <button onClick={() => navigateTo('login')} className="flex-1 py-5 bg-blue-600 text-white font-black rounded-2xl shadow-2xl hover:scale-105 transition-all">Start Free — First {TRIAL_DAYS} Days On Us</button>
+                <button onClick={() => navigateTo('login')} className="flex-1 py-5 bg-blue-600 text-white font-black rounded-2xl shadow-2xl hover:scale-105 transition-all">Start Free Trial</button>
                 <button onClick={startTour} className="flex-1 py-5 glass font-bold rounded-2xl border-slate-200 dark:border-white/10 hover:bg-slate-50 dark:hover:bg-white/10 transition-all">See How It Works</button>
               </div>
             </section>
@@ -1942,7 +1942,7 @@ const App: React.FC = () => {
                <div className="relative z-10">
                   <h2 className="text-5xl font-black mb-6 tracking-tighter leading-none">Ready to never miss <br/> a follow-up again?</h2>
                   <p className="text-lg font-medium mb-12 opacity-80 max-w-sm mx-auto">Join thousands of people using MemoPear at conferences, trade shows, and networking events.</p>
-                  <button onClick={() => navigateTo('login')} className="px-12 py-6 bg-white text-blue-600 font-black rounded-3xl shadow-2xl hover:scale-110 transition-transform uppercase text-xs tracking-widest active:scale-95">Start Free — First {TRIAL_DAYS} Days On Us</button>
+                  <button onClick={() => navigateTo('login')} className="px-12 py-6 bg-white text-blue-600 font-black rounded-3xl shadow-2xl hover:scale-110 transition-transform uppercase text-xs tracking-widest active:scale-95">Start Free Trial</button>
                </div>
             </section>
           </div>
@@ -2039,19 +2039,18 @@ const App: React.FC = () => {
               </div>
 
               <button onClick={() => {
-                localStorage.setItem(STORAGE_KEY_SEATS, String(seatQuantity));
-                setSeatCount(seatQuantity);
-                sessionStorage.setItem('lcp_pending_activation', '1');
-                window.open(buildCheckoutUrl(paymentCycle, seatQuantity, email || userProfile.email || '', accountId), '_blank');
-                navigateTo('payment');
+                if (isLoggedIn) {
+                  localStorage.setItem(STORAGE_KEY_SEATS, String(seatQuantity));
+                  setSeatCount(seatQuantity);
+                  sessionStorage.setItem('lcp_pending_activation', '1');
+                  window.open(buildCheckoutUrl(paymentCycle, seatQuantity, email || userProfile.email || '', accountId), '_blank');
+                  navigateTo('payment');
+                } else {
+                  navigateTo('login');
+                }
               }} className="w-full py-4 bg-pear-600 text-white font-black rounded-2xl shadow-xl hover:scale-[1.02] active:scale-95 transition-all text-[10px] uppercase tracking-widest">
-                {seatQuantity > 1 ? `Get ${seatQuantity} Seats Now` : 'Get Started Now'}
+                Start Free — First {TRIAL_DAYS} Days On Us
               </button>
-              {!isLoggedIn && (
-                <button onClick={() => navigateTo('login')} className="w-full mt-3 py-4 border-2 border-pear-600 text-pear-600 font-black rounded-2xl hover:bg-pear-600/5 active:scale-95 transition-all text-[10px] uppercase tracking-widest">
-                  Start Free — First {TRIAL_DAYS} Days On Us
-                </button>
-              )}
               {!isLoggedIn && (
                 <p className="text-center text-[10px] font-bold uppercase tracking-widest text-slate-400 mt-4">
                   Already have an account?{' '}
