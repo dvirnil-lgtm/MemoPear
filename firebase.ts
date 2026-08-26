@@ -21,7 +21,6 @@ import {
   doc,
   getDoc,
   setDoc,
-  runTransaction,
   onSnapshot,
   serverTimestamp,
   arrayUnion,
@@ -319,48 +318,28 @@ export async function regenerateInviteToken(ownerUid: string): Promise<string> {
   return token;
 }
 
-// Owner: remove a teammate, freeing their seat.
+// Owner: remove a teammate, freeing their seat. Runs in the `removeSeatMember`
+// Cloud Function (admin SDK) so seat mutations stay server-side and Firestore
+// rules can keep `subscriptions`/`seatClaims` locked down — see functions/index.js.
 export async function removeSeatMember(ownerUid: string, email: string): Promise<void> {
-  await runTransaction(db, async (tx) => {
-    const ref = doc(db, 'subscriptions', ownerUid);
-    const snap = await tx.get(ref);
-    if (!snap.exists()) return;
-    const data = snap.data() as SubscriptionDoc;
-    const removed = (data.members || []).find((m) => m.email === email);
-    const members = (data.members || []).filter((m) => m.email !== email);
-    tx.set(ref, { members, updatedAt: serverTimestamp() }, { merge: true });
-    if (removed?.uid) tx.delete(doc(db, 'seatClaims', removed.uid));
-  });
+  const fn = httpsCallable(getFunctions(app), 'removeSeatMember');
+  await fn({ email });
 }
 
 // Teammate: claim a seat on the owner's subscription via the invite link.
-// Enforces the seat cap atomically so the link dies once seats are exhausted.
-// Throws on permission/network errors so the caller can surface the reason.
+// Runs in the `claimSeat` Cloud Function, which enforces the seat cap atomically
+// and is the only writer of `seatClaims` (the doc that grants Pro access), so a
+// user can't self-grant access by writing their own claim. Throws on network
+// errors so the caller can surface the reason.
 export async function claimSeat(
   ownerUid: string,
   token: string,
   uid: string,
   email: string,
 ): Promise<ClaimResult> {
-  return await runTransaction<ClaimResult>(db, async (tx) => {
-    const ref = doc(db, 'subscriptions', ownerUid);
-    const snap = await tx.get(ref);
-    if (!snap.exists()) return 'invalid';
-    const data = snap.data() as SubscriptionDoc;
-    if (!token || data.inviteToken !== token) return 'invalid';
-    const members = data.members || [];
-    // Already on this team — just (re)issue the access pointer.
-    if (members.some((m) => m.uid === uid || m.email === email)) {
-      tx.set(doc(db, 'seatClaims', uid), { ownerUid, email, joinedAt: Date.now() }, { merge: true });
-      return 'already';
-    }
-    // Owner takes one seat; reject once every remaining seat is filled.
-    if (members.length + 1 >= data.seats) return 'full';
-    const member: SeatMember = { email, uid, joinedAt: Date.now() };
-    tx.set(ref, { members: [...members, member], updatedAt: serverTimestamp() }, { merge: true });
-    tx.set(doc(db, 'seatClaims', uid), { ownerUid, email, joinedAt: Date.now() });
-    return 'ok';
-  });
+  const fn = httpsCallable(getFunctions(app), 'claimSeat');
+  const res = await fn({ ownerUid, token, email });
+  return ((res.data as { result?: ClaimResult })?.result) || 'error';
 }
 
 // Returns the subscription a signed-in user belongs to as a teammate, if any.
