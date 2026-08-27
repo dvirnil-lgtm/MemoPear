@@ -89,6 +89,15 @@ else
   report "Firestore/Storage rule grants access with no real condition (allow … if true / unconditional)" "$DANGER_RULES"
 fi
 
+# 7. Client-side Gemini usage. This is a client-rendered app: any Gemini API key
+#    reachable from the browser bundle is world-readable and can be used to run up
+#    the project's AI Studio bill. Gemini must only ever be called server-side
+#    (functions/). Flag the SDK being instantiated, a key being injected into the
+#    bundle, or a VITE_GEMINI_* env var anywhere outside the functions dir.
+CLIENT_GEMINI="$(git grep -nIE 'new[[:space:]]+GoogleGenAI|VITE_GEMINI|process\.env\.API_KEY' -- "${FILES[@]}" 2>/dev/null \
+  | grep -vE '^functions/' | grep -v 'scan-ok')"
+report "Client-side Gemini key/SDK usage (must run server-side in functions/ only)" "$CLIENT_GEMINI"
+
 if [ "$FINDINGS" -eq 0 ]; then
   echo "✓ security-scan: clean — no exposed secrets or client data detected in tracked files."
   exit 0

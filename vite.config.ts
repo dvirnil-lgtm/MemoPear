@@ -9,7 +9,9 @@ export default defineConfig({
       '@': path.resolve(__dirname, '.'),
     },
   },
-  define: {
-    'process.env.API_KEY': JSON.stringify(process.env.VITE_GEMINI_API_KEY || ''),
-  },
+  // NOTE: the Gemini API key is deliberately NOT injected into the client bundle.
+  // A client-rendered app cannot hold a secret — anything defined here ships in
+  // world-readable JavaScript. All Gemini calls run server-side in Cloud
+  // Functions (functions/index.js) which hold the key as a secret; see
+  // services/geminiService.ts.
 });

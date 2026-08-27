@@ -5,6 +5,7 @@ const crypto = require('crypto');
 const { initializeApp } = require('firebase-admin/app');
 const { getFirestore, FieldValue, Timestamp } = require('firebase-admin/firestore');
 const Stripe = require('stripe');
+const { GoogleGenAI, Type } = require('@google/genai');
 
 initializeApp();
 const db = getFirestore();
@@ -648,4 +649,129 @@ exports.removeSeatMember = onCall(async (request) => {
     if (removed?.uid) tx.delete(db.collection('seatClaims').doc(removed.uid));
   });
   return { result: 'ok' };
+});
+
+// ---------------------------------------------------------------------------
+// Gemini AI — server-side proxy.
+//
+// The Gemini API key MUST NOT ship to the browser. This is a client-rendered
+// Vite app, so any key embedded in the bundle is world-readable and can be
+// lifted from the deployed JavaScript and used to run up the project's AI
+// Studio bill. To close that hole, every Gemini call the app makes runs here
+// instead, behind Firebase Auth, with the key held only as a Cloud Functions
+// secret (GEMINI_API_KEY). The client calls these via httpsCallable and never
+// sees the key.
+//
+// Set the secret once before deploying (and rotate the old, exposed key in AI
+// Studio / Google Cloud Console — removing it from the client does not undo the
+// fact that it was already public):
+//   firebase functions:secrets:set GEMINI_API_KEY
+// ---------------------------------------------------------------------------
+const geminiApiKey = defineSecret('GEMINI_API_KEY');
+
+const AI_MODEL = 'gemini-3-flash-preview';
+
+// Structured lead shape Gemini returns for badge/business-card extraction.
+const LEAD_RESPONSE_SCHEMA = {
+  type: Type.OBJECT,
+  properties: {
+    firstName: { type: Type.STRING },
+    lastName: { type: Type.STRING },
+    email: { type: Type.STRING },
+    phone: { type: Type.STRING },
+    linkedin: { type: Type.STRING },
+    company: { type: Type.STRING },
+    jobTitle: { type: Type.STRING },
+    website: { type: Type.STRING },
+  },
+};
+
+// True when a Gemini error is a quota/billing failure (429 / RESOURCE_EXHAUSTED),
+// so the callable can surface it to the client as a distinct code the UI maps to
+// its "AI quota exhausted — check Gemini API billing" message.
+function isGeminiQuotaError(err) {
+  const status = err && err.status;
+  if (status === 429 || status === 'RESOURCE_EXHAUSTED') return true;
+  const text = String((err && err.message) || '').toLowerCase();
+  return (
+    text.includes('resource_exhausted') ||
+    text.includes('quota') ||
+    text.includes('credits are depleted') ||
+    text.includes('billing') ||
+    text.includes('429')
+  );
+}
+
+function geminiClient() {
+  return new GoogleGenAI({ apiKey: geminiApiKey.value() });
+}
+
+// Parse raw QR-code / badge text (often a vCard) into structured lead fields.
+exports.aiParseScan = onCall({ secrets: [geminiApiKey] }, async (request) => {
+  if (!request.auth) throw new HttpsError('unauthenticated', 'Sign in required.');
+  const rawText = String(request.data?.rawText || '').slice(0, 4000);
+  if (!rawText.trim()) return {};
+  try {
+    const response = await geminiClient().models.generateContent({
+      model: AI_MODEL,
+      contents: `Extract lead information from the following raw QR code scan text: "${rawText}". If it looks like a vCard, parse it correctly.`,
+      config: { responseMimeType: 'application/json', responseSchema: LEAD_RESPONSE_SCHEMA },
+    });
+    return JSON.parse((response.text || '{}').trim());
+  } catch (err) {
+    console.error('[aiParseScan] error', err);
+    if (isGeminiQuotaError(err)) throw new HttpsError('resource-exhausted', 'AI quota exhausted.');
+    return {};
+  }
+});
+
+// Extract contact details from a business-card image (data URL / base64).
+exports.aiParseBusinessCard = onCall({ secrets: [geminiApiKey] }, async (request) => {
+  if (!request.auth) throw new HttpsError('unauthenticated', 'Sign in required.');
+  const image = String(request.data?.imageBase64 || '');
+  if (!image) return {};
+  try {
+    const mimeMatch = image.match(/^data:(image\/[a-zA-Z+]+);base64,/);
+    const mimeType = mimeMatch ? mimeMatch[1] : 'image/jpeg';
+    const base64Data = image.split(',')[1] || image;
+    const response = await geminiClient().models.generateContent({
+      model: AI_MODEL,
+      contents: {
+        parts: [
+          { inlineData: { mimeType, data: base64Data } },
+          { text: 'Act as a high-precision OCR and contact extraction engine. Extract all contact information from this business card image. Return ONLY a valid JSON object with these keys: firstName, lastName, email, phone, company, jobTitle, website, linkedin. If a field is not found, use an empty string. Ensure the JSON is valid.' },
+        ],
+      },
+      config: { responseMimeType: 'application/json', responseSchema: LEAD_RESPONSE_SCHEMA },
+    });
+    const text = (response.text || '{}').trim().replace(/^```json\n?/, '').replace(/\n?```$/, '');
+    return JSON.parse(text);
+  } catch (err) {
+    console.error('[aiParseBusinessCard] error', err);
+    if (isGeminiQuotaError(err)) throw new HttpsError('resource-exhausted', 'AI quota exhausted.');
+    return {};
+  }
+});
+
+// Draft a concise follow-up email for a captured lead. Returns { text }.
+exports.aiFollowUpEmail = onCall({ secrets: [geminiApiKey] }, async (request) => {
+  if (!request.auth) throw new HttpsError('unauthenticated', 'Sign in required.');
+  const lead = request.data?.lead || {};
+  const prompt = `Generate a professional, high-conversion follow-up email for a lead met at a conference.
+      Lead Name: ${String(lead.firstName || '')} ${String(lead.lastName || '')}
+      Company: ${String(lead.company || 'Unknown')}
+      Conference: ${String(lead.conferenceName || '')}
+      Tags: ${Array.isArray(lead.tags) && lead.tags.length ? lead.tags.join(', ') : 'None'}
+      Notes: ${String(lead.notes || '')}
+
+      The email should be concise, startup-style, and mention a specific follow-up action.
+      Return ONLY the email body text.`;
+  try {
+    const response = await geminiClient().models.generateContent({ model: AI_MODEL, contents: prompt });
+    return { text: response.text || '' };
+  } catch (err) {
+    console.error('[aiFollowUpEmail] error', err);
+    if (isGeminiQuotaError(err)) throw new HttpsError('resource-exhausted', 'AI quota exhausted.');
+    throw new HttpsError('internal', 'Email generation failed.');
+  }
 });

@@ -9,8 +9,28 @@ Smart field intelligence and lead capture platform. Capture, enrich, and manage 
 ```bash
 npm install
 cp .env.example .env.local
-# Edit .env.local and set your VITE_GEMINI_API_KEY
+# Fill in the VITE_FIREBASE_* values in .env.local.
+# The Gemini key is NOT a client variable — it is a server secret used only by
+# the Cloud Functions (see "Gemini AI runs server-side" below). Local AI calls
+# go through the Functions emulator, which reads GEMINI_API_KEY from functions/.env.
 npm run dev
+```
+
+## Gemini AI runs server-side
+
+MemoPear is a client-rendered app, so it **must not** ship the Gemini API key in
+the browser bundle — any key in client JavaScript is world-readable and can be
+used to run up the project's AI Studio bill. All Gemini calls therefore run in
+Cloud Functions (`functions/index.js`: `aiParseScan`, `aiParseBusinessCard`,
+`aiFollowUpEmail`), which hold the key as a secret. The client calls those
+functions and never sees the key.
+
+Set the secret once (and after rotating a previously-exposed key), then deploy
+the functions:
+
+```bash
+firebase functions:secrets:set GEMINI_API_KEY   # paste the key when prompted
+firebase deploy --only functions
 ```
 
 ## Deploy to Google Cloud Run
@@ -44,18 +64,16 @@ gcloud run deploy memopear \
   --source . \
   --region us-central1 \
   --allow-unauthenticated \
-  --port 8080 \
-  --set-env-vars="" \
-  --build-arg="VITE_GEMINI_API_KEY=your_api_key_here"
+  --port 8080
 ```
+
+The frontend bundle contains no Gemini key — the key lives only in the
+`GEMINI_API_KEY` Cloud Functions secret (see "Gemini AI runs server-side").
 
 **Option B: Using Cloud Build (CI/CD)**
 
 ```bash
-# Submit build with your API key
-gcloud builds submit \
-  --config=cloudbuild.yaml \
-  --substitutions=_GEMINI_API_KEY="your_api_key_here"
+gcloud builds submit --config=cloudbuild.yaml
 ```
 
 ### Step 3: Map your custom domain (GoDaddy)

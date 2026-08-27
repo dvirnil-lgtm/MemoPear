@@ -39,7 +39,7 @@ const firebaseConfig = {
   measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID,
 };
 
-const app = initializeApp(firebaseConfig);
+export const app = initializeApp(firebaseConfig);
 
 // Use initializeAuth with explicit sync persistence and resolver so there
 // is no lazy async initialisation between the click event and window.open().

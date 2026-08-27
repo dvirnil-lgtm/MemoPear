@@ -1,6 +1,17 @@
-
-import { GoogleGenAI, Type } from "@google/genai";
+import { getFunctions, httpsCallable } from "firebase/functions";
+import { app } from "../firebase";
 import { Lead, ScannedLeadData } from "../types";
+
+/**
+ * MemoPear is a client-rendered app, so the Gemini API key must never ship in
+ * the browser bundle — a key embedded there is world-readable and can be lifted
+ * from the deployed JavaScript to run up the project's AI Studio bill. Every
+ * Gemini call therefore runs in a Firebase Cloud Function (see functions/index.js:
+ * aiParseScan / aiParseBusinessCard / aiFollowUpEmail), which holds the key as a
+ * server-only secret. This module just invokes those callables; no key, and no
+ * @google/genai SDK, is loaded on the client.
+ */
+const functions = getFunctions(app);
 
 /**
  * User-facing message shown when the Gemini API rejects a request because the
@@ -17,11 +28,15 @@ export class QuotaError extends Error {
 }
 
 /**
- * Detects whether an error from the Gemini SDK is a quota/billing failure
- * (429 / RESOURCE_EXHAUSTED / depleted prepayment credits).
+ * Detects whether an error is a quota/billing failure. The server proxy raises a
+ * `resource-exhausted` HttpsError for Gemini 429s, which reaches the client as a
+ * FunctionsError with code `functions/resource-exhausted`; we also keep the
+ * substring checks for defensive coverage.
  */
 export const isQuotaError = (error: unknown): boolean => {
   if (!error) return false;
+  const code = (error as any)?.code;
+  if (code === "functions/resource-exhausted" || code === "resource-exhausted") return true;
   const status = (error as any)?.status;
   if (status === 429 || status === "RESOURCE_EXHAUSTED") return true;
   const text = (typeof error === "string" ? error : (error as any)?.message ?? "").toLowerCase();
@@ -35,34 +50,14 @@ export const isQuotaError = (error: unknown): boolean => {
 };
 
 /**
- * Uses Gemini to parse raw text (often vCard or unstructured) from a conference badge QR code.
+ * Parses raw text (often vCard or unstructured) from a conference badge QR code,
+ * server-side via the `aiParseScan` Cloud Function.
  */
 export const parseScannedData = async (rawText: string): Promise<ScannedLeadData> => {
-  // Creating a new GoogleGenAI instance right before making an API call
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   try {
-    const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
-      contents: `Extract lead information from the following raw QR code scan text: "${rawText}". If it looks like a vCard, parse it correctly.`,
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            firstName: { type: Type.STRING },
-            lastName: { type: Type.STRING },
-            email: { type: Type.STRING },
-            phone: { type: Type.STRING },
-            linkedin: { type: Type.STRING },
-            company: { type: Type.STRING },
-            jobTitle: { type: Type.STRING },
-            website: { type: Type.STRING },
-          },
-        },
-      },
-    });
-
-    return JSON.parse(response.text.trim());
+    const call = httpsCallable<{ rawText: string }, ScannedLeadData>(functions, "aiParseScan");
+    const res = await call({ rawText });
+    return (res.data as ScannedLeadData) || {};
   } catch (error) {
     console.error("Error parsing scanned data:", error);
     if (isQuotaError(error)) throw new QuotaError();
@@ -71,52 +66,14 @@ export const parseScannedData = async (rawText: string): Promise<ScannedLeadData
 };
 
 /**
- * Uses Gemini Vision to extract contact details from an image of a business card.
+ * Extracts contact details from a business-card image, server-side via the
+ * `aiParseBusinessCard` Cloud Function. Accepts a data URL or bare base64 string.
  */
 export const parseBusinessCard = async (base64Image: string): Promise<ScannedLeadData> => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   try {
-    const mimeTypeMatch = base64Image.match(/^data:(image\/[a-zA-Z+]+);base64,/);
-    const mimeType = mimeTypeMatch ? mimeTypeMatch[1] : 'image/jpeg';
-    const base64Data = base64Image.split(',')[1] || base64Image;
-
-    const imagePart = {
-      inlineData: {
-        mimeType: mimeType,
-        data: base64Data,
-      },
-    };
-
-    const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
-      contents: {
-        parts: [
-          imagePart,
-          { text: "Act as a high-precision OCR and contact extraction engine. Extract all contact information from this business card image. Return ONLY a valid JSON object with these keys: firstName, lastName, email, phone, company, jobTitle, website, linkedin. If a field is not found, use an empty string. Ensure the JSON is valid." }
-        ]
-      },
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            firstName: { type: Type.STRING },
-            lastName: { type: Type.STRING },
-            email: { type: Type.STRING },
-            phone: { type: Type.STRING },
-            linkedin: { type: Type.STRING },
-            company: { type: Type.STRING },
-            jobTitle: { type: Type.STRING },
-            website: { type: Type.STRING },
-          },
-        },
-      },
-    });
-
-    const text = response.text.trim();
-    // Remove potential markdown code blocks if the model ignored responseMimeType
-    const jsonStr = text.replace(/^```json\n?/, '').replace(/\n?```$/, '');
-    return JSON.parse(jsonStr);
+    const call = httpsCallable<{ imageBase64: string }, ScannedLeadData>(functions, "aiParseBusinessCard");
+    const res = await call({ imageBase64: base64Image });
+    return (res.data as ScannedLeadData) || {};
   } catch (error) {
     console.error("Error parsing business card:", error);
     if (isQuotaError(error)) throw new QuotaError();
@@ -125,33 +82,18 @@ export const parseBusinessCard = async (base64Image: string): Promise<ScannedLea
 };
 
 /**
- * Generates a professional summary and follow-up email draft for the agent.
+ * Generates a follow-up email draft for a lead, server-side via the
+ * `aiFollowUpEmail` Cloud Function. Throws QuotaError on a billing/quota failure
+ * so the caller can surface it distinctly.
  */
-export const generateLeadReport = async (lead: Lead): Promise<string> => {
-  // Creating a new GoogleGenAI instance right before making an API call
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+export const generateFollowUpEmail = async (lead: Lead): Promise<string> => {
   try {
-    const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
-      contents: `Create a professional lead summary and a follow-up email draft for this person met at a conference.
-      Lead Name: ${lead.firstName} ${lead.lastName}
-      Company: ${lead.company || 'Unknown'}
-      Email: ${lead.email || 'Not provided'}
-      Phone: ${lead.phone || 'Not provided'}
-      Preferred Contact Methods: ${lead.commMethods.join(', ')}
-      Tags: ${lead.tags?.length ? lead.tags.join(', ') : 'None'}
-      Notes from meeting: ${lead.notes}
-      
-      The output should be a concise summary followed by a polite follow-up email ready to be sent. Use the company name and contact details to personalize the draft.`,
-      config: {
-        temperature: 0.7,
-      }
-    });
-
-    return response.text || "Summary generation failed.";
+    const call = httpsCallable<{ lead: Lead }, { text: string }>(functions, "aiFollowUpEmail");
+    const res = await call({ lead });
+    return res.data?.text || "";
   } catch (error) {
-    console.error("Error generating lead report:", error);
-    if (isQuotaError(error)) return `AI summary unavailable — ${QUOTA_ERROR_MESSAGE}`;
-    return "Could not generate AI summary.";
+    console.error("Error generating follow-up email:", error);
+    if (isQuotaError(error)) throw new QuotaError();
+    throw error;
   }
 };

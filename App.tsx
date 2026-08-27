@@ -1,6 +1,5 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { GoogleGenAI } from "@google/genai";
 import { Lead, CommMethod, UserProfile, PaymentCycle, TeamMember } from './types';
 import { QRScanner } from './components/QRScanner';
 import { CommMethodToggle } from './components/CommMethodToggle';
@@ -10,7 +9,7 @@ import { BlogIndex, BlogPostView, getPostBySlug, SITE_URL } from './components/B
 import { PAGE_META, VIEW_URLS } from './content/pageMeta';
 import { buildBlogPostJsonLd, buildBlogIndexJsonLd } from './content/seo';
 import { useConferenceSearch, ConferenceResult } from './services/conferenceService';
-import { parseScannedData, parseBusinessCard, QuotaError, QUOTA_ERROR_MESSAGE, isQuotaError } from './services/geminiService';
+import { parseScannedData, parseBusinessCard, generateFollowUpEmail, QuotaError, QUOTA_ERROR_MESSAGE, isQuotaError } from './services/geminiService';
 import { signInWithGoogle, signInWithLinkedIn, signUpWithEmail, signInWithEmail, firebaseSignOut, auth, logLoginEvent, getUserPaidStatus, logCancellationRequest, exportLeadsToGoogleSheet, ensureSubscription, getSubscription, watchSubscription, regenerateInviteToken, removeSeatMember, claimSeat, getSeatClaim, getUserLeads, saveUserLeads, watchUserLeads, logConferenceName, buildHubspotAuthUrl, watchHubspotConnection, syncLeadsToHubspot, touchLastActive, SubscriptionDoc } from './firebase';
 import { trackLinkedInConversion, LINKEDIN_CONVERSIONS } from './services/linkedinTracking';
 import ConsentBanner, { openConsentPreferences } from './components/ConsentBanner';
@@ -1466,23 +1465,9 @@ const App: React.FC = () => {
   const generateEmailSuggestion = async (lead: Lead) => {
     setIsGeneratingEmail(true);
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-      const prompt = `Generate a professional, high-conversion follow-up email for a lead met at a conference.
-      Lead Name: ${lead.firstName} ${lead.lastName}
-      Company: ${lead.company || 'Unknown'}
-      Conference: ${lead.conferenceName}
-      Tags: ${lead.tags?.length ? lead.tags.join(', ') : 'None'}
-      Notes: ${lead.notes}
-      
-      The email should be concise, startup-style, and mention a specific follow-up action.
-      Return ONLY the email body text.`;
-
-      const response = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
-        contents: prompt,
-      });
-
-      const emailBody = response.text;
+      // Runs server-side (aiFollowUpEmail Cloud Function) so the Gemini key
+      // never ships to the browser.
+      const emailBody = await generateFollowUpEmail(lead);
       const updatedLead = { ...lead, aiSummary: emailBody };
       handleUpdateLead(updatedLead);
       setStatusMsg({ type: 'success', text: 'Email Protocol Generated.' });
