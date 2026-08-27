@@ -10,7 +10,7 @@ import { BlogIndex, BlogPostView, getPostBySlug, SITE_URL } from './components/B
 import { PAGE_META, VIEW_URLS } from './content/pageMeta';
 import { buildBlogPostJsonLd, buildBlogIndexJsonLd } from './content/seo';
 import { useConferenceSearch, ConferenceResult } from './services/conferenceService';
-import { parseScannedData, parseBusinessCard, generateLeadReport, QuotaError, QUOTA_ERROR_MESSAGE, isQuotaError } from './services/geminiService';
+import { parseScannedData, parseBusinessCard, QuotaError, QUOTA_ERROR_MESSAGE, isQuotaError } from './services/geminiService';
 import { signInWithGoogle, signInWithLinkedIn, signUpWithEmail, signInWithEmail, firebaseSignOut, auth, logLoginEvent, getUserPaidStatus, logCancellationRequest, exportLeadsToGoogleSheet, ensureSubscription, getSubscription, watchSubscription, regenerateInviteToken, removeSeatMember, claimSeat, getSeatClaim, getUserLeads, saveUserLeads, watchUserLeads, logConferenceName, buildHubspotAuthUrl, watchHubspotConnection, syncLeadsToHubspot, touchLastActive, SubscriptionDoc } from './firebase';
 import { trackLinkedInConversion, LINKEDIN_CONVERSIONS } from './services/linkedinTracking';
 import ConsentBanner, { openConsentPreferences } from './components/ConsentBanner';
@@ -1533,7 +1533,16 @@ const App: React.FC = () => {
     const newLead: Lead = {
       id: crypto.randomUUID(), firstName, lastName, email, phone, company, jobTitle, website, conferenceName, commMethods, contactValues, notes, tags: finalTags, timestamp: Date.now(),
     };
-    newLead.aiSummary = await generateLeadReport(newLead);
+    // NOTE: we intentionally do NOT generate an AI summary/email here. Firing a
+    // Gemini generateContent call on every single capture was the dominant —
+    // and mostly wasted — AI cost on the billing account: the summary is only
+    // ever shown when a lead is expanded, and the pipeline already has an
+    // on-demand "Email Suggestion" button (generateEmailSuggestion) that
+    // produces the same draft when the user actually wants it. Generating it
+    // lazily instead of eagerly removes one full model call per lead (users
+    // capture many leads per conference, most never opened) with no loss of
+    // functionality, and makes the capture itself instant instead of blocking
+    // on the model.
     const updated = [newLead, ...leads];
     persistLeads(updated);
     // Feed the conference name into the shared suggestions pool (names only) so
