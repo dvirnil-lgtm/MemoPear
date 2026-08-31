@@ -6,9 +6,19 @@ const { initializeApp } = require('firebase-admin/app');
 const { getFirestore, FieldValue, Timestamp } = require('firebase-admin/firestore');
 const Stripe = require('stripe');
 const { GoogleGenAI, Type } = require('@google/genai');
+const { createBlogSsrHandler } = require('./blogSsr');
 
 initializeApp();
 const db = getFirestore();
+
+// Server-side blog renderer for SEO. nginx proxies /blog, /blog/<slug> and
+// /sitemap.xml to this function so published Firestore posts are indexable by
+// search engines and non-JS crawlers instantly, with no rebuild. See
+// functions/blogSsr.js and nginx.conf.
+exports.blogSsr = onRequest(
+  { region: 'us-central1', memory: '256MiB', concurrency: 40, invoker: 'public' },
+  createBlogSsrHandler(db),
+);
 
 function trialEndedEmailHtml() {
   return `

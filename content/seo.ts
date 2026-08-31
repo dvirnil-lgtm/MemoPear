@@ -46,13 +46,13 @@ export const buildBlogPostJsonLd = (post: BlogPost): object => {
   return { '@context': 'https://schema.org', '@graph': graph };
 };
 
-export const buildBlogIndexJsonLd = (): object => ({
+export const buildBlogIndexJsonLd = (posts: BlogPost[] = BLOG_POSTS): object => ({
   '@context': 'https://schema.org',
   '@type': 'Blog',
   name: 'MemoPear Blog',
   description: PAGE_META.blog.description,
   url: `${SITE_URL}/blog`,
-  blogPost: BLOG_POSTS.map((p) => ({
+  blogPost: posts.map((p) => ({
     '@type': 'BlogPosting',
     headline: p.title,
     description: p.description,

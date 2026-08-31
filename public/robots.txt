@@ -6,5 +6,6 @@ Disallow: /pipeline
 Disallow: /profile
 Disallow: /team
 Disallow: /payment
+Disallow: /blog/admin
 
 Sitemap: https://memopear.com/sitemap.xml

@@ -5,12 +5,13 @@ import { QRScanner } from './components/QRScanner';
 import { CommMethodToggle } from './components/CommMethodToggle';
 import { PrivacyPolicy, TermsAndConditions, ContactUs, Company } from './components/LegalPages';
 import { Integrations } from './components/Integrations';
-import { BlogIndex, BlogPostView, getPostBySlug, SITE_URL } from './components/Blog';
+import { BlogIndex, BlogPostView, BLOG_POSTS, SITE_URL, type BlogPost } from './components/Blog';
+import { BlogAdmin } from './components/BlogAdmin';
 import { PAGE_META, VIEW_URLS } from './content/pageMeta';
 import { buildBlogPostJsonLd, buildBlogIndexJsonLd } from './content/seo';
 import { useConferenceSearch, ConferenceResult } from './services/conferenceService';
 import { parseScannedData, parseBusinessCard, generateFollowUpEmail, QuotaError, QUOTA_ERROR_MESSAGE, isQuotaError } from './services/geminiService';
-import { signInWithGoogle, signInWithLinkedIn, signUpWithEmail, signInWithEmail, firebaseSignOut, auth, logLoginEvent, getUserPaidStatus, logCancellationRequest, exportLeadsToGoogleSheet, ensureSubscription, getSubscription, watchSubscription, regenerateInviteToken, removeSeatMember, claimSeat, getSeatClaim, getUserLeads, saveUserLeads, watchUserLeads, logConferenceName, buildHubspotAuthUrl, watchHubspotConnection, syncLeadsToHubspot, touchLastActive, SubscriptionDoc } from './firebase';
+import { signInWithGoogle, signInWithLinkedIn, signUpWithEmail, signInWithEmail, firebaseSignOut, auth, logLoginEvent, getUserPaidStatus, logCancellationRequest, exportLeadsToGoogleSheet, ensureSubscription, getSubscription, watchSubscription, regenerateInviteToken, removeSeatMember, claimSeat, getSeatClaim, getUserLeads, saveUserLeads, watchUserLeads, logConferenceName, buildHubspotAuthUrl, watchHubspotConnection, syncLeadsToHubspot, touchLastActive, watchPublishedPosts, isBlogAdmin, SubscriptionDoc, type StoredBlogPost } from './firebase';
 import { trackLinkedInConversion, LINKEDIN_CONVERSIONS } from './services/linkedinTracking';
 import ConsentBanner, { openConsentPreferences } from './components/ConsentBanner';
 import AccessibilityMenu from './components/AccessibilityMenu';
@@ -381,7 +382,7 @@ const App: React.FC = () => {
   // Sign-up consent: the user must agree to the Terms and opt in to emails
   // before an account can be created (email/password or social).
   const [agreedToTerms, setAgreedToTerms] = useState(false);
-  type AppView = 'home' | 'login' | 'pricing' | 'form' | 'history' | 'payment' | 'profile' | 'privacy' | 'terms' | 'contact' | 'team' | 'company' | 'blog' | 'blogPost' | 'integrations';
+  type AppView = 'home' | 'login' | 'pricing' | 'form' | 'history' | 'payment' | 'profile' | 'privacy' | 'terms' | 'contact' | 'team' | 'company' | 'blog' | 'blogPost' | 'blogAdmin' | 'integrations';
   // Resolve a pathname to a view (and, for blog posts, the post slug). Blog
   // posts live at /blog/<slug>, so they need prefix matching rather than the
   // exact-path lookup used for every other page.
@@ -394,11 +395,20 @@ const App: React.FC = () => {
     };
     const clean = pathname.replace(/\/$/, '') || '/';
     if (clean === '/blog') return { view: 'blog', slug: '' };
+    if (clean === '/blog/admin') return { view: 'blogAdmin', slug: '' };
     if (clean.startsWith('/blog/')) return { view: 'blogPost', slug: clean.slice('/blog/'.length) };
     return { view: pathMap[clean] || 'home', slug: '' };
   };
   const [blogSlug, setBlogSlug] = useState<string>(() => resolveRoute(window.location.pathname).slug);
   const [view, setView] = useState<AppView>(() => resolveRoute(window.location.pathname).view);
+  // Live blog posts from Firestore (owner-managed via the CMS). Falls back to
+  // the built-in seed posts until the collection has been populated, so the
+  // blog is never empty on a fresh project.
+  const [livePosts, setLivePosts] = useState<StoredBlogPost[] | null>(null);
+  const [currentUserEmail, setCurrentUserEmail] = useState<string>('');
+  const blogPosts: BlogPost[] = (livePosts && livePosts.length > 0) ? livePosts : BLOG_POSTS;
+  const getLivePost = (slug: string): BlogPost | undefined =>
+    blogPosts.find((p) => p.slug === slug);
   const [seatCount, setSeatCount] = useState<number>(() => {
     const saved = localStorage.getItem(STORAGE_KEY_SEATS);
     return saved ? parseInt(saved, 10) : 1;
@@ -598,6 +608,7 @@ const App: React.FC = () => {
       if (stored) { try { setJoinIntent(JSON.parse(stored)); } catch { /* ignore */ } }
     }
     const off = auth.onAuthStateChanged((u) => {
+      setCurrentUserEmail(u?.email || '');
       if (u?.uid) {
         setAccountId(u.uid);
         localStorage.setItem(STORAGE_KEY_ACCOUNT, u.uid);
@@ -605,6 +616,10 @@ const App: React.FC = () => {
     });
     return () => off();
   }, []);
+
+  // Stream published blog posts so the public blog and its SEO metadata reflect
+  // whatever the owner has published from the CMS, with no rebuild required.
+  useEffect(() => watchPublishedPosts(setLivePosts), []);
 
   // Lift the pricing-page lock once Firestore confirms this account has access
   // (paid owner or covered team member), so a fresh device with empty local
@@ -1548,6 +1563,13 @@ const App: React.FC = () => {
     window.scrollTo(0, 0);
   };
 
+  const navigateToBlogAdmin = () => {
+    setBlogSlug('');
+    window.history.pushState({ view: 'blogAdmin', slug: '' }, '', '/blog/admin');
+    setView('blogAdmin');
+    window.scrollTo(0, 0);
+  };
+
   // Blog posts carry a slug, so they need their own navigation helper.
   const navigateToBlogPost = (slug: string) => {
     const url = `/blog/${slug}`;
@@ -1597,8 +1619,24 @@ const App: React.FC = () => {
     let description: string;
     let canonical = SITE_URL + (VIEW_URLS[view] || '/');
 
-    if (view === 'blogPost') {
-      const post = getPostBySlug(blogSlug);
+    // Keep app/admin views out of the index (belt-and-braces with robots.txt).
+    const setRobots = (noindex: boolean) => {
+      let el = document.head.querySelector('meta[name="robots"]') as HTMLMetaElement | null;
+      if (noindex) {
+        if (!el) { el = document.createElement('meta'); el.setAttribute('name', 'robots'); document.head.appendChild(el); }
+        el.setAttribute('content', 'noindex,nofollow');
+      } else if (el) {
+        el.remove();
+      }
+    };
+    setRobots(view === 'blogAdmin');
+
+    if (view === 'blogAdmin') {
+      title = 'Blog CMS | MemoPear';
+      description = 'Manage MemoPear blog posts.';
+      setJsonLd(null);
+    } else if (view === 'blogPost') {
+      const post = getLivePost(blogSlug);
       if (post) {
         title = `${post.title} | MemoPear Blog`;
         description = post.description;
@@ -1614,7 +1652,7 @@ const App: React.FC = () => {
       title = meta.title;
       description = meta.description;
       if (view === 'blog') {
-        setJsonLd(buildBlogIndexJsonLd());
+        setJsonLd(buildBlogIndexJsonLd(blogPosts));
       } else {
         setJsonLd(null);
       }
@@ -1629,7 +1667,7 @@ const App: React.FC = () => {
     setMeta('meta[name="twitter:title"]', 'content', title);
     setMeta('meta[name="twitter:description"]', 'content', description);
     setCanonical(canonical);
-  }, [view, blogSlug]);
+  }, [view, blogSlug, livePosts]);
 
   useEffect(() => {
     const handlePopState = (e: PopStateEvent) => {
@@ -2970,12 +3008,15 @@ const App: React.FC = () => {
         {view === 'integrations' && (
           <Integrations onBack={() => navigateTo('home')} />
         )}
-        {view === 'blog' && <BlogIndex onBack={() => navigateTo('home')} onOpenPost={navigateToBlogPost} onGetStarted={() => navigateTo('pricing')} />}
+        {view === 'blog' && <BlogIndex posts={blogPosts} onBack={() => navigateTo('home')} onOpenPost={navigateToBlogPost} onGetStarted={() => navigateTo('pricing')} onManage={isBlogAdmin(currentUserEmail) ? navigateToBlogAdmin : undefined} />}
         {view === 'blogPost' && (() => {
-          const post = getPostBySlug(blogSlug);
-          if (!post) return <BlogIndex onBack={() => navigateTo('home')} onOpenPost={navigateToBlogPost} onGetStarted={() => navigateTo('pricing')} />;
-          return <BlogPostView post={post} onBack={() => navigateTo('blog')} onOpenPost={navigateToBlogPost} onGetStarted={() => navigateTo('pricing')} />;
+          const post = getLivePost(blogSlug);
+          if (!post) return <BlogIndex posts={blogPosts} onBack={() => navigateTo('home')} onOpenPost={navigateToBlogPost} onGetStarted={() => navigateTo('pricing')} />;
+          return <BlogPostView post={post} posts={blogPosts} onBack={() => navigateTo('blog')} onOpenPost={navigateToBlogPost} onGetStarted={() => navigateTo('pricing')} />;
         })()}
+        {view === 'blogAdmin' && (
+          <BlogAdmin currentEmail={currentUserEmail} onBack={() => navigateTo('blog')} />
+        )}
       </main>
 
       {!['form', 'history', 'team'].includes(view) && (

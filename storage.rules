@@ -1,0 +1,23 @@
+rules_version = '2';
+// Firebase Storage rules for the blog CMS media.
+//
+// Blog images are public (they're embedded in published, world-readable posts),
+// but only owner accounts may upload or overwrite them. Keep this allowlist in
+// sync with BLOG_ADMIN_EMAILS in firebase.ts and firestore.rules.
+service firebase.storage {
+  match /b/{bucket}/o {
+    function isBlogAdmin() {
+      return request.auth != null
+        && request.auth.token.email_verified == true
+        && request.auth.token.email in ['dvir.n.il@gmail.com'];
+    }
+
+    match /blog/{allPaths=**} {
+      allow read: if true; // scan-ok: blog images are public by design
+      // Cap uploads at 10 MB and require an image content type.
+      allow write: if isBlogAdmin()
+        && request.resource.size < 10 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+    }
+  }
+}

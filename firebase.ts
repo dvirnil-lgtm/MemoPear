@@ -20,14 +20,21 @@ import {
   addDoc,
   doc,
   getDoc,
+  getDocs,
   setDoc,
+  deleteDoc,
   onSnapshot,
+  query,
+  where,
+  orderBy,
   serverTimestamp,
   arrayUnion,
   increment,
 } from 'firebase/firestore';
+import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { Lead } from './types';
+import type { BlogPost } from './components/Blog';
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -550,6 +557,129 @@ export async function syncLeadsToHubspot(leads: Lead[]): Promise<{ synced: numbe
   const fn = httpsCallable(getFunctions(app), 'syncLeadsToHubspot');
   const result = await fn({ leads });
   return result.data as { synced: number; skipped: number };
+}
+
+// ── Blog CMS ────────────────────────────────────────────────────────────────
+// Blog posts live in the `blogPosts` Firestore collection (one document per
+// post, keyed by slug) so the site owner can publish and edit articles from the
+// in-app CMS (components/BlogAdmin.tsx) without a code deploy. Published posts
+// are world-readable; only the owner accounts below may write — enforced both
+// here (UI gating) and, authoritatively, in firestore.rules. A Cloud Function
+// (functions/blogSsr.js) server-renders these same documents into fully
+// SEO-optimised HTML for crawlers.
+
+export const storage = getStorage(app);
+
+/**
+ * Accounts allowed to author blog posts. Kept in sync with the admin check in
+ * firestore.rules and storage.rules. This is UI gating only — the security
+ * rules are the real gate.
+ */
+export const BLOG_ADMIN_EMAILS = ['dvir.n.il@gmail.com'];
+
+export const isBlogAdmin = (email?: string | null): boolean =>
+  !!email && BLOG_ADMIN_EMAILS.includes(email.toLowerCase());
+
+export type BlogPostStatus = 'draft' | 'published';
+
+/** A blog post as stored in Firestore: the renderable BlogPost plus CMS metadata. */
+export interface StoredBlogPost extends BlogPost {
+  status: BlogPostStatus;
+  createdAt: number;
+  updatedAt: number;
+}
+
+const BLOG_COLLECTION = 'blogPosts';
+
+/** Streams every published post, newest first, for the public blog. */
+export function watchPublishedPosts(
+  cb: (posts: StoredBlogPost[]) => void,
+): () => void {
+  const q = query(
+    collection(db, BLOG_COLLECTION),
+    where('status', '==', 'published'),
+  );
+  return onSnapshot(
+    q,
+    (snap) => {
+      const posts = snap.docs
+        .map((d) => d.data() as StoredBlogPost)
+        .sort((a, b) => (a.date < b.date ? 1 : -1));
+      cb(posts);
+    },
+    (err) => {
+      console.warn('[MemoPear] published posts watch failed:', err);
+      cb([]);
+    },
+  );
+}
+
+/** Streams every post (drafts included) for the CMS admin view. */
+export function watchAllPosts(
+  cb: (posts: StoredBlogPost[]) => void,
+): () => void {
+  return onSnapshot(
+    collection(db, BLOG_COLLECTION),
+    (snap) => {
+      const posts = snap.docs
+        .map((d) => d.data() as StoredBlogPost)
+        .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+      cb(posts);
+    },
+    (err) => {
+      console.warn('[MemoPear] all posts watch failed:', err);
+      cb([]);
+    },
+  );
+}
+
+/** One-shot read of every published post (used where a live stream isn't needed). */
+export async function fetchPublishedPosts(): Promise<StoredBlogPost[]> {
+  const q = query(collection(db, BLOG_COLLECTION), where('status', '==', 'published'));
+  const snap = await getDocs(q);
+  return snap.docs
+    .map((d) => d.data() as StoredBlogPost)
+    .sort((a, b) => (a.date < b.date ? 1 : -1));
+}
+
+/** Create or overwrite a post. Keyed by slug; bumps updatedAt. */
+export async function savePost(
+  post: BlogPost & { status: BlogPostStatus },
+  isNew: boolean,
+): Promise<void> {
+  const now = Date.now();
+  const ref = doc(db, BLOG_COLLECTION, post.slug);
+  const payload: StoredBlogPost = {
+    ...post,
+    updatedAt: now,
+    createdAt: isNew ? now : ((await getDoc(ref)).data()?.createdAt ?? now),
+  };
+  // Firestore rejects `undefined`; strip the optional hero image when unset.
+  if (payload.heroImageUrl === undefined) delete (payload as any).heroImageUrl;
+  await setDoc(ref, payload);
+}
+
+export async function deletePost(slug: string): Promise<void> {
+  await deleteDoc(doc(db, BLOG_COLLECTION, slug));
+}
+
+/** True when a slug is already taken (so the editor can warn before saving). */
+export async function slugExists(slug: string): Promise<boolean> {
+  const snap = await getDoc(doc(db, BLOG_COLLECTION, slug));
+  return snap.exists();
+}
+
+/**
+ * Uploads an image (hero or inline) for a post to Firebase Storage and returns
+ * its public download URL. Files are namespaced by slug so a post's media stays
+ * grouped. Only owner accounts may write (enforced in storage.rules).
+ */
+export async function uploadBlogImage(file: File, slug: string): Promise<string> {
+  const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+  const path = `blog/${slug || 'unfiled'}/${Date.now()}-${safeName}`;
+  const ref = storageRef(storage, path);
+  await uploadBytes(ref, file, { contentType: file.type, cacheControl: 'public,max-age=31536000,immutable' });
+  return getDownloadURL(ref);
 }
 
 export async function logCancellationRequest(details: {
