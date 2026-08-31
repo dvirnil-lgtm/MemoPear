@@ -7,11 +7,16 @@
 # the blog for SEO (functions/blogSsr.js), e.g.
 #   https://us-central1-my-new-memopear.cloudfunctions.net
 #
-# IMPORTANT — self-healing design: the blog routes below try the SSR function
-# first, but fall back to the statically prerendered blog (built into the image)
-# if the function returns any error or isn't deployed yet. That means shipping
-# the frontend WITHOUT the function never breaks the blog — it just serves the
-# static version until the function is live, then upgrades automatically.
+# ROBUSTNESS — two deliberate choices so a deploy can never break the site:
+#  1. The SSR upstream is referenced through a *variable* ($blog_ssr) with a
+#     runtime `resolver`. nginx therefore does NOT resolve the Cloud Function
+#     host at startup, so a DNS hiccup at boot can't stop nginx from starting
+#     (a literal proxy_pass host would — and that keeps the whole new revision
+#     from going live). Resolution happens per-request instead.
+#  2. Every blog route falls back to the statically prerendered blog (built into
+#     the image) on ANY upstream problem — function not deployed, DNS failure,
+#     timeout, error. So the blog works with or without the SSR function, and
+#     the SEO upgrade activates automatically once the function is live.
 
 # Legacy domain: permanently redirect every go.memopear.com request to the
 # canonical memopear.com origin, preserving the full path and query string.
@@ -26,6 +31,10 @@ server {
     server_name _;
     root /usr/share/nginx/html;
     index index.html;
+
+    # Public DNS for resolving the SSR Cloud Function host at request time.
+    resolver 8.8.8.8 1.1.1.1 valid=300s ipv6=off;
+    resolver_timeout 3s;
 
     # Cloud Run terminates TLS and proxies plain HTTP to this container on 8080,
     # so nginx's own scheme/port are never what the client connected on. Relative
@@ -42,13 +51,13 @@ server {
         try_files /index.html =404;
     }
 
-    # The blog index, individual posts, and the live sitemap are rendered by the
-    # SSR Cloud Function so search engines and non-JS crawlers get full HTML.
-    # On any upstream error (incl. the function not being deployed yet) nginx
-    # falls back to the static prerendered files via the @blog_static /
-    # @sitemap_static named locations.
+    # Blog index, individual posts, and the live sitemap are rendered by the SSR
+    # Cloud Function so search engines and non-JS crawlers get full HTML. The
+    # function reads the real path from the X-Original-Path header (not the proxied
+    # URL), and on any upstream error nginx serves the static prerendered files.
     location = /blog {
-        proxy_pass ${BLOG_SSR_ORIGIN}/blogSsr/blog;
+        set $blog_ssr "${BLOG_SSR_ORIGIN}";
+        proxy_pass $blog_ssr/blogSsr/blog;
         proxy_ssl_server_name on;
         proxy_set_header X-Original-Path $request_uri;
         proxy_connect_timeout 3s;
@@ -57,7 +66,8 @@ server {
         error_page 404 500 502 503 504 = @blog_static;
     }
     location /blog/ {
-        proxy_pass ${BLOG_SSR_ORIGIN}/blogSsr/blog/;
+        set $blog_ssr "${BLOG_SSR_ORIGIN}";
+        proxy_pass $blog_ssr/blogSsr/blog/;
         proxy_ssl_server_name on;
         proxy_set_header X-Original-Path $request_uri;
         proxy_connect_timeout 3s;
@@ -66,7 +76,8 @@ server {
         error_page 404 500 502 503 504 = @blog_static;
     }
     location = /sitemap.xml {
-        proxy_pass ${BLOG_SSR_ORIGIN}/blogSsr/sitemap.xml;
+        set $blog_ssr "${BLOG_SSR_ORIGIN}";
+        proxy_pass $blog_ssr/blogSsr/sitemap.xml;
         proxy_ssl_server_name on;
         proxy_set_header X-Original-Path $request_uri;
         proxy_connect_timeout 3s;
