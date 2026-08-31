@@ -9,7 +9,7 @@ service firebase.storage {
     function isBlogAdmin() {
       return request.auth != null
         && request.auth.token.email_verified == true
-        && request.auth.token.email in ['dvir.n.il@gmail.com', 'kleingil777@gmail.com'];
+        && request.auth.token.email in ['dvir.n.il@gmail.com'];
     }
 
     match /blog/{allPaths=**} {

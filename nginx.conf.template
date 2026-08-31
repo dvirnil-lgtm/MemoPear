@@ -6,8 +6,12 @@
 # BLOG_SSR_ORIGIN is the scheme+host of the Cloud Function that server-renders
 # the blog for SEO (functions/blogSsr.js), e.g.
 #   https://us-central1-my-new-memopear.cloudfunctions.net
-# The proxied paths append the function name (/blogSsr) so the standard
-# Firebase Functions URL routes correctly.
+#
+# IMPORTANT — self-healing design: the blog routes below try the SSR function
+# first, but fall back to the statically prerendered blog (built into the image)
+# if the function returns any error or isn't deployed yet. That means shipping
+# the frontend WITHOUT the function never breaks the blog — it just serves the
+# static version until the function is live, then upgrades automatically.
 
 # Legacy domain: permanently redirect every go.memopear.com request to the
 # canonical memopear.com origin, preserving the full path and query string.
@@ -28,7 +32,7 @@ server {
     # redirects let the browser resolve directory redirects against the real origin.
     absolute_redirect off;
 
-    # --- Blog SEO: server-render published Firestore posts ---------------------
+    # --- Blog SEO: server-render published Firestore posts --------------------
     # The blog CMS (/blog/admin) is an authenticated SPA view — never proxy it to
     # the SSR function; serve the static app shell so it hydrates client-side.
     location = /blog/admin {
@@ -40,24 +44,45 @@ server {
 
     # The blog index, individual posts, and the live sitemap are rendered by the
     # SSR Cloud Function so search engines and non-JS crawlers get full HTML.
+    # On any upstream error (incl. the function not being deployed yet) nginx
+    # falls back to the static prerendered files via the @blog_static /
+    # @sitemap_static named locations.
     location = /blog {
         proxy_pass ${BLOG_SSR_ORIGIN}/blogSsr/blog;
         proxy_ssl_server_name on;
         proxy_set_header X-Original-Path $request_uri;
-        proxy_set_header X-Forwarded-Host $host;
-        proxy_set_header X-Forwarded-Proto https;
+        proxy_connect_timeout 3s;
+        proxy_read_timeout 10s;
+        proxy_intercept_errors on;
+        error_page 404 500 502 503 504 = @blog_static;
     }
     location /blog/ {
         proxy_pass ${BLOG_SSR_ORIGIN}/blogSsr/blog/;
         proxy_ssl_server_name on;
         proxy_set_header X-Original-Path $request_uri;
-        proxy_set_header X-Forwarded-Host $host;
-        proxy_set_header X-Forwarded-Proto https;
+        proxy_connect_timeout 3s;
+        proxy_read_timeout 10s;
+        proxy_intercept_errors on;
+        error_page 404 500 502 503 504 = @blog_static;
     }
     location = /sitemap.xml {
         proxy_pass ${BLOG_SSR_ORIGIN}/blogSsr/sitemap.xml;
         proxy_ssl_server_name on;
         proxy_set_header X-Original-Path $request_uri;
+        proxy_connect_timeout 3s;
+        proxy_read_timeout 10s;
+        proxy_intercept_errors on;
+        error_page 404 500 502 503 504 = @sitemap_static;
+    }
+
+    # Static fallbacks (the prerendered blog built into the image). For a brand
+    # new post that isn't in the static build, this resolves to /index.html and
+    # the SPA renders it client-side from Firestore.
+    location @blog_static {
+        try_files $uri $uri/ /index.html;
+    }
+    location @sitemap_static {
+        try_files /sitemap.xml =404;
     }
 
     location / {

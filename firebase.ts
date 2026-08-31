@@ -575,7 +575,7 @@ export const storage = getStorage(app);
  * firestore.rules and storage.rules. This is UI gating only — the security
  * rules are the real gate.
  */
-export const BLOG_ADMIN_EMAILS = ['dvir.n.il@gmail.com', 'kleingil777@gmail.com'];
+export const BLOG_ADMIN_EMAILS = ['dvir.n.il@gmail.com'];
 
 export const isBlogAdmin = (email?: string | null): boolean =>
   !!email && BLOG_ADMIN_EMAILS.includes(email.toLowerCase());
