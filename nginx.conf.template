@@ -1,0 +1,76 @@
+# nginx config template. The nginx:alpine entrypoint runs envsubst over this
+# file at container start (only ${BLOG_SSR_ORIGIN} is substituted; see the
+# Dockerfile's NGINX_ENVSUBST_FILTER) and writes the result to
+# /etc/nginx/conf.d/default.conf.
+#
+# BLOG_SSR_ORIGIN is the scheme+host of the Cloud Function that server-renders
+# the blog for SEO (functions/blogSsr.js), e.g.
+#   https://us-central1-my-new-memopear.cloudfunctions.net
+# The proxied paths append the function name (/blogSsr) so the standard
+# Firebase Functions URL routes correctly.
+
+# Legacy domain: permanently redirect every go.memopear.com request to the
+# canonical memopear.com origin, preserving the full path and query string.
+server {
+    listen 8080;
+    server_name go.memopear.com;
+    return 301 https://memopear.com$request_uri;
+}
+
+server {
+    listen 8080 default_server;
+    server_name _;
+    root /usr/share/nginx/html;
+    index index.html;
+
+    # Cloud Run terminates TLS and proxies plain HTTP to this container on 8080,
+    # so nginx's own scheme/port are never what the client connected on. Relative
+    # redirects let the browser resolve directory redirects against the real origin.
+    absolute_redirect off;
+
+    # --- Blog SEO: server-render published Firestore posts ---------------------
+    # The blog CMS (/blog/admin) is an authenticated SPA view — never proxy it to
+    # the SSR function; serve the static app shell so it hydrates client-side.
+    location = /blog/admin {
+        try_files /index.html =404;
+    }
+    location = /blog/admin/ {
+        try_files /index.html =404;
+    }
+
+    # The blog index, individual posts, and the live sitemap are rendered by the
+    # SSR Cloud Function so search engines and non-JS crawlers get full HTML.
+    location = /blog {
+        proxy_pass ${BLOG_SSR_ORIGIN}/blogSsr/blog;
+        proxy_ssl_server_name on;
+        proxy_set_header X-Original-Path $request_uri;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_set_header X-Forwarded-Proto https;
+    }
+    location /blog/ {
+        proxy_pass ${BLOG_SSR_ORIGIN}/blogSsr/blog/;
+        proxy_ssl_server_name on;
+        proxy_set_header X-Original-Path $request_uri;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_set_header X-Forwarded-Proto https;
+    }
+    location = /sitemap.xml {
+        proxy_pass ${BLOG_SSR_ORIGIN}/blogSsr/sitemap.xml;
+        proxy_ssl_server_name on;
+        proxy_set_header X-Original-Path $request_uri;
+    }
+
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+
+    location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$ {
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+    }
+
+    gzip on;
+    gzip_vary on;
+    gzip_min_length 256;
+    gzip_types text/plain text/css application/json application/javascript text/xml application/xml application/xml+rss text/javascript;
+}

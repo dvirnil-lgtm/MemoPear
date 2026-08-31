@@ -290,7 +290,7 @@ This needs **no backend** — it works for everyone with no SendGrid/extension s
 ├── tailwind.config.js      # Tailwind CSS config
 ├── postcss.config.js       # PostCSS config
 ├── Dockerfile              # Multi-stage Docker build
-├── nginx.conf              # Nginx config for serving the SPA
+├── nginx.conf.template     # Nginx config (envsubst) for serving the SPA + blog SEO proxy
 ├── cloudbuild.yaml         # Google Cloud Build config
 └── .env.example            # Environment variable template
 ```

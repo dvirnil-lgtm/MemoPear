@@ -22,6 +22,7 @@ export type BlogBlock =
   | { type: 'quote'; text: string }
   | { type: 'banner' }
   | { type: 'link'; label: string; url: string }
+  | { type: 'image'; url: string; alt?: string; caption?: string }
   | { type: 'faq'; items: { q: string; a: string }[] };
 
 export interface BlogPost {
@@ -1191,6 +1192,22 @@ const Block: React.FC<{ block: BlogBlock; id?: string }> = ({ block, id }) => {
       );
     case 'banner':
       return <SubscribeBanner />;
+    case 'image':
+      return (
+        <figure className="not-prose my-8">
+          <img
+            src={block.url}
+            alt={block.alt || ''}
+            loading="lazy"
+            className="w-full rounded-[1.5rem] border border-slate-200 dark:border-white/10 shadow-lg"
+          />
+          {block.caption && (
+            <figcaption className="mt-3 text-center text-xs font-medium text-slate-400">
+              {block.caption}
+            </figcaption>
+          )}
+        </figure>
+      );
     case 'link':
       return (
         <p className="not-prose">
@@ -1241,8 +1258,12 @@ export const BlogIndex: React.FC<{
   onBack: () => void;
   onOpenPost: (slug: string) => void;
   onGetStarted: () => void;
-}> = ({ onBack, onOpenPost, onGetStarted }) => {
-  const posts = sortedPosts();
+  /** Live posts (from Firestore). Falls back to the built-in seed posts. */
+  posts?: BlogPost[];
+  /** When provided (owner only), shows a link to the blog CMS. */
+  onManage?: () => void;
+}> = ({ onBack, onOpenPost, onGetStarted, posts: postsProp, onManage }) => {
+  const posts = (postsProp ? [...postsProp].sort((a, b) => (a.date < b.date ? 1 : -1)) : sortedPosts());
   return (
     <BlogCtaContext.Provider value={onGetStarted}>
     <div className="p-8 max-w-4xl mx-auto animate-in fade-in duration-500 pb-32">
@@ -1256,7 +1277,17 @@ export const BlogIndex: React.FC<{
         Go Back
       </button>
 
-      <p className="text-sm font-bold text-slate-400 mb-4 uppercase tracking-widest">The MemoPear Blog</p>
+      <div className="flex items-center justify-between gap-4 mb-4">
+        <p className="text-sm font-bold text-slate-400 uppercase tracking-widest">The MemoPear Blog</p>
+        {onManage && (
+          <button
+            onClick={onManage}
+            className="text-[10px] font-black uppercase tracking-widest px-3 py-1.5 rounded-full border border-pear-500/40 text-pear-600 dark:text-pear-400 hover:bg-pear-600/10 transition-colors"
+          >
+            Manage posts
+          </button>
+        )}
+      </div>
       <h1 className="text-4xl md:text-5xl font-black mb-4 tracking-tighter text-pear-600 dark:text-pear-400">
         Field notes from the conference floor.
       </h1>
@@ -1321,8 +1352,13 @@ export const BlogPostView: React.FC<{
   onBack: () => void;
   onOpenPost: (slug: string) => void;
   onGetStarted: () => void;
-}> = ({ post, onBack, onOpenPost, onGetStarted }) => {
-  const related = sortedPosts()
+  /** All live posts, used to pick "keep reading" suggestions. */
+  posts?: BlogPost[];
+}> = ({ post, onBack, onOpenPost, onGetStarted, posts: postsProp }) => {
+  const allPosts = postsProp
+    ? [...postsProp].sort((a, b) => (a.date < b.date ? 1 : -1))
+    : sortedPosts();
+  const related = allPosts
     .filter((p) => p.slug !== post.slug)
     .slice(0, 2);
 

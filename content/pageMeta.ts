@@ -11,7 +11,7 @@ export const VIEW_URLS: Record<string, string> = {
   home: '/', login: '/login', pricing: '/pricing', form: '/gather',
   history: '/pipeline', payment: '/payment', profile: '/profile',
   privacy: '/privacy', terms: '/terms', contact: '/contact', team: '/team', company: '/company',
-  blog: '/blog', integrations: '/integrations',
+  blog: '/blog', blogAdmin: '/blog/admin', integrations: '/integrations',
 };
 
 export interface PageMeta {

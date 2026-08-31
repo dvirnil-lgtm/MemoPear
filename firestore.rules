@@ -1,6 +1,20 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    // --- Blog CMS ---
+    // Published posts are world-readable (the public blog + server-side SEO
+    // renderer). Drafts and all writes are restricted to owner accounts. Keep
+    // this allowlist in sync with BLOG_ADMIN_EMAILS in firebase.ts.
+    function isBlogAdmin() {
+      return request.auth != null
+        && request.auth.token.email_verified == true
+        && request.auth.token.email in ['dvir.n.il@gmail.com', 'kleingil777@gmail.com'];
+    }
+    match /blogPosts/{slug} {
+      allow read: if resource.data.status == 'published' || isBlogAdmin();
+      allow create, update, delete: if isBlogAdmin();
+    }
+
     match /loginLogs/{doc} {
       allow create: if request.auth != null;
       allow read, update, delete: if false;
