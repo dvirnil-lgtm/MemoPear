@@ -269,7 +269,7 @@ const PostEditor: React.FC<{
   }
 
   return (
-    <div className="max-w-3xl mx-auto pb-40">
+    <div className="max-w-3xl mx-auto pb-8">
       <div className="flex items-center justify-between mb-6">
         <h2 className="text-2xl font-black tracking-tight">{isNew ? 'New post' : 'Edit post'}</h2>
         <button className={btnGhost} onClick={onDone}>← All posts</button>
@@ -370,16 +370,16 @@ const PostEditor: React.FC<{
         </div>
       </div>
 
-      {/* Sticky action bar */}
-      <div className="fixed bottom-0 left-0 right-0 border-t border-slate-200 dark:border-white/10 bg-white/95 dark:bg-slate-900/95 backdrop-blur px-6 py-4 z-20">
-        <div className="max-w-3xl mx-auto flex flex-wrap items-center justify-between gap-3">
-          <button className={btnGhost} onClick={() => setShowPreview(true)}>Preview</button>
-          <div className="flex items-center gap-3">
-            <button className={btnGhost} disabled={saving} onClick={() => commit('draft')}>Save draft</button>
-            <button className={btnPrimary} disabled={saving} onClick={() => commit('published')}>
-              {saving ? 'Saving…' : draft.status === 'published' ? 'Update & keep live' : 'Publish'}
-            </button>
-          </div>
+      {/* Action bar — sticky (not fixed): the app's <main> has a transform/filter,
+          which would make a `fixed` element anchor to <main> and float mid-page.
+          `sticky bottom-4` pins it to the bottom of the scroll area correctly. */}
+      <div className="sticky bottom-4 z-20 mt-10 rounded-2xl border border-slate-200 dark:border-white/10 bg-white/95 dark:bg-slate-900/95 backdrop-blur px-5 py-3.5 shadow-xl flex flex-wrap items-center justify-between gap-3">
+        <button className={btnGhost} onClick={() => setShowPreview(true)}>Preview</button>
+        <div className="flex items-center gap-3">
+          <button className={btnGhost} disabled={saving} onClick={() => commit('draft')}>Save draft</button>
+          <button className={btnPrimary} disabled={saving} onClick={() => commit('published')}>
+            {saving ? 'Saving…' : draft.status === 'published' ? 'Update & keep live' : 'Publish'}
+          </button>
         </div>
       </div>
     </div>
