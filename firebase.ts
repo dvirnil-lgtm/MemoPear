@@ -15,6 +15,7 @@ import {
   User,
   signOut,
 } from 'firebase/auth';
+import { initializeAppCheck, ReCaptchaV3Provider } from 'firebase/app-check';
 import { Capacitor } from '@capacitor/core';
 import {
   getFirestore,
@@ -49,6 +50,26 @@ const firebaseConfig = {
 };
 
 export const app = initializeApp(firebaseConfig);
+
+// App Check attests that Firebase/Cloud Function requests come from our real
+// website or app, so the AI functions can reject anonymous abuse (e.g. someone
+// draining the Gemini budget). reCAPTCHA v3 covers both the website and the
+// Capacitor WebView app. Guarded so:
+//   - local dev / prerender (no key, or no browser) skips it and still runs;
+//   - enforcement is turned on later in the Firebase console once monitoring
+//     shows real traffic is verified — initialising here only makes the client
+//     start sending App Check tokens, it does not block anything on its own.
+const RECAPTCHA_SITE_KEY = import.meta.env.VITE_RECAPTCHA_SITE_KEY;
+if (RECAPTCHA_SITE_KEY && typeof window !== 'undefined') {
+  try {
+    initializeAppCheck(app, {
+      provider: new ReCaptchaV3Provider(RECAPTCHA_SITE_KEY),
+      isTokenAutoRefreshEnabled: true,
+    });
+  } catch (err) {
+    console.error('[MemoPear] App Check init failed:', err);
+  }
+}
 
 // Use initializeAuth with explicit sync persistence and resolver so there
 // is no lazy async initialisation between the click event and window.open().
