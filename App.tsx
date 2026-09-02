@@ -1209,7 +1209,10 @@ const App: React.FC = () => {
       } else if (code === 'auth/network-request-failed') {
         setSocialAuthError('Network error during sign-in. Check your connection and try again.');
       } else {
-        setSocialAuthError(`Sign-in failed: ${code || 'unknown error'}. See browser console for details.`);
+        // Native (Capacitor) Google sign-in surfaces the real reason in
+        // err.message rather than a Firebase auth/* code, so show that.
+        const detail = err?.message || code || 'unknown error';
+        setSocialAuthError(`Sign-in failed: ${detail}`);
       }
     }
   };
