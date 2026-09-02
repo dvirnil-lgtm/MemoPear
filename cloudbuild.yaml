@@ -22,6 +22,8 @@ steps:
       - 'VITE_GOOGLE_OAUTH_CLIENT_ID=${_GOOGLE_OAUTH_CLIENT_ID}'
       - '--build-arg'
       - 'VITE_HUBSPOT_CLIENT_ID=${_HUBSPOT_CLIENT_ID}'
+      - '--build-arg'
+      - 'VITE_RECAPTCHA_SITE_KEY=${_RECAPTCHA_SITE_KEY}'
       - '.'
 
   - name: 'gcr.io/cloud-builders/docker'
@@ -59,6 +61,10 @@ substitutions:
   _FIREBASE_MEASUREMENT_ID: ''
   _GOOGLE_OAUTH_CLIENT_ID: ''
   _HUBSPOT_CLIENT_ID: ''
+  # Firebase App Check reCAPTCHA v3 site key (public). Set the real value as a
+  # substitution on the Cloud Build trigger. If left empty, App Check simply
+  # isn't initialised on the website — nothing breaks.
+  _RECAPTCHA_SITE_KEY: ''
 
 options:
   substitution_option: ALLOW_LOOSE

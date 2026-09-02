@@ -6,6 +6,7 @@ import {
   GoogleAuthProvider,
   OAuthProvider,
   signInWithPopup,
+  signInWithCredential,
   signInAnonymously,
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
@@ -14,6 +15,8 @@ import {
   User,
   signOut,
 } from 'firebase/auth';
+import { initializeAppCheck, ReCaptchaV3Provider } from 'firebase/app-check';
+import { Capacitor } from '@capacitor/core';
 import {
   getFirestore,
   collection,
@@ -48,6 +51,26 @@ const firebaseConfig = {
 
 export const app = initializeApp(firebaseConfig);
 
+// App Check attests that Firebase/Cloud Function requests come from our real
+// website or app, so the AI functions can reject anonymous abuse (e.g. someone
+// draining the Gemini budget). reCAPTCHA v3 covers both the website and the
+// Capacitor WebView app. Guarded so:
+//   - local dev / prerender (no key, or no browser) skips it and still runs;
+//   - enforcement is turned on later in the Firebase console once monitoring
+//     shows real traffic is verified — initialising here only makes the client
+//     start sending App Check tokens, it does not block anything on its own.
+const RECAPTCHA_SITE_KEY = import.meta.env.VITE_RECAPTCHA_SITE_KEY;
+if (RECAPTCHA_SITE_KEY && typeof window !== 'undefined') {
+  try {
+    initializeAppCheck(app, {
+      provider: new ReCaptchaV3Provider(RECAPTCHA_SITE_KEY),
+      isTokenAutoRefreshEnabled: true,
+    });
+  } catch (err) {
+    console.error('[MemoPear] App Check init failed:', err);
+  }
+}
+
 // Use initializeAuth with explicit sync persistence and resolver so there
 // is no lazy async initialisation between the click event and window.open().
 export const auth = initializeAuth(app, {
@@ -63,7 +86,46 @@ linkedinProvider.addScope('openid');
 linkedinProvider.addScope('profile');
 linkedinProvider.addScope('email');
 
+// The Web OAuth 2.0 client id for this Firebase project. Native Google Sign-In
+// (Android/iOS via Credential Manager) needs it to request an ID token that
+// Firebase will accept. Falls back to the Sheets-export OAuth client id, which
+// lives in the same Google Cloud project.
+const GOOGLE_WEB_CLIENT_ID =
+  import.meta.env.VITE_GOOGLE_WEB_CLIENT_ID || import.meta.env.VITE_GOOGLE_OAUTH_CLIENT_ID;
+
+// Native Google Sign-In. Google forbids its OAuth screen inside embedded
+// WebViews, so on a device we must use the OS-level Google account picker
+// (Android Credential Manager) instead of a popup. The plugin returns a Google
+// ID token, which we exchange for a normal Firebase credential — so the rest of
+// the app (Firestore, Functions, etc.) keeps using the same `auth` user.
+let socialLoginReady = false;
+async function nativeGoogleSignIn(): Promise<UserCredential> {
+  const { SocialLogin } = await import('@capgo/capacitor-social-login');
+  if (!socialLoginReady) {
+    await SocialLogin.initialize({ google: { webClientId: GOOGLE_WEB_CLIENT_ID } });
+    socialLoginReady = true;
+  }
+  // No `scopes` here: requesting scopes triggers Google's authorization flow,
+  // which the plugin requires extra native MainActivity wiring for. We only
+  // need authentication — the returned ID token already carries the user's
+  // email/profile claims for Firebase, so plain sign-in is enough.
+  const res = await SocialLogin.login({
+    provider: 'google',
+    options: {},
+  });
+  const idToken = (res.result as { idToken?: string | null } | null)?.idToken;
+  if (!idToken) {
+    throw new Error('Google sign-in did not return an ID token.');
+  }
+  return signInWithCredential(auth, GoogleAuthProvider.credential(idToken));
+}
+
 export function signInWithGoogle(): Promise<UserCredential> {
+  // On a phone (Capacitor) use the native account picker; in a browser keep the
+  // existing popup flow the website relies on.
+  if (Capacitor.isNativePlatform()) {
+    return nativeGoogleSignIn();
+  }
   return signInWithPopup(auth, googleProvider, browserPopupRedirectResolver);
 }
 

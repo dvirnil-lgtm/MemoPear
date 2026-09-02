@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">MemoPear</string>
+    <string name="title_activity_main">MemoPear</string>
+    <string name="package_name">com.memopear.app</string>
+    <string name="custom_url_scheme">com.memopear.app</string>
+</resources>
