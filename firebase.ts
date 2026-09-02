@@ -84,9 +84,13 @@ async function nativeGoogleSignIn(): Promise<UserCredential> {
     await SocialLogin.initialize({ google: { webClientId: GOOGLE_WEB_CLIENT_ID } });
     socialLoginReady = true;
   }
+  // No `scopes` here: requesting scopes triggers Google's authorization flow,
+  // which the plugin requires extra native MainActivity wiring for. We only
+  // need authentication — the returned ID token already carries the user's
+  // email/profile claims for Firebase, so plain sign-in is enough.
   const res = await SocialLogin.login({
     provider: 'google',
-    options: { scopes: ['email', 'profile'] },
+    options: {},
   });
   const idToken = (res.result as { idToken?: string | null } | null)?.idToken;
   if (!idToken) {
