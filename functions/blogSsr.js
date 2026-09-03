@@ -226,6 +226,74 @@ function buildSitemap(posts) {
   return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls}\n</urlset>\n`;
 }
 
+// Static preamble/appendix for /llms.txt. Only the "## Blog" section is
+// generated from Firestore (see buildLlmsTxt); everything else is constant and
+// must be kept in sync with public/llms.txt, which serves as the fallback when
+// this function is unavailable.
+const LLMS_TXT_HEAD = `# MemoPear
+
+> MemoPear is an AI-powered field intelligence and lead capture platform built for conference and trade show professionals. It turns in-person encounters into structured pipeline data using Gemini AI.
+
+## What MemoPear does
+
+- Captures contact information from business cards via camera (AI OCR)
+- Transcribes spoken notes in real time using Google Gemini Live Audio
+- Generates AI-written personalized follow-up emails per contact
+- Exports leads to Google Sheets in one tap
+- Supports team seat plans with shared pipeline access
+
+## Public pages
+
+- Home: ${SITE_URL}/
+- Pricing: ${SITE_URL}/pricing
+- Blog: ${SITE_URL}/blog
+- Company: ${SITE_URL}/company
+- Contact: ${SITE_URL}/contact
+- Privacy Policy: ${SITE_URL}/privacy
+- Terms of Service: ${SITE_URL}/terms
+
+## Blog
+
+The MemoPear blog publishes tactical lead-capture playbooks for the biggest conferences in high tech. Each article covers a specific event and how field marketers, field sales reps, founders, and exhibitors can capture, organize, and follow up on leads at it.
+`;
+
+const LLMS_TXT_TAIL = `
+## App pages (require sign-in, not indexed)
+
+- Login / Sign up: ${SITE_URL}/login
+- Gather (lead capture): ${SITE_URL}/gather
+- Pipeline (saved leads): ${SITE_URL}/pipeline
+- Profile: ${SITE_URL}/profile
+- Team management: ${SITE_URL}/team
+
+## Technology
+
+- Frontend: React + TypeScript + Vite
+- AI: Google Gemini (vision, live audio, text generation)
+- Auth: Firebase Authentication
+- Payments: Stripe
+- Hosting: Google Cloud Run
+
+## Contact
+
+For questions about data use or API access, visit ${SITE_URL}/contact
+`;
+
+// llms.txt is plain text (Markdown), so collapse newlines that would otherwise
+// break a bullet across lines but keep the single-line-per-post shape.
+const oneLine = (s) => String(s == null ? '' : s).replace(/\s+/g, ' ').trim();
+
+function buildLlmsTxt(posts) {
+  const bullets = posts
+    .map((p) => {
+      const summary = oneLine(p.excerpt || p.description);
+      const base = `- ${oneLine(p.title)} (${p.date}): ${SITE_URL}/blog/${p.slug}`;
+      return summary ? `${base} — ${summary}` : base;
+    })
+    .join('\n');
+  return `${LLMS_TXT_HEAD}\n${bullets}\n${LLMS_TXT_TAIL}`;
+}
+
 /**
  * Returns an Express-style (req, res) handler bound to the given Firestore
  * instance. Exported so functions/index.js can wrap it in onRequest().
@@ -240,6 +308,14 @@ function createBlogSsrHandler(db) {
         res.set('Content-Type', 'application/xml; charset=utf-8');
         res.set('Cache-Control', 'public, max-age=300, s-maxage=600');
         return res.status(200).send(buildSitemap(posts));
+      }
+
+      // Dynamic llms.txt (blog section generated from Firestore).
+      if (path === '/llms.txt') {
+        const posts = await loadPublishedPosts(db);
+        res.set('Content-Type', 'text/plain; charset=utf-8');
+        res.set('Cache-Control', 'public, max-age=300, s-maxage=600');
+        return res.status(200).send(buildLlmsTxt(posts));
       }
 
       const shell = await getShell();

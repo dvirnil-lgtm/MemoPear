@@ -85,6 +85,18 @@ server {
         proxy_intercept_errors on;
         error_page 404 500 502 503 504 = @sitemap_static;
     }
+    # llms.txt: the blog section is generated from Firestore by the SSR function
+    # (like the sitemap), falling back to the static file built into the image.
+    location = /llms.txt {
+        set $blog_ssr "${BLOG_SSR_ORIGIN}";
+        proxy_pass $blog_ssr/blogSsr/llms.txt;
+        proxy_ssl_server_name on;
+        proxy_set_header X-Original-Path $request_uri;
+        proxy_connect_timeout 3s;
+        proxy_read_timeout 10s;
+        proxy_intercept_errors on;
+        error_page 404 500 502 503 504 = @llms_static;
+    }
 
     # Static fallbacks (the prerendered blog built into the image). For a brand
     # new post that isn't in the static build, this resolves to /index.html and
@@ -94,6 +106,10 @@ server {
     }
     location @sitemap_static {
         try_files /sitemap.xml =404;
+    }
+    location @llms_static {
+        default_type text/plain;
+        try_files /llms.txt =404;
     }
 
     location / {
