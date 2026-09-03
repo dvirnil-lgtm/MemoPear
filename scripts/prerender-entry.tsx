@@ -34,6 +34,7 @@ import { fileURLToPath } from 'node:url';
 import { BLOG_POSTS, SITE_URL, BlogIndex, BlogPostView } from '../components/Blog';
 import { Integrations } from '../components/Integrations';
 import { PrivacyPolicy, TermsAndConditions, ContactUs, Company } from '../components/LegalPages';
+import { HomeSeoContent, PricingSeoContent } from '../components/HomeSeoContent';
 import { PAGE_META } from '../content/pageMeta';
 import { buildBlogPostJsonLd, buildBlogIndexJsonLd } from '../content/seo';
 
@@ -116,11 +117,16 @@ async function main() {
       urlPath: '/',
       title: PAGE_META.home.title,
       description: PAGE_META.home.description,
+      // Home is a stateful view in <App> and can't be server-rendered directly,
+      // so we inject a faithful static copy for crawlers. createRoot() replaces
+      // it with the live app on mount — see components/HomeSeoContent.tsx.
+      bodyHtml: renderToStaticMarkup(<HomeSeoContent />),
     },
     {
       urlPath: '/pricing',
       title: PAGE_META.pricing.title,
       description: PAGE_META.pricing.description,
+      bodyHtml: renderToStaticMarkup(<PricingSeoContent />),
     },
     {
       urlPath: '/integrations',
