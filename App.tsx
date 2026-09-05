@@ -1765,9 +1765,13 @@ const App: React.FC = () => {
 
         {/* Mobile Header Actions */}
         <div className="md:hidden flex items-center gap-1">
-          {isLoggedIn && (
+          {isLoggedIn ? (
             <button onClick={handleLogout} className="p-2 text-slate-400 hover:text-rose-600 transition-colors" title="Logout">
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
+            </button>
+          ) : (
+            <button onClick={() => navigateTo('login')} className="px-4 py-2 bg-blue-600 text-white font-black rounded-full text-[10px] uppercase tracking-widest shadow-sm active:scale-95 transition-all">
+              Login
             </button>
           )}
           <button onClick={() => setIsMenuOpen(true)} className="p-2 text-slate-400">
@@ -1792,7 +1796,8 @@ const App: React.FC = () => {
                 </svg>
              </button>
           </div>
-          <div className="flex flex-col gap-8 flex-grow justify-center pb-20 items-center">
+          <div className="flex-grow overflow-y-auto -mx-6 px-6">
+            <div className="flex flex-col gap-8 min-h-full justify-center py-6 items-center">
             {navLinks.map(link => (
               <button 
                 key={link.name} 
@@ -1817,6 +1822,7 @@ const App: React.FC = () => {
             ) : (
               <button onClick={() => { navigateTo('login'); setIsMenuOpen(false); }} className="w-full max-w-xs py-6 bg-blue-600 text-white font-black rounded-[2rem] text-sm uppercase tracking-widest shadow-2xl mt-8 active:scale-95 transition-all">Login / Sign Up</button>
             )}
+            </div>
           </div>
         </div>
       )}
