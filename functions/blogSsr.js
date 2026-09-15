@@ -49,6 +49,13 @@ async function getShell() {
   const res = await fetch(`${SITE_URL}/index.html`, { headers: { 'x-ssr-shell': '1' } });
   if (!res.ok) throw new Error(`shell fetch failed: ${res.status}`);
   const html = await res.text();
+  // The SSR blog pages inherit the gtag.js analytics snippet from the app
+  // shell. If the shell ever lacks it, every server-rendered blog URL would be
+  // untagged in Google Analytics — surface that in the function logs rather
+  // than letting it slip by silently. Non-fatal: still serve the page.
+  if (!html.includes('googletagmanager.com/gtag/js?id=G-')) {
+    console.warn('[blogSsr] app shell is missing the Google Analytics tag; SSR blog pages will not be tagged.');
+  }
   _shellCache = { html, at: now };
   return html;
 }
