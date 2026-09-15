@@ -44,6 +44,14 @@ const distDir = path.join(root, 'dist');
 
 const noop = () => {};
 
+// Every public page's analytics coverage depends on the gtag.js snippet in
+// index.html surviving into each prerendered output. The snippet is defined
+// once (index.html) and inherited here via the template, so this marker is the
+// single thing that guarantees "all pages are tagged". If it ever goes missing
+// — the snippet removed from index.html, or a head-injection regex mangling it
+// — the build must fail loudly rather than quietly shipping untagged pages.
+const GA_TAG_MARKER = 'googletagmanager.com/gtag/js?id=G-';
+
 interface Route {
   urlPath: string;
   title: string;
@@ -111,6 +119,17 @@ function renderPage(template: string, route: Route): string {
 
 async function main() {
   const template = await readFile(path.join(distDir, 'index.html'), 'utf8');
+
+  // Guard: the template must carry the analytics tag, otherwise every page
+  // derived from it below would ship without measurement.
+  if (!template.includes(GA_TAG_MARKER)) {
+    throw new Error(
+      `Prerender aborted: dist/index.html is missing the Google Analytics tag ` +
+        `("${GA_TAG_MARKER}…"). Every prerendered page inherits its <head> from ` +
+        `this template, so all public pages would ship untagged. Restore the ` +
+        `gtag.js snippet in index.html.`
+    );
+  }
 
   const routes: Route[] = [
     {
@@ -181,6 +200,13 @@ async function main() {
 
   for (const route of routes) {
     const html = renderPage(template, route);
+    // Guard: the tag must survive head injection for this specific route.
+    if (!html.includes(GA_TAG_MARKER)) {
+      throw new Error(
+        `Prerender aborted: ${route.urlPath} lost the Google Analytics tag ` +
+          `("${GA_TAG_MARKER}…") during head injection.`
+      );
+    }
     const outPath =
       route.urlPath === '/'
         ? path.join(distDir, 'index.html')
