@@ -15,7 +15,7 @@ import {
   User,
   signOut,
 } from 'firebase/auth';
-import { initializeAppCheck, ReCaptchaV3Provider } from 'firebase/app-check';
+import { initializeAppCheck, ReCaptchaEnterpriseProvider } from 'firebase/app-check';
 import { Capacitor } from '@capacitor/core';
 import {
   getFirestore,
@@ -53,7 +53,10 @@ export const app = initializeApp(firebaseConfig);
 
 // App Check attests that Firebase/Cloud Function requests come from our real
 // website or app, so the AI functions can reject anonymous abuse (e.g. someone
-// draining the Gemini budget). reCAPTCHA v3 covers both the website and the
+// draining the Gemini budget). The site key is a reCAPTCHA Enterprise key, so we
+// use ReCaptchaEnterpriseProvider — the App Check web app must be registered with
+// the matching "reCAPTCHA Enterprise" provider in the Firebase console, otherwise
+// every token is rejected as "invalid". reCAPTCHA covers both the website and the
 // Capacitor WebView app. Guarded so:
 //   - local dev / prerender (no key, or no browser) skips it and still runs;
 //   - enforcement is turned on later in the Firebase console once monitoring
@@ -63,7 +66,7 @@ const RECAPTCHA_SITE_KEY = import.meta.env.VITE_RECAPTCHA_SITE_KEY;
 if (RECAPTCHA_SITE_KEY && typeof window !== 'undefined') {
   try {
     initializeAppCheck(app, {
-      provider: new ReCaptchaV3Provider(RECAPTCHA_SITE_KEY),
+      provider: new ReCaptchaEnterpriseProvider(RECAPTCHA_SITE_KEY),
       isTokenAutoRefreshEnabled: true,
     });
   } catch (err) {
