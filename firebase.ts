@@ -724,6 +724,25 @@ export async function savePost(
   await setDoc(ref, payload);
 }
 
+/**
+ * Moves an unpublished draft to a new slug (drafts' URLs can still change;
+ * published permalinks can't). Keeps the original createdAt.
+ */
+export async function renamePost(
+  oldSlug: string,
+  post: BlogPost & { status: BlogPostStatus },
+): Promise<void> {
+  const oldSnap = await getDoc(doc(db, BLOG_COLLECTION, oldSlug));
+  const payload: StoredBlogPost = {
+    ...post,
+    updatedAt: Date.now(),
+    createdAt: oldSnap.data()?.createdAt ?? Date.now(),
+  };
+  if (payload.heroImageUrl === undefined) delete (payload as any).heroImageUrl;
+  await setDoc(doc(db, BLOG_COLLECTION, post.slug), payload);
+  await deleteDoc(doc(db, BLOG_COLLECTION, oldSlug));
+}
+
 export async function deletePost(slug: string): Promise<void> {
   await deleteDoc(doc(db, BLOG_COLLECTION, slug));
 }
