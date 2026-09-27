@@ -4,7 +4,7 @@
 // what a browser sees and what a non-JS crawler sees.
 // ---------------------------------------------------------------------------
 
-import { BLOG_POSTS, SITE_URL, type BlogPost } from '../components/Blog';
+import { BLOG_POSTS, SITE_URL, stripInline, type BlogPost } from '../components/Blog';
 import { PAGE_META } from './pageMeta';
 
 export const buildBlogPostJsonLd = (post: BlogPost): object => {
@@ -37,8 +37,8 @@ export const buildBlogPostJsonLd = (post: BlogPost): object => {
       '@type': 'FAQPage',
       mainEntity: faqBlock.items.map((qa) => ({
         '@type': 'Question',
-        name: qa.q,
-        acceptedAnswer: { '@type': 'Answer', text: qa.a },
+        name: stripInline(qa.q),
+        acceptedAnswer: { '@type': 'Answer', text: stripInline(qa.a) },
       })),
     });
   }

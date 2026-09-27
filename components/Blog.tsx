@@ -18,6 +18,7 @@ export const SITE_URL = 'https://memopear.com';
 export type BlogBlock =
   | { type: 'p'; text: string }
   | { type: 'h2'; text: string }
+  | { type: 'h3'; text: string }
   | { type: 'ul'; items: string[] }
   | { type: 'quote'; text: string }
   | { type: 'banner' }
@@ -963,6 +964,29 @@ const slugify = (text: string): string =>
     .replace(/^-+|-+$/g, '')
     .slice(0, 60);
 
+// Inline formatting inside any text field: **bold** and *italic*.
+const INLINE_RE = /\*\*([^*]+?)\*\*|\*([^*\s][^*]*?)\*/g;
+
+/** Removes inline formatting markers (for ids, the TOC and structured data). */
+export const stripInline = (text: string): string =>
+  text.replace(INLINE_RE, (_m, b?: string, i?: string) => b ?? i ?? '');
+
+/** Renders **bold** / *italic* markers as <strong> / <em>. */
+export const InlineText: React.FC<{ text: string }> = ({ text }) => {
+  const out: React.ReactNode[] = [];
+  let last = 0;
+  for (const m of text.matchAll(INLINE_RE)) {
+    const at = m.index ?? 0;
+    if (at > last) out.push(text.slice(last, at));
+    out.push(m[1] !== undefined
+      ? <strong key={at} className="font-black text-slate-900 dark:text-white">{m[1]}</strong>
+      : <em key={at}>{m[2]}</em>);
+    last = at + m[0].length;
+  }
+  if (last < text.length) out.push(text.slice(last));
+  return <>{out}</>;
+};
+
 export interface TocItem {
   id: string;
   label: string;
@@ -973,7 +997,7 @@ export interface TocItem {
 export function getSections(post: BlogPost): TocItem[] {
   const items: TocItem[] = [];
   post.blocks.forEach((b) => {
-    if (b.type === 'h2') items.push({ id: slugify(b.text), label: b.text });
+    if (b.type === 'h2') items.push({ id: slugify(stripInline(b.text)), label: stripInline(b.text) });
     else if (b.type === 'faq') items.push({ id: 'faq', label: 'FAQ' });
   });
   return items;
@@ -1169,25 +1193,31 @@ export const SubscribeBanner: React.FC = () => {
 const Block: React.FC<{ block: BlogBlock; id?: string }> = ({ block, id }) => {
   switch (block.type) {
     case 'p':
-      return <p>{block.text}</p>;
+      return <p><InlineText text={block.text} /></p>;
     case 'h2':
       return (
         <h2 id={id} className="scroll-mt-24 text-2xl font-black text-slate-900 dark:text-white mt-12 mb-4 tracking-tight">
-          {block.text}
+          <InlineText text={block.text} />
         </h2>
+      );
+    case 'h3':
+      return (
+        <h3 className="text-lg md:text-xl font-black text-slate-900 dark:text-white mt-8 mb-2 tracking-tight">
+          <InlineText text={block.text} />
+        </h3>
       );
     case 'ul':
       return (
         <ul className="list-disc pl-6 space-y-3 marker:text-pear-500">
           {block.items.map((item, i) => (
-            <li key={i}>{item}</li>
+            <li key={i}><InlineText text={item} /></li>
           ))}
         </ul>
       );
     case 'quote':
       return (
         <blockquote className="not-prose my-10 border-l-4 border-pear-500 pl-6 py-2 text-xl md:text-2xl font-black tracking-tight text-slate-900 dark:text-white italic">
-          {block.text}
+          <InlineText text={block.text} />
         </blockquote>
       );
     case 'banner':
@@ -1203,7 +1233,7 @@ const Block: React.FC<{ block: BlogBlock; id?: string }> = ({ block, id }) => {
           />
           {block.caption && (
             <figcaption className="mt-3 text-center text-xs font-medium text-slate-400">
-              {block.caption}
+              <InlineText text={block.caption} />
             </figcaption>
           )}
         </figure>
@@ -1236,9 +1266,9 @@ const Block: React.FC<{ block: BlogBlock; id?: string }> = ({ block, id }) => {
                 key={i}
                 className="p-6 bg-slate-100 dark:bg-white/5 rounded-[1.5rem] border border-slate-200 dark:border-white/10"
               >
-                <h3 className="text-base font-black text-slate-900 dark:text-white mb-2">{item.q}</h3>
+                <h3 className="text-base font-black text-slate-900 dark:text-white mb-2"><InlineText text={item.q} /></h3>
                 <p className="text-sm text-slate-600 dark:text-slate-300 font-medium leading-relaxed">
-                  {item.a}
+                  <InlineText text={item.a} />
                 </p>
               </div>
             ))}
@@ -1397,7 +1427,7 @@ export const BlogPostView: React.FC<{
 
   // Per-block id: h2 headings and the FAQ section are the scroll anchors.
   const blockId = (block: BlogBlock): string | undefined => {
-    if (block.type === 'h2') return slugify(block.text);
+    if (block.type === 'h2') return slugify(stripInline(block.text));
     if (block.type === 'faq') return 'faq';
     return undefined;
   };
