@@ -69,6 +69,13 @@ const escapeHtml = (s) =>
 
 const escapeAttr = escapeHtml;
 
+// Inline formatting (mirrors components/Blog.tsx InlineText): **bold**, *italic*.
+const INLINE_RE = /\*\*([^*]+?)\*\*|\*([^*\s][^*]*?)\*/g;
+const stripInline = (s) => String(s == null ? '' : s).replace(INLINE_RE, (_m, b, i) => (b !== undefined ? b : i));
+const inlineHtml = (s) =>
+  escapeHtml(s).replace(INLINE_RE, (_m, b, i) =>
+    b !== undefined ? `<strong class="font-black text-slate-900 dark:text-white">${b}</strong>` : `<em>${i}</em>`);
+
 const escapeJsonLdForScript = (data) => JSON.stringify(data).replace(/</g, '\\u003c');
 
 const slugifyHeading = (text) =>
@@ -91,21 +98,23 @@ const formatDate = (iso) => {
 function renderBlock(block) {
   switch (block && block.type) {
     case 'p':
-      return `<p>${escapeHtml(block.text)}</p>`;
+      return `<p>${inlineHtml(block.text)}</p>`;
     case 'h2':
-      return `<h2 id="${escapeAttr(slugifyHeading(block.text))}" class="scroll-mt-24 text-2xl font-black text-slate-900 dark:text-white mt-12 mb-4 tracking-tight">${escapeHtml(block.text)}</h2>`;
+      return `<h2 id="${escapeAttr(slugifyHeading(stripInline(block.text)))}" class="scroll-mt-24 text-2xl font-black text-slate-900 dark:text-white mt-12 mb-4 tracking-tight">${inlineHtml(block.text)}</h2>`;
+    case 'h3':
+      return `<h3 class="text-lg md:text-xl font-black text-slate-900 dark:text-white mt-8 mb-2 tracking-tight">${inlineHtml(block.text)}</h3>`;
     case 'ul':
-      return `<ul class="list-disc pl-6 space-y-3 marker:text-pear-500">${(block.items || []).map((i) => `<li>${escapeHtml(i)}</li>`).join('')}</ul>`;
+      return `<ul class="list-disc pl-6 space-y-3 marker:text-pear-500">${(block.items || []).map((i) => `<li>${inlineHtml(i)}</li>`).join('')}</ul>`;
     case 'quote':
-      return `<blockquote class="not-prose my-10 border-l-4 border-pear-500 pl-6 py-2 text-xl md:text-2xl font-black tracking-tight text-slate-900 dark:text-white italic">${escapeHtml(block.text)}</blockquote>`;
+      return `<blockquote class="not-prose my-10 border-l-4 border-pear-500 pl-6 py-2 text-xl md:text-2xl font-black tracking-tight text-slate-900 dark:text-white italic">${inlineHtml(block.text)}</blockquote>`;
     case 'banner':
       return `<aside class="not-prose my-10 p-7 md:p-10 rounded-[2rem] bg-pear-600 text-white shadow-2xl"><p class="text-[10px] font-black uppercase tracking-[0.25em] text-pear-100 mb-3">MemoPear</p><h3 class="text-2xl md:text-3xl font-black tracking-tight mb-2">Never lose a conference lead again.</h3><p class="text-sm font-medium text-pear-50/90 max-w-xl mb-6">Scan badges, snap business cards, and capture notes in the moment — then follow up with AI.</p><a href="/pricing" class="inline-flex items-center gap-2 px-7 py-3.5 bg-white text-pear-700 font-black rounded-2xl text-[11px] uppercase tracking-widest">Get Started</a></aside>`;
     case 'link':
       return `<p class="not-prose"><a href="${escapeAttr(block.url)}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1.5 text-sm font-black text-pear-600 dark:text-pear-400 hover:underline underline-offset-2">${escapeHtml(block.label)}</a></p>`;
     case 'image':
-      return `<figure class="not-prose my-8"><img src="${escapeAttr(block.url)}" alt="${escapeAttr(block.alt || '')}" loading="lazy" class="w-full rounded-[1.5rem] border border-slate-200 dark:border-white/10 shadow-lg">${block.caption ? `<figcaption class="mt-3 text-center text-xs font-medium text-slate-400">${escapeHtml(block.caption)}</figcaption>` : ''}</figure>`;
+      return `<figure class="not-prose my-8"><img src="${escapeAttr(block.url)}" alt="${escapeAttr(block.alt || '')}" loading="lazy" class="w-full rounded-[1.5rem] border border-slate-200 dark:border-white/10 shadow-lg">${block.caption ? `<figcaption class="mt-3 text-center text-xs font-medium text-slate-400">${inlineHtml(block.caption)}</figcaption>` : ''}</figure>`;
     case 'faq':
-      return `<section id="faq" class="not-prose scroll-mt-24 mt-12"><h2 class="text-2xl font-black text-slate-900 dark:text-white mb-6 tracking-tight">Frequently Asked Questions</h2><div class="space-y-4">${(block.items || []).map((qa) => `<div class="p-6 bg-slate-100 dark:bg-white/5 rounded-[1.5rem] border border-slate-200 dark:border-white/10"><h3 class="text-base font-black text-slate-900 dark:text-white mb-2">${escapeHtml(qa.q)}</h3><p class="text-sm text-slate-600 dark:text-slate-300 font-medium leading-relaxed">${escapeHtml(qa.a)}</p></div>`).join('')}</div></section>`;
+      return `<section id="faq" class="not-prose scroll-mt-24 mt-12"><h2 class="text-2xl font-black text-slate-900 dark:text-white mb-6 tracking-tight">Frequently Asked Questions</h2><div class="space-y-4">${(block.items || []).map((qa) => `<div class="p-6 bg-slate-100 dark:bg-white/5 rounded-[1.5rem] border border-slate-200 dark:border-white/10"><h3 class="text-base font-black text-slate-900 dark:text-white mb-2">${inlineHtml(qa.q)}</h3><p class="text-sm text-slate-600 dark:text-slate-300 font-medium leading-relaxed">${inlineHtml(qa.a)}</p></div>`).join('')}</div></section>`;
     default:
       return '';
   }
@@ -150,7 +159,7 @@ function buildPostJsonLd(post) {
   if (faq) {
     graph.push({
       '@type': 'FAQPage',
-      mainEntity: faq.items.map((qa) => ({ '@type': 'Question', name: qa.q, acceptedAnswer: { '@type': 'Answer', text: qa.a } })),
+      mainEntity: faq.items.map((qa) => ({ '@type': 'Question', name: stripInline(qa.q), acceptedAnswer: { '@type': 'Answer', text: stripInline(qa.a) } })),
     });
   }
   return { '@context': 'https://schema.org', '@graph': graph };

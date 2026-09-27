@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   BLOG_POSTS,
   BlogPostView,
+  stripInline,
   type BlogBlock,
   type BlogPost,
 } from './Blog';
@@ -27,7 +28,8 @@ import {
 // middle, and every setting/action for the open post on the right.
 //
 // The body is written as plain text with a few lightweight shortcuts
-// (## heading, - bullet, > quote, ![alt](url), Q:/A: FAQ…) and converted to
+// (## / ### headings, **bold**, *italic*, - bullet, > quote, ![alt](url),
+// Q:/A: FAQ…) and converted to
 // the structured BlogBlock list on save, so the public renderer, JSON-LD and
 // the SSR function in functions/blogSsr.js keep working unchanged.
 //
@@ -80,6 +82,7 @@ export const blocksToText = (blocks: BlogBlock[]): string =>
       switch (b.type) {
         case 'p': return b.text;
         case 'h2': return `## ${b.text}`;
+        case 'h3': return `### ${b.text}`;
         case 'ul': return b.items.map((i) => `- ${i}`).join('\n');
         case 'quote': return `> ${b.text}`;
         case 'banner': return '[cta]';
@@ -111,7 +114,9 @@ export const textToBlocks = (text: string): BlogBlock[] => {
     const wasAfterBlank = afterBlank;
     afterBlank = false;
 
-    if ((m = line.match(/^#{2,3}\s+(.+)$/))) {
+    if ((m = line.match(/^###\s+(.+)$/))) {
+      flush(); blocks.push({ type: 'h3', text: m[1].trim() }); prev = 'other';
+    } else if ((m = line.match(/^##\s+(.+)$/))) {
       flush(); blocks.push({ type: 'h2', text: m[1].trim() }); prev = 'other';
     } else if ((m = line.match(/^[-*•]\s+(.+)$/))) {
       flush();
@@ -158,7 +163,7 @@ export const textToBlocks = (text: string): BlogBlock[] => {
   return blocks.filter((b) => {
     if (b.type === 'faq') b.items = b.items.filter((it) => it.q || it.a);
     if (b.type === 'faq') return b.items.length > 0;
-    if (b.type === 'p' || b.type === 'h2' || b.type === 'quote') return !!b.text.trim();
+    if (b.type === 'p' || b.type === 'h2' || b.type === 'h3' || b.type === 'quote') return !!b.text.trim();
     return true;
   });
 };
@@ -167,7 +172,7 @@ const plainText = (blocks: BlogBlock[]): string =>
   blocks
     .map((b) => {
       switch (b.type) {
-        case 'p': case 'h2': case 'quote': return b.text;
+        case 'p': case 'h2': case 'h3': case 'quote': return stripInline(b.text);
         case 'ul': return b.items.join(' ');
         case 'faq': return b.items.map((i) => `${i.q} ${i.a}`).join(' ');
         default: return '';
@@ -181,7 +186,7 @@ const autoReadTime = (blocks: BlogBlock[]): string => {
 };
 
 const firstParagraph = (blocks: BlogBlock[]): string =>
-  (blocks.find((b) => b.type === 'p') as { text: string } | undefined)?.text || '';
+  stripInline((blocks.find((b) => b.type === 'p') as { text: string } | undefined)?.text || '');
 
 // ── Styles ──────────────────────────────────────────────────────────────────
 
@@ -357,10 +362,32 @@ const PostEditor: React.FC<{
     const el = bodyRef.current;
     if (el && el.selectionStart !== el.selectionEnd) {
       const sel = body.slice(el.selectionStart, el.selectionEnd);
-      insert(sel.split('\n').map((l) => (l.trim() ? prefix + l.replace(/^(##\s+|[-*•]\s+|>\s?)/, '') : l)).join('\n'));
+      insert(sel.split('\n').map((l) => (l.trim() ? prefix + l.replace(/^(#{2,3}\s+|[-*•]\s+|>\s?)/, '') : l)).join('\n'));
     } else {
       insert(prefix + placeholder, prefix.length, placeholder.length);
     }
+  };
+
+  /** Wraps the selection in an inline marker (** bold, * italic), or inserts a placeholder. */
+  const wrap = (marker: string, placeholder: string) => {
+    const el = bodyRef.current;
+    if (!el) return;
+    const { selectionStart: start, selectionEnd: end } = el;
+    const sel = body.slice(start, end);
+    // Toggle off when the selection is already wrapped.
+    const before = body.slice(start - marker.length, start);
+    const after = body.slice(end, end + marker.length);
+    if (sel && before === marker && after === marker) {
+      setState((s) => ({ ...s, body: body.slice(0, start - marker.length) + sel + body.slice(end + marker.length) }));
+      requestAnimationFrame(() => { el.focus(); el.setSelectionRange(start - marker.length, end - marker.length); });
+      return;
+    }
+    const inner = sel || placeholder;
+    setState((s) => ({ ...s, body: body.slice(0, start) + marker + inner + marker + body.slice(end) }));
+    requestAnimationFrame(() => {
+      el.focus();
+      el.setSelectionRange(start + marker.length, start + marker.length + inner.length);
+    });
   };
 
   const uploadImages = async (files: File[]) => {
@@ -414,38 +441,47 @@ const PostEditor: React.FC<{
           ? `Saved ${new Date(lastSavedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
           : '';
 
+  // The publish bar sits in the page flow — once above and once below the
+  // writing area — rather than floating over the content.
+  const errorBox = error && (
+    <div className="my-4 rounded-xl bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/30 text-rose-700 dark:text-rose-300 text-sm px-4 py-3 font-medium flex items-start justify-between gap-3">
+      <span>{error}</span>
+      <button className="text-rose-400 hover:text-rose-600" onClick={() => setError('')} aria-label="Dismiss">✕</button>
+    </div>
+  );
+
+  const actionBar = (where: 'top' | 'bottom') => (
+    <div className={`flex flex-wrap items-center gap-3 rounded-2xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/5 px-4 py-3 ${where === 'top' ? 'mb-4' : 'mt-4'}`}>
+      {where === 'top' && (
+        <button onClick={onClose} className="lg:hidden text-[10px] font-black uppercase text-slate-400 tracking-widest hover:text-pear-600">← Posts</button>
+      )}
+      <div className="inline-flex rounded-xl border border-slate-300 dark:border-white/15 p-0.5">
+        {(['write', 'preview'] as const).map((m) => (
+          <button key={m} onClick={() => setMode(m)}
+            className={`px-3.5 py-1.5 rounded-[10px] text-[11px] font-black uppercase tracking-widest transition-colors ${mode === m ? 'bg-pear-600 text-white' : 'text-slate-500 hover:text-pear-600'}`}>
+            {m}
+          </button>
+        ))}
+      </div>
+      <StatusPill status={post.status} />
+      <span className={`text-[11px] font-medium ${dirty && isLive ? 'text-amber-600 dark:text-amber-400' : 'text-slate-400'}`}>{saveLabel}</span>
+      <div className="ml-auto">
+        {isLive ? (
+          <button className={btnPrimary} disabled={saving || !dirty} onClick={() => persist('published')}>
+            {dirty ? 'Update live post' : 'Up to date'}
+          </button>
+        ) : (
+          <button className={btnPrimary} disabled={saving} onClick={() => persist('published')}>Publish</button>
+        )}
+      </div>
+    </div>
+  );
+
   return (
     <div className="min-w-0">
-      {/* Top bar: view toggle, save state and the one primary action. */}
-      <div className="sticky top-20 z-20 -mx-1 px-1 py-3 mb-4 bg-white/90 dark:bg-slate-900/90 backdrop-blur flex flex-wrap items-center gap-3">
-        <button onClick={onClose} className="lg:hidden text-[10px] font-black uppercase text-slate-400 tracking-widest hover:text-pear-600">← Posts</button>
-        <div className="inline-flex rounded-xl border border-slate-300 dark:border-white/15 p-0.5">
-          {(['write', 'preview'] as const).map((m) => (
-            <button key={m} onClick={() => setMode(m)}
-              className={`px-3.5 py-1.5 rounded-[10px] text-[11px] font-black uppercase tracking-widest transition-colors ${mode === m ? 'bg-pear-600 text-white' : 'text-slate-500 hover:text-pear-600'}`}>
-              {m}
-            </button>
-          ))}
-        </div>
-        <StatusPill status={post.status} />
-        <span className={`text-[11px] font-medium ${dirty && isLive ? 'text-amber-600 dark:text-amber-400' : 'text-slate-400'}`}>{saveLabel}</span>
-        <div className="ml-auto">
-          {isLive ? (
-            <button className={btnPrimary} disabled={saving || !dirty} onClick={() => persist('published')}>
-              {dirty ? 'Update live post' : 'Up to date'}
-            </button>
-          ) : (
-            <button className={btnPrimary} disabled={saving} onClick={() => persist('published')}>Publish</button>
-          )}
-        </div>
-      </div>
+      {actionBar('top')}
 
-      {error && (
-        <div className="mb-4 rounded-xl bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/30 text-rose-700 dark:text-rose-300 text-sm px-4 py-3 font-medium flex items-start justify-between gap-3">
-          <span>{error}</span>
-          <button className="text-rose-400 hover:text-rose-600" onClick={() => setError('')} aria-label="Dismiss">✕</button>
-        </div>
-      )}
+      {errorBox}
 
       <div className="grid xl:grid-cols-[minmax(0,1fr)_300px] gap-6 items-start">
         {/* ── Writing area ── */}
@@ -467,7 +503,11 @@ const PostEditor: React.FC<{
 
               <div className="rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 focus-within:ring-2 focus-within:ring-pear-500">
                 <div className="flex flex-wrap items-center gap-0.5 border-b border-slate-200 dark:border-white/10 px-2 py-1.5">
-                  <button type="button" className={toolBtn} title="Section heading" onClick={() => prefixLine('## ', 'Section heading')}>H2</button>
+                  <button type="button" className={toolBtn} title="Section heading (shows in the table of contents)" onClick={() => prefixLine('## ', 'Section heading')}>H2</button>
+                  <button type="button" className={toolBtn} title="Sub-heading" onClick={() => prefixLine('### ', 'Sub-heading')}>H3</button>
+                  <button type="button" className={toolBtn + ' !font-black'} title="Bold (Ctrl/Cmd+B)" onClick={() => wrap('**', 'bold text')}>B</button>
+                  <button type="button" className={toolBtn + ' italic font-serif'} title="Italic (Ctrl/Cmd+I)" onClick={() => wrap('*', 'italic text')}>I</button>
+                  <span className="w-px h-4 bg-slate-200 dark:bg-white/10 mx-1" />
                   <button type="button" className={toolBtn} title="Bullet list" onClick={() => prefixLine('- ', 'List item')}>• List</button>
                   <button type="button" className={toolBtn} title="Pull quote" onClick={() => prefixLine('> ', 'A memorable quote')}>❝ Quote</button>
                   <button type="button" className={toolBtn} title="Link button" onClick={() => insert('[Link text](https://)', 1, 9)}>Link</button>
@@ -484,6 +524,12 @@ const PostEditor: React.FC<{
                   ref={bodyRef}
                   value={body}
                   onChange={(e) => setState((s) => ({ ...s, body: e.target.value }))}
+                  onKeyDown={(e) => {
+                    if (!(e.metaKey || e.ctrlKey)) return;
+                    const k = e.key.toLowerCase();
+                    if (k === 'b') { e.preventDefault(); wrap('**', 'bold text'); }
+                    else if (k === 'i') { e.preventDefault(); wrap('*', 'italic text'); }
+                  }}
                   onPaste={(e) => {
                     const files = Array.from(e.clipboardData.files || []);
                     if (files.some((f) => f.type.startsWith('image/'))) { e.preventDefault(); uploadImages(files); }
@@ -492,21 +538,25 @@ const PostEditor: React.FC<{
                     const files = Array.from(e.dataTransfer.files || []);
                     if (files.length) { e.preventDefault(); uploadImages(files); }
                   }}
-                  placeholder={'Start writing…\n\nSeparate paragraphs with a blank line.\n## A heading\n- A bullet point\n> A pull quote\n\nPaste or drop images right here.'}
+                  placeholder={'Start writing…\n\nSeparate paragraphs with a blank line.\n## A heading\n### A sub-heading\n**bold** and *italic*\n- A bullet point\n> A pull quote\n\nPaste or drop images right here.'}
                   className="w-full min-h-[60vh] resize-y bg-transparent px-4 py-4 text-[15px] leading-relaxed text-slate-800 dark:text-slate-100 placeholder:text-slate-400 focus:outline-none font-[inherit]"
                 />
               </div>
               <details className="mt-3 text-xs text-slate-500 dark:text-slate-400">
                 <summary className="cursor-pointer font-bold">Formatting cheatsheet</summary>
                 <div className="mt-2 grid sm:grid-cols-2 gap-x-6 gap-y-1 font-mono text-[11px]">
-                  <span>## Heading</span><span>- Bullet point</span>
+                  <span>## Heading</span><span>### Sub-heading</span>
+                  <span>**bold** (Ctrl/Cmd+B)</span><span>*italic* (Ctrl/Cmd+I)</span>
+                  <span>- Bullet point</span><span>Blank line — new paragraph</span>
                   <span>&gt; Pull quote</span><span>[cta] — sign-up banner</span>
                   <span>[Label](https://…) — link</span><span>![Alt text](url "Caption") — image</span>
-                  <span>Q: Question / A: Answer — FAQ</span><span>Blank line — new paragraph</span>
+                  <span>Q: Question / A: Answer — FAQ</span>
                 </div>
               </details>
             </>
           )}
+          {errorBox}
+          {actionBar('bottom')}
         </div>
 
         {/* ── Settings & actions: everything else about the post, in one panel ── */}
