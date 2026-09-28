@@ -1392,7 +1392,7 @@ export const BlogPostView: React.FC<{
     .filter((p) => p.slug !== post.slug)
     .slice(0, 2);
 
-  const sections = useMemo(() => getSections(post), [post.slug]);
+  const sections = useMemo(() => getSections(post), [post.blocks]);
   const [activeId, setActiveId] = useState<string>('');
 
   // Scroll-spy: highlight the section currently in view. The rootMargin biases
@@ -1445,7 +1445,10 @@ export const BlogPostView: React.FC<{
         All Articles
       </button>
 
-      <div className="lg:grid lg:grid-cols-[200px_minmax(0,1fr)] lg:gap-12">
+      {/* The two-column grid is only applied when the TOC aside is rendered.
+          Posts without h2/FAQ sections have no aside, and a fixed 200px first
+          column would otherwise swallow the article into a phone-width strip. */}
+      <div className={sections.length > 0 ? 'lg:grid lg:grid-cols-[200px_minmax(0,1fr)] lg:gap-12' : 'max-w-3xl mx-auto'}>
         {/* Sticky table of contents (desktop) */}
         {sections.length > 0 && (
           <aside className="hidden lg:block">
