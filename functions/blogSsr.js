@@ -177,8 +177,10 @@ function buildIndexJsonLd(posts) {
 
 // ── Head injection (mirrors scripts/prerender-entry.tsx renderPage) ──────────
 
-function injectHead(template, { title, description, canonical, isArticle, jsonLd, image }) {
+function injectHead(template, { title, description, canonical, isArticle, jsonLd, image, imageAlt, publishedTime }) {
   let html = template;
+  // A post's hero image doubles as its social share card (og:image /
+  // twitter:image); posts without one fall back to the site-wide card.
   const img = image || `${SITE_URL}/og-image-1200x630.png`;
   html = html.replace(/<title>.*?<\/title>/s, `<title>${escapeHtml(title)}</title>`);
   html = html.replace(/<meta name="description" content=".*?">/s, `<meta name="description" content="${escapeAttr(description)}">`);
@@ -199,6 +201,9 @@ function injectHead(template, { title, description, canonical, isArticle, jsonLd
     `<link rel="canonical" href="${escapeAttr(canonical)}">`,
     `<meta property="og:url" content="${escapeAttr(canonical)}">`,
     `<meta property="og:type" content="${isArticle ? 'article' : 'website'}">`,
+    image && imageAlt ? `<meta property="og:image:alt" content="${escapeAttr(imageAlt)}">` : '',
+    image && imageAlt ? `<meta name="twitter:image:alt" content="${escapeAttr(imageAlt)}">` : '',
+    isArticle && publishedTime ? `<meta property="article:published_time" content="${escapeAttr(publishedTime)}">` : '',
     jsonLd ? `<script type="application/ld+json">${escapeJsonLdForScript(jsonLd)}</script>` : '',
   ].filter(Boolean).join('\n    ');
   html = html.replace('</head>', `    ${extraHead}\n  </head>`);
@@ -411,6 +416,8 @@ function createBlogSsrHandler(db) {
           isArticle: true,
           jsonLd: buildPostJsonLd(post),
           image: post.heroImageUrl,
+          imageAlt: post.title,
+          publishedTime: post.date,
         });
         html = injectBody(html, renderPostBody(post));
         res.set('Content-Type', 'text/html; charset=utf-8');
