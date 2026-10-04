@@ -1374,6 +1374,101 @@ export const BlogIndex: React.FC<{
 };
 
 // ---------------------------------------------------------------------------
+// Share links
+// ---------------------------------------------------------------------------
+
+// Plain share-intent URLs (no third-party SDKs or trackers). The networks fetch
+// the post URL and build the preview card from its og:* tags — which carry the
+// post's hero image, title and description (see functions/blogSsr.js).
+const SHARE_TARGETS: { name: string; href: (url: string, title: string) => string; icon: React.ReactNode }[] = [
+  {
+    name: 'LinkedIn',
+    href: (url) => `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(url)}`,
+    icon: <path d="M20.45 20.45h-3.56v-5.57c0-1.33-.02-3.04-1.85-3.04-1.85 0-2.14 1.45-2.14 2.94v5.67H9.34V9h3.42v1.56h.05c.48-.9 1.64-1.85 3.37-1.85 3.6 0 4.27 2.37 4.27 5.46v6.28zM5.34 7.43a2.06 2.06 0 110-4.13 2.06 2.06 0 010 4.13zM7.12 20.45H3.56V9h3.56v11.45zM22.22 0H1.77C.79 0 0 .77 0 1.73v20.54C0 23.23.79 24 1.77 24h20.45c.98 0 1.78-.77 1.78-1.73V1.73C24 .77 23.2 0 22.22 0z" />,
+  },
+  {
+    name: 'X',
+    href: (url, title) => `https://twitter.com/intent/tweet?url=${encodeURIComponent(url)}&text=${encodeURIComponent(title)}`,
+    icon: <path d="M18.24 2.25h3.31l-7.23 8.26 8.5 11.24h-6.66l-5.21-6.82-5.97 6.82H1.68l7.73-8.84L1.25 2.25h6.83l4.71 6.23 5.45-6.23zm-1.16 17.52h1.83L7.08 4.13H5.12l11.96 15.64z" />,
+  },
+  {
+    name: 'Facebook',
+    href: (url) => `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}`,
+    icon: <path d="M24 12.07C24 5.41 18.63 0 12 0S0 5.4 0 12.07C0 18.1 4.39 23.1 10.13 24v-8.44H7.08v-3.49h3.04V9.41c0-3.02 1.8-4.7 4.54-4.7 1.31 0 2.68.24 2.68.24v2.97h-1.5c-1.5 0-1.96.93-1.96 1.89v2.26h3.32l-.53 3.5h-2.8V24C19.62 23.1 24 18.1 24 12.07z" />,
+  },
+  {
+    name: 'WhatsApp',
+    href: (url, title) => `https://wa.me/?text=${encodeURIComponent(`${title} ${url}`)}`,
+    icon: <path d="M17.47 14.38c-.3-.15-1.76-.87-2.03-.97-.27-.1-.47-.15-.67.15-.2.3-.77.97-.94 1.16-.17.2-.35.22-.64.07-.3-.15-1.26-.46-2.39-1.47-.88-.79-1.48-1.76-1.65-2.06-.17-.3-.02-.46.13-.6.13-.14.3-.35.45-.52.15-.17.2-.3.3-.5.1-.2.05-.37-.03-.52-.07-.15-.67-1.61-.92-2.2-.24-.58-.49-.5-.67-.51h-.57c-.2 0-.52.07-.79.37-.27.3-1.04 1.02-1.04 2.48s1.07 2.88 1.21 3.07c.15.2 2.1 3.2 5.08 4.49.71.31 1.26.49 1.7.63.71.22 1.36.19 1.87.12.57-.09 1.76-.72 2-1.41.25-.7.25-1.29.17-1.41-.07-.13-.27-.2-.57-.35zM12.05 21.8h-.01a9.87 9.87 0 01-5.03-1.38l-.36-.21-3.74.98 1-3.65-.24-.37a9.86 9.86 0 01-1.51-5.26c0-5.45 4.44-9.88 9.89-9.88 2.64 0 5.12 1.03 6.99 2.9a9.82 9.82 0 012.89 6.99c0 5.45-4.44 9.88-9.88 9.88zm8.41-18.3A11.81 11.81 0 0012.05 0C5.5 0 .16 5.34.16 11.89c0 2.1.55 4.14 1.59 5.95L.06 24l6.3-1.65a11.88 11.88 0 005.68 1.45h.01c6.55 0 11.89-5.34 11.89-11.89 0-3.18-1.24-6.16-3.48-8.41z" />,
+  },
+  {
+    name: 'Email',
+    href: (url, title) => `mailto:?subject=${encodeURIComponent(title)}&body=${encodeURIComponent(`${title}\n\n${url}`)}`,
+    icon: <path d="M2 4h20a2 2 0 012 2v12a2 2 0 01-2 2H2a2 2 0 01-2-2V6a2 2 0 012-2zm0 2v.51l10 6.25 10-6.25V6H2zm20 2.87l-9.47 5.92a1 1 0 01-1.06 0L2 8.87V18h20V8.87z" />,
+  },
+];
+
+const shareBtnClass =
+  'w-9 h-9 flex items-center justify-center rounded-full border border-slate-200 dark:border-white/10 text-slate-500 dark:text-slate-300 hover:text-pear-600 hover:border-pear-500/50 transition-colors';
+
+export const ShareButtons: React.FC<{ post: BlogPost; label?: string }> = ({ post, label = 'Share' }) => {
+  const url = `${SITE_URL}/blog/${post.slug}`;
+  const [copied, setCopied] = useState(false);
+  // Native share sheet (mobile) is detected after mount so the prerendered
+  // markup stays identical to the first client render.
+  const [canNativeShare, setCanNativeShare] = useState(false);
+  useEffect(() => {
+    setCanNativeShare(typeof navigator !== 'undefined' && typeof navigator.share === 'function');
+  }, []);
+
+  const copyLink = async () => {
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      window.prompt('Copy this link:', url);
+    }
+  };
+
+  const nativeShare = () => {
+    navigator.share({ title: post.title, text: post.description, url }).catch(() => {});
+  };
+
+  return (
+    <div className="flex items-center gap-2 flex-wrap">
+      <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 mr-1">{label}</span>
+      {SHARE_TARGETS.map((t) => (
+        <a
+          key={t.name}
+          href={t.href(url, post.title)}
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label={`Share on ${t.name}`}
+          title={`Share on ${t.name}`}
+          className={shareBtnClass}
+        >
+          <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">{t.icon}</svg>
+        </a>
+      ))}
+      <button type="button" onClick={copyLink} aria-label="Copy link" title="Copy link" className={shareBtnClass}>
+        {copied ? (
+          <svg className="w-4 h-4 text-pear-600" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+        ) : (
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M13.83 10.17a4 4 0 00-5.66 0l-4 4a4 4 0 105.66 5.66l1.1-1.1m-.76-4.9a4 4 0 005.66 0l4-4a4 4 0 00-5.66-5.66l-1.1 1.1" /></svg>
+        )}
+      </button>
+      {canNativeShare && (
+        <button type="button" onClick={nativeShare} aria-label="More sharing options" title="More sharing options" className={shareBtnClass}>
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M4 12v7a2 2 0 002 2h12a2 2 0 002-2v-7M16 6l-4-4-4 4M12 2v13" /></svg>
+        </button>
+      )}
+      {copied && <span className="text-[10px] font-bold uppercase tracking-widest text-pear-600" role="status">Link copied</span>}
+    </div>
+  );
+};
+
+// ---------------------------------------------------------------------------
 // Single blog post
 // ---------------------------------------------------------------------------
 
@@ -1483,6 +1578,10 @@ export const BlogPostView: React.FC<{
             <span>{post.readTime}</span>
           </div>
 
+          <div className="mb-8 -mt-3">
+            <ShareButtons post={post} />
+          </div>
+
           {/* Collapsible table of contents (mobile / tablet) */}
           {sections.length > 0 && (
             <details className="lg:hidden mb-10 glass rounded-2xl border border-slate-200 dark:border-white/10 p-4">
@@ -1499,6 +1598,10 @@ export const BlogPostView: React.FC<{
             {post.blocks.map((block, i) => (
               <Block key={i} block={block} id={blockId(block)} />
             ))}
+          </div>
+
+          <div className="mt-12 pt-8 border-t border-slate-200 dark:border-white/10">
+            <ShareButtons post={post} label="Found this useful? Share it" />
           </div>
 
           <SubscribeBanner />

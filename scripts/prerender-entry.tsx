@@ -59,6 +59,9 @@ interface Route {
   jsonLd?: object;
   bodyHtml?: string;
   isArticle?: boolean;
+  /** Absolute URL of the social share image; defaults to the site-wide card. */
+  image?: string;
+  imageAlt?: string;
 }
 
 const escapeHtml = (s: string): string =>
@@ -97,11 +100,28 @@ function renderPage(template: string, route: Route): string {
     `<meta name="twitter:description" content="${escapeHtml(route.description)}">`
   );
 
+  if (route.image) {
+    html = html.replace(
+      /<meta property="og:image" content=".*?">/s,
+      `<meta property="og:image" content="${escapeHtml(route.image)}">`
+    );
+    html = html.replace(
+      /<meta name="twitter:image" content=".*?">/s,
+      `<meta name="twitter:image" content="${escapeHtml(route.image)}">`
+    );
+  }
+
   const canonical = `${SITE_URL}${route.urlPath}`;
   const extraHead = [
     `<link rel="canonical" href="${canonical}">`,
     `<meta property="og:url" content="${canonical}">`,
     `<meta property="og:type" content="${route.isArticle ? 'article' : 'website'}">`,
+    route.image && route.imageAlt
+      ? `<meta property="og:image:alt" content="${escapeHtml(route.imageAlt)}">`
+      : '',
+    route.image && route.imageAlt
+      ? `<meta name="twitter:image:alt" content="${escapeHtml(route.imageAlt)}">`
+      : '',
     route.jsonLd
       ? `<script type="application/ld+json">${escapeJsonLdForScript(route.jsonLd)}</script>`
       : '',
@@ -192,6 +212,9 @@ async function main() {
       description: post.description,
       jsonLd: buildBlogPostJsonLd(post),
       isArticle: true,
+      // The post's hero image is its share card when it has one.
+      image: post.heroImageUrl,
+      imageAlt: post.heroImageUrl ? post.title : undefined,
       bodyHtml: renderToStaticMarkup(
         <BlogPostView post={post} onBack={noop} onOpenPost={noop} onGetStarted={noop} />
       ),
