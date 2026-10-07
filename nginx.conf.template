@@ -18,11 +18,12 @@
 #     timeout, error. So the blog works with or without the SSR function, and
 #     the SEO upgrade activates automatically once the function is live.
 
-# Legacy domain: permanently redirect every go.memopear.com request to the
-# canonical memopear.com origin, preserving the full path and query string.
+# Legacy / alias domains: permanently redirect every go.memopear.com and
+# www.memopear.com request to the canonical memopear.com origin, preserving the
+# full path and query string.
 server {
     listen 8080;
-    server_name go.memopear.com;
+    server_name go.memopear.com www.memopear.com;
     return 301 https://memopear.com$request_uri;
 }
 
@@ -40,6 +41,28 @@ server {
     # so nginx's own scheme/port are never what the client connected on. Relative
     # redirects let the browser resolve directory redirects against the real origin.
     absolute_redirect off;
+
+    # --- One URL per page ------------------------------------------------------
+    # Every canonical tag and sitemap entry uses the no-trailing-slash form.
+    # Variants that serve the same page (/pricing/, /blog/<slug>/, /index.html,
+    # the /billing alias) used to answer 200 with a canonical pointing elsewhere,
+    # so Search Console kept listing them under "Alternate page with proper
+    # canonical tag". 301 them to the canonical URL instead so Google
+    # consolidates them and drops the variants. Query strings are preserved.
+    #
+    # Matched on $request_uri (what the client asked for), not $uri, so the
+    # internal try_files fallback to /index.html is never redirected.
+    if ($request_uri ~ "^/index\.html(?:\?|$)") {
+        return 301 /$is_args$args;
+    }
+    location = /billing {
+        return 301 /pricing$is_args$args;
+    }
+    # Strip a trailing slash from any path except "/" itself. Regex locations
+    # beat the /blog/ prefix location; the exact /blog/admin/ match still wins.
+    location ~ ^(?<no_slash>/.+)/$ {
+        return 301 $no_slash$is_args$args;
+    }
 
     # --- Blog SEO: server-render published Firestore posts --------------------
     # The blog CMS (/blog/admin) is an authenticated SPA view — never proxy it to
